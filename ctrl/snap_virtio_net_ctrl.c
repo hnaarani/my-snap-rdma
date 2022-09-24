@@ -60,6 +60,7 @@ static int snap_virtio_net_ctrl_bar_update(struct snap_virtio_ctrl *vctrl,
 					   struct snap_virtio_device_attr *vbar)
 {
 	struct snap_virtio_net_device_attr *vnbar = to_net_device_attr(vbar);
+	bool vq_enable = false;
 	int ret, i;
 
 	/* Query with max VQ buffer */
@@ -69,9 +70,17 @@ static int snap_virtio_net_ctrl_bar_update(struct snap_virtio_ctrl *vctrl,
 
 	/* Update enabled queue count */
 	vctrl->enabled_queues = 0;
-	for (i = 0; i < vnbar->queues; ++i)
-		if (vnbar->q_attrs[i].vattr.enable)
+	for (i = 0; i < vnbar->queues; ++i) {
+		if (vctrl->sdev->transitional_device) {
+			vq_enable = vnbar->q_attrs[i].vattr.desc ? true : false;
+			vnbar->q_attrs[i].vattr.enable = vq_enable ? 1 : 0;
+		} else {
+			vq_enable = vnbar->q_attrs[i].vattr.enable ? true : false;
+		}
+
+		if (vq_enable)
 			vctrl->enabled_queues++;
+	}
 
 	return 0;
 }
