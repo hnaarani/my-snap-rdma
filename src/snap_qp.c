@@ -92,7 +92,7 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 		umem_id = devx_cq->devx.umem.devx_umem->umem_id;
 		umem_offset = 0;
 		dbr_umem_id = umem_id;
-		dbr_addr = attr->cqe_size * devx_cq->cqe_cnt;
+		dbr_addr = (uint64_t)attr->cqe_size * devx_cq->cqe_cnt;
 	} else {
 		if (attr->dpa_element_type == MLX5_APU_ELEMENT_TYPE_THREAD) {
 			if (!attr->dpa_thread) {
