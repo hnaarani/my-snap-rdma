@@ -51,6 +51,32 @@ enum snap_virtio_common_device_status {
 	SNAP_VIRTIO_DEVICE_S_FAILED = 1 << 7,
 };
 
+/*
+ * Driver may choose to reset device for numerous reasons:
+ * during initialization, on error, or during FLR.
+ * Driver executes reset by writing `0` to `device_status` bar register.
+ * According to virtio v0.95 spec., driver is not obligated to wait
+ * for device to finish the RESET command, which may cause race conditions
+ * to occur between driver and controller.
+ * Issue is solved by using the extra internal `reset` bit:
+ *  - FW set bit to `1` on driver reset.
+ *  - Controller set it back to `0` once finished.
+ */
+#define SNAP_VIRTIO_CTRL_RESET_DETECTED(vctrl) \
+			(vctrl->bar_curr->reset)
+
+#define SNAP_VIRTIO_CTRL_FLR_DETECTED(vctrl) \
+		(!vctrl->bar_curr->enabled)
+
+/*
+ * DRIVER_OK bit indicates that the driver is set up and ready to drive the
+ * device. Only at this point, device is considered "live".
+ * Prior to that, it is not promised that any driver resource is available
+ * for the device to use.
+ */
+#define SNAP_VIRTIO_CTRL_LIVE_DETECTED(vctrl) \
+		!!(vctrl->bar_curr->status & SNAP_VIRTIO_DEVICE_S_DRIVER_OK)
+
 /**
  * enum snap_virtio_ctrl_state - Virtio controller internal state
  *
