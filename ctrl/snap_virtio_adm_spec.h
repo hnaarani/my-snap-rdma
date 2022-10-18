@@ -58,6 +58,22 @@
 #define SNAP_VQ_ADM_DP_GET_MAP_PENDING_BYTES 3
 #define SNAP_VQ_ADM_DP_REPORT_MAP 4
 
+/* Status Code (SC) that are transport, device and vendor independent */
+#define SNAP_VIRTIO_ADM_STATUS_COMMON_START 0
+#define SNAP_VIRTIO_ADM_STATUS_COMMON_END 31
+
+/* Status Code (SC) that are transport specific */
+#define SNAP_VIRTIO_ADM_STATUS_TRANSPORT_START 32
+#define SNAP_VIRTIO_ADM_STATUS_TRANSPORT_END 63
+
+/* Status Code (SC) that are device specific */
+#define SNAP_VIRTIO_ADM_STATUS_DEVICE_START 64
+#define SNAP_VIRTIO_ADM_STATUS_DEVICE_END 95
+
+/* Status Code (SC) that are reserved */
+#define SNAP_VIRTIO_ADM_STATUS_RESERVED_START 96
+#define SNAP_VIRTIO_ADM_STATUS_RESERVED_END 127
+
 enum snap_virtio_adm_status {
 	SNAP_VIRTIO_ADM_STATUS_OK = 0,
 	SNAP_VIRTIO_ADM_STATUS_ERR = 1,
@@ -65,6 +81,7 @@ enum snap_virtio_adm_status {
 	SNAP_VIRTIO_ADM_STATUS_INVALID_COMMAND = 3,
 	SNAP_VIRTIO_ADM_STATUS_DATA_TRANSFER_ERR = 4,
 	SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR = 5,
+	SNAP_VIRTIO_ADM_STATUS_DNR = (1<<7)
 };
 
 struct snap_virtio_adm_cmd_hdr {
@@ -73,6 +90,16 @@ struct snap_virtio_adm_cmd_hdr {
 } SNAP_PACKED;
 
 struct snap_virtio_adm_cmd_ftr {
+	/*
+	 * Bits (6:0) - Status Code (SC)
+	 * Indicate status information for the command
+	 *
+	 * Bit (7) - Do Not Retry (DNR)
+	 * If set to 1, indicates that if the same command is submitted
+	 * again - it is expected to fail.
+	 * If cleared to 0, indicates that the same command is submitted
+	 * again may succeed.
+	 */
 	uint8_t status;
 } SNAP_PACKED;
 
