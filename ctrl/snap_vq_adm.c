@@ -437,19 +437,8 @@ void snap_vq_adm_destroy(struct snap_vq *vq)
 	free(q);
 }
 
-/**
- * snap_vaq_cmd_complete() - complete virtio admin command
- * @cmd: Command to complete
- *
- * Complete virtio admin command. The function writes back to host memory
- * the response data and footer according to virtio admin command layout.
- * command processing stage to get the layout according to virtio spec.
- *
- * Context: After calling this function, command cannot be further processed,
- *          as command's struct may already be reused.
- */
-void snap_vaq_cmd_complete(struct snap_vq_cmd *vcmd,
-				enum snap_virtio_adm_status status)
+static void snap_vaq_cmd_complete_int(struct snap_vq_cmd *vcmd,
+				enum snap_virtio_adm_status status, bool dnr)
 {
 	int ret;
 	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
@@ -457,7 +446,9 @@ void snap_vaq_cmd_complete(struct snap_vq_cmd *vcmd,
 	if (status == SNAP_VIRTIO_ADM_STATUS_OK) {
 		ret = snap_vaq_cmd_wb_cmd_out(cmd);
 		if (snap_unlikely(ret))
-			status = SNAP_VIRTIO_ADM_STATUS_ERR;
+			status = SNAP_VIRTIO_ADM_STATUS_ERR | SNAP_VIRTIO_ADM_STATUS_DNR;
+	} else if (dnr) {
+		status |= SNAP_VIRTIO_ADM_STATUS_DNR;
 	}
 
 	cmd->layout->ftr.status = status;
@@ -467,6 +458,46 @@ void snap_vaq_cmd_complete(struct snap_vq_cmd *vcmd,
 		return;
 	}
 	snap_vq_cmd_complete(vcmd);
+}
+
+/**
+ * snap_vaq_cmd_complete() - complete virtio admin command
+ * @cmd: Command to complete
+ * @status: completion error code
+ *
+ * Complete virtio admin command. The function writes back to host memory
+ * the response data and footer according to virtio admin command layout.
+ * command processing stage to get the layout according to virtio spec.
+ *
+ * If status is not OK, the DNR bit will be set
+ *
+ * Context: After calling this function, command cannot be further processed,
+ *          as command's struct may already be reused.
+ */
+void snap_vaq_cmd_complete(struct snap_vq_cmd *vcmd,
+				enum snap_virtio_adm_status status)
+{
+	snap_vaq_cmd_complete_int(vcmd, status, true);
+}
+
+/**
+ * snap_vaq_cmd_complete_no_dnr() - complete virtio admin command
+ * @cmd: Command to complete
+ * @status: completion error code
+ *
+ * Complete virtio admin command. The function writes back to host memory
+ * the response data and footer according to virtio admin command layout.
+ * command processing stage to get the layout according to virtio spec.
+ *
+ * If status is not OK, the DNR bit will NOT be set
+ *
+ * Context: After calling this function, command cannot be further processed,
+ *          as command's struct may already be reused.
+ */
+void snap_vaq_cmd_complete_no_dnr(struct snap_vq_cmd *vcmd,
+				enum snap_virtio_adm_status status)
+{
+	snap_vaq_cmd_complete_int(vcmd, status, false);
 }
 
 void **snap_vaq_cmd_priv(struct snap_vq_cmd *cmd)
