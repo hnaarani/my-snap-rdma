@@ -898,7 +898,8 @@ static void snap_virtio_blk_ctrl_lm_state_restore_cb(struct snap_vq_cmd *vcmd,
 	if (ret >= 0)
 		snap_vaq_cmd_complete(vcmd, SNAP_VIRTIO_ADM_STATUS_OK);
 	else
-		snap_vaq_cmd_complete(vcmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
+		/* allow retries, restore may fail because of the pending flr */
+		snap_vaq_cmd_complete_no_dnr(vcmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
 
 free_mem:
 	snap_buf_free(blk_ctrl->lm_buf);
