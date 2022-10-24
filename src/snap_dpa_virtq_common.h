@@ -88,7 +88,7 @@ struct dpa_virtq {
 	struct dpa_virtq_stats stats;
 };
 
-struct __attribute__((packed)) dpa_virtq_cmd_create {
+struct dpa_virtq_cmd_create {
 	struct dpa_virtq vq;
 	int do_recovery;
 };
