@@ -129,14 +129,16 @@ int dpa_virtq_create(struct snap_dpa_cmd *cmd)
 		 * We can either use a separate dma_q or do recovery as part
 		 * of the virtq creation
 		 */
+		struct snap_dpa_tcb *tcb = dpa_tcb();
 		struct virtq_device_ring *used_ring;
 
 		dpa_window_set_active_mkey(vq->dpa_xmkey);
-		used_ring = (struct virtq_device_ring *)vq->common.device;
+		used_ring = (void *)dpa_window_get_base() + vq->common.device;
 		snap_memory_bus_fence();
 		vq->hw_used_index = used_ring->idx;
 		vq->hw_available_index = used_ring->idx;
 		vq->do_recovery = 1;
+		dpa_window_set_active_mkey(tcb->mbox_lkey);
 	}
 	/* allow queue creation in the rdy state, save 3-5usec on extra modify
 	 */
