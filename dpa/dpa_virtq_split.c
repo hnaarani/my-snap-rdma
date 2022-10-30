@@ -441,6 +441,12 @@ static inline void virtq_progress()
 	/* NOTE: window mapping is going to be invalidated on controller reset
 	 * flr etc. It means that there is a chance that thread will be
 	 * reading available index from the invalid window.
+	 *
+	 * It is supposed to be fixed. FW/RTOS treat TPT errors as
+	 * non fatal. In case of TPT read we should return from the default
+	 * RTOS exception handler to the next instruction.
+	 *
+	 * Obsolete part:
 	 * Currently it will cause hart crash.
 	 *
 	 * It means that:
