@@ -91,12 +91,14 @@ static inline void dpa_virtq_msix_arm()
 	struct mlx5_cqe64 *cqe;
 	int n;
 
+	/* cq shall be armed before it is polled. See man ibv_get_cq_event */
+	snap_dv_arm_cq(&rt_ctx->msix_cq);
+
 	for (n = 0; n < SNAP_DPA_RT_THR_MSIX_CQE_CNT; n++) {
 		cqe = snap_dv_poll_cq(&rt_ctx->msix_cq, 64);
 		if (!cqe)
 			break;
 	}
-	snap_dv_arm_cq(&rt_ctx->msix_cq);
 }
 
 static void dpa_virtq_write_rsp(struct dpa_virtq *vq)
@@ -325,6 +327,10 @@ static inline int dpa_virtq_msix_recv()
 	struct snap_dpa_p2p_msg *msgs[VIRTQ_DPA_NUM_P2P_MSGS];
 	int n, msix_count;
 
+	/* cq shall be armed before it is polled. See man ibv_get_cq_event */
+	if (is_event_mode())
+		snap_dv_arm_cq(&rt_ctx->dpa_cmd_chan.dma_q->sw_qp.dv_rx_cq);
+
 	msix_count = 0;
 	do {
 		n = snap_dpa_p2p_recv_msg(&rt_ctx->dpa_cmd_chan, msgs, VIRTQ_DPA_NUM_P2P_MSGS);
@@ -338,8 +344,6 @@ static inline int dpa_virtq_msix_recv()
 
 	vq->stats.n_msix_rcvd += msix_count;
 
-	if (is_event_mode())
-		snap_dv_arm_cq(&rt_ctx->dpa_cmd_chan.dma_q->sw_qp.dv_rx_cq);
 #if 0
 	/* at the moment we are only getting msix messages for the one queue. no need to parse */
 	for (msix_count = i = 0; i < n; i++) {
@@ -362,7 +366,6 @@ static inline void dpa_virtq_msix_raise()
 {
 	struct dpa_virtq *vq = get_vq();
 
-	dpa_virtq_msix_recv();
 	dpa_virtq_msix_arm();
 	dpa_msix_send(vq->msix_cqnum);
 	vq->stats.n_msix_sent++;
@@ -405,6 +408,9 @@ static inline void virtq_progress()
 	/* we can collapse doorbells and just pick up last avail index,
 	 * todo use 1 entry cq
 	 */
+	if (is_event_mode())
+		snap_dv_arm_cq(&rt_ctx->db_cq);
+
 	for (n = 0; n < SNAP_DPA_RT_THR_SINGLE_DB_CQE_CNT; n++) {
 		cqe = snap_dv_poll_cq(&rt_ctx->db_cq, 64);
 		if (!cqe)
@@ -414,13 +420,17 @@ static inline void virtq_progress()
 	if (n == 0 && !vq->pending)
 		return;
 
+	dpa_duar_arm(vq->duar_id, rt_ctx->db_cq.cq_num);
+
 	vq->pending = 0;
 
 	/* note: this is going to disable db batching, optimize */
-	if (is_event_mode())
-		snap_dv_arm_cq(&rt_ctx->dpa_cmd_chan.dma_q->sw_qp.dv_tx_cq);
-
-	dpa_virtq_duar_arm();
+	/* we don't need to arm tx cq at the moment because tx qp has
+	 * 2x vq size. It means that we can accomodate vq * (send_table + send_head)
+	 * which covers worst case scenario.
+	 */
+	//if (is_event_mode())
+	//	snap_dv_arm_cq(&rt_ctx->dpa_cmd_chan.dma_q->sw_qp.dv_tx_cq);
 
 	/* todo: consider keeping window adjusted 'driver' address */
 	avail_ring = (void *)dpa_window_get_base() + vq->common.driver;
