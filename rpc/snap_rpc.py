@@ -387,7 +387,7 @@ def main():
     p.add_argument('--suspend', help='Created controller is in the SUSPENDED state. '
                    'The controller must be explicitly resumed ',
                    required=False, action='store_true')
-    p.add_argument('--new', help='Create a new cotroller. '
+    p.add_argument('--new', help='Create a new controller. '
                    'If recovery is needed - do not specify this flag. ',
                    required=False, action='store_true')
     p.add_argument('--mem', help='Memory model', type=str,

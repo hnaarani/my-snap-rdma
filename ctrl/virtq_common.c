@@ -685,7 +685,7 @@ int virtq_progress(struct virtq_common_ctx *q, int thread_id)
 		virtq_progress_unordered(priv);
 
 	/*
-	 * need to wait until all inflight requests
+	 * need to wait until all in-flight requests
 	 * are finished before moving to the suspend state
 	 */
 	if (snap_unlikely(priv->swq_state == SW_VIRTQ_FLUSHING))

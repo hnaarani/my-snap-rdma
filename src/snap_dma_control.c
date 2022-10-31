@@ -1406,7 +1406,7 @@ static int snap_create_io_ctx(struct snap_dma_q *q, struct ibv_pd *pd,
 	q->crypto_support = false;
 
 	if (attr->iov_enable) {
-		/* DV/GGA mode donot need iov_ctx */
+		/* DV/GGA mode do not need iov_ctx */
 		if (q->sw_qp.mode == SNAP_DMA_Q_MODE_VERBS) {
 			ret = snap_alloc_iov_ctx(q);
 			if (ret) {

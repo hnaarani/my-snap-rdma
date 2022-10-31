@@ -628,7 +628,7 @@ int snap_vq_handle_events(struct snap_vq *q)
  *
  * The function initiates queue suspending process.
  * After the function returns, it is guaranteed that no new commands
- * will be fetched from host. However, there might still be inflight
+ * will be fetched from host. However, there might still be in-flight
  * commands in the pipeline. To ensure queue is fully suspended, user
  * needs to query it by calling snap_vq_is_suspended(). If user is working in
  * non-polling mode, user must first call snap_vq_progress() to move queue to
@@ -644,7 +644,7 @@ void snap_vq_suspend(struct snap_vq *q)
  * @q: queue to check
  *
  * The function checks whether a queue is fully suspended, e.g.
- * has no inflight commands in the pipeline.
+ * has no in-flight commands in the pipeline.
  *
  * Return: true if queue is suspended, false otherwise.
  */
