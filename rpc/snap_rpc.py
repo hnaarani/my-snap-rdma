@@ -157,6 +157,9 @@ def main():
         if args.transitional_device is True and args.type != 'virtio_blk':
             raise JsonRpcSnapException("Error: Support hotplug Virtio-blk transitional device ONLY");
 
+        if args.transitional_device is True and args.bdev_type != 'spdk':
+            raise JsonRpcSnapException("Error: MUST provide a SPDK bdev for hotplugged transitional device");
+
         params = {
             'emulation_manager': args.emu_manager,
             'device_type': args.type,
