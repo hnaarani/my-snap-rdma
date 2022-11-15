@@ -712,10 +712,15 @@ static int snap_sw_qp_rx_wqe_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 	int rc;
 	bool destroy_cqs = true;
 
-	q->tx_available = q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
-
-	if (q->ops->mode == SNAP_DMA_Q_MODE_DV || q->ops->mode == SNAP_DMA_Q_MODE_GGA)
+	if (q->ops->mode == SNAP_DMA_Q_MODE_DV || q->ops->mode == SNAP_DMA_Q_MODE_GGA) {
 		q->sw_qp.dv_qp.db_flag = (enum snap_db_ring_flag)snap_env_getenv(SNAP_DMA_Q_DBMODE);
+		q->tx_available = snap_dma_q_dv_get_tx_avail_max(q);
+	} else
+		/**
+		 * in verbs mode every operation takes exactly one place in the queue
+		 * wqe management is done by the rdma-core
+		 */
+		q->tx_available = q->tx_qsize;
 
 	if (attr->dpa_mode)
 		return 0;

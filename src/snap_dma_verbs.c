@@ -490,7 +490,7 @@ static int verbs_dma_q_flush(struct snap_dma_q *q)
 	int n;
 
 	n = 0;
-	while (q->tx_available < q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt)
+	while (q->tx_available < q->tx_qsize)
 		n += verbs_dma_q_progress_tx(q);
 
 	return n;
@@ -531,7 +531,7 @@ static inline int verbs_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in
 
 static bool verbs_dma_q_empty(struct snap_dma_q *q)
 {
-	return q->tx_available == q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
+	return q->tx_available == q->tx_qsize;
 }
 
 const struct snap_dma_q_ops verb_ops = {

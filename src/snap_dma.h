@@ -522,6 +522,21 @@ static inline const struct snap_dv_qp_stat *snap_dma_q_stat(const struct snap_dm
 	return q->ops->stat ? q->ops->stat(q) : NULL;
 }
 
+static inline int snap_dma_q_dv_get_tx_avail_max(struct snap_dma_q *q)
+{
+	/**
+	 * if wqe_cnt > cqe_cnt we can have cq overrun because most operations take
+	 * exactly one wqe. Notable exceptions are inline sends (>48b) and sgls.
+	 * If qp is not created via devx, rdma-core always allocates enough wqes
+	 * to accommodate worst possible scenrio. For example if inline is 64b it
+	 * will allocate 2xwqe(s) than the requested tx_qsize.
+	 *
+	 * Limit number of outstanding wqes by cq size, in the future
+	 * consider counting cq space separately.
+	 */
+	return snap_min(q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt, q->sw_qp.dv_tx_cq.cqe_cnt);
+}
+
 /* how many tx and rx completions to process during a single progress call */
 #define SNAP_DMA_MAX_TX_COMPLETIONS  128
 #define SNAP_DMA_MAX_RX_COMPLETIONS  128

@@ -872,7 +872,7 @@ static int dv_dma_q_flush(struct snap_dma_q *q)
 		n--;
 	}
 
-	tx_available = q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
+	tx_available = snap_dma_q_dv_get_tx_avail_max(q);
 	while (q->tx_available < tx_available)
 		n += dv_dma_q_progress_tx(q);
 
@@ -886,7 +886,7 @@ static int dv_dma_q_flush_nowait(struct snap_dma_q *q, struct snap_dma_completio
 
 static bool dv_dma_q_empty(struct snap_dma_q *q)
 {
-	return q->tx_available == q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
+	return q->tx_available == snap_dma_q_dv_get_tx_avail_max(q);
 }
 
 static const struct snap_dv_qp_stat *dv_dma_q_stat(const struct snap_dma_q *q)
@@ -1176,6 +1176,8 @@ int dv_worker_flush(struct snap_dma_worker *wk)
 	for (i = 0 ; i < wk->max_queues; i++) {
 		if (snap_unlikely(!wk->queues[i].in_use))
 			continue;
+		/* api is highly experimental and not in use at the moment */
+		snap_error("WORKER FLUSH NEEDS TO BE FIXED\n");
 		tx_available = wk->queues[i].q.sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
 		while (wk->queues[i].q.tx_available < tx_available)
 			n += dv_worker_progress_tx(wk);
