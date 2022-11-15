@@ -161,7 +161,7 @@ uint32_t snap_dp_bmap_range_size(struct snap_dp_bmap *map, uint64_t pa, uint32_t
 
 static uint64_t snap_dp_bmap_size_to_len(struct snap_dp_bmap *map, uint32_t size)
 {
-	printf("size2len: %d\n", size);
+	snap_debug("size2len: %d\n", size);
 	return map->is_bytemap ? size : 8 * size;
 }
 /*
@@ -188,14 +188,14 @@ uint32_t snap_dp_bmap_get_start_pa(struct snap_dp_bmap *map, uint64_t pa, uint32
 	return -EINVAL;
 found:
 
-	printf("range_pa: %ld, range_len %ld\n", range_pa, range_len);
+	snap_debug("range_pa: %ld, range_len %ld\n", range_pa, range_len);
 	if (pa + length < range_pa + range_len) {
 		*size = snap_dp_bmap_range_size(map, pa, length);
 		ret_len = length;
 	} else {
 		*size = snap_dp_bmap_range_size(map, pa, range_len - pa);
 		ret_len = range_len;
-		printf("returning %ld\n", ret_len);
+		snap_debug("returning %ld\n", ret_len);
 	}
 
 	if (map->is_bytemap) {
