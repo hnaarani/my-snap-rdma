@@ -53,6 +53,9 @@ struct snap_dpa_ctx {
 	struct snap_dma_q      *dummy_q;
 	struct snap_dpa_mkeyh  *dma_mkeyh;
 	struct flexio_uar      *flexio_uar;
+	struct {
+		uint64_t heap_memory;
+	} stats;
 };
 
 struct snap_dpa_memh {

@@ -66,6 +66,7 @@ struct snap_dpa_memh *snap_dpa_mem_alloc(struct snap_dpa_ctx *dctx, size_t size)
 		return 0;
 	}
 
+	mem->dctx->stats.heap_memory += size;
 	return mem;
 }
 
@@ -77,6 +78,7 @@ struct snap_dpa_memh *snap_dpa_mem_alloc(struct snap_dpa_ctx *dctx, size_t size)
  */
 void snap_dpa_mem_free(struct snap_dpa_memh *mem)
 {
+	mem->dctx->stats.heap_memory -= mem->size;
 	flexio_buf_dev_free(mem->dctx->dpa_proc, mem->va);
 	free(mem);
 }
