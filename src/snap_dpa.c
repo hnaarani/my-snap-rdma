@@ -1089,15 +1089,37 @@ void snap_dpa_cmd_send(struct snap_dpa_thread *thr, struct snap_dpa_cmd *cmd, ui
 	snap_dpa_thread_wakeup(thr);
 }
 
+static int snap_dpa_duar_query(struct snap_dpa_duar *duar, uint32_t obj_id)
+{
+	uint8_t in[DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(general_obj_out_cmd_hdr)  +
+		   DEVX_ST_SZ_BYTES(emulated_dev_db_cq_map)] = {0};
+	uint8_t *cq_db_map_out;
+	int ret;
+
+	DEVX_SET(general_obj_in_cmd_hdr, in, opcode,
+		 MLX5_CMD_OP_QUERY_GENERAL_OBJECT);
+	DEVX_SET(general_obj_in_cmd_hdr, in, obj_type, MLX5_OBJ_TYPE_DPA_DB_CQ_MAPPING);
+	DEVX_SET(general_obj_in_cmd_hdr, in, obj_id, obj_id);
+
+	ret = mlx5dv_devx_obj_query(duar->obj, in, sizeof(in), out, sizeof(out));
+	if (ret)
+		goto out;
+
+	cq_db_map_out = out + DEVX_ST_SZ_BYTES(general_obj_out_cmd_hdr);
+	duar->duar_id = DEVX_GET(emulated_dev_db_cq_map, cq_db_map_out, dbr_handle);
+
+out:
+	return ret;
+}
+
 /**
  * snap_dpa_duar_create() - create emulation doorbell mapping
- * @ctx:          ibv context
- * @dev_emu_id:   emuation object id
- * @queue_id:  queue number (virtio/nvme)
- * @cq_num:    completion queue (cq) number to use
+ * @ctx:  ibv context
+ * @attr: doorbell creating attributes
  *
- * The function creates a new doorbell context of (dev_emu_id, queue_id) and
- * attaches it CQ @cq_num.
+ * The function creates a new doorbell context of (attr->dev_emu_id, attr->queue_id) and
+ * attaches it CQ (attr->cq_num).
  *
  * Doing NVMe or virtio doorbell will put a new CQE on the CQ.
  *
@@ -1107,13 +1129,15 @@ void snap_dpa_cmd_send(struct snap_dpa_thread *thr, struct snap_dpa_cmd *cmd, ui
  * Return:
  * New doorbell context or NULL on error.
  */
-struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, uint32_t dev_emu_id, uint32_t queue_id, uint32_t cq_num)
+struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, struct snap_dpa_duar_attr *attr)
 {
 	uint8_t in[DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr) +
 		   DEVX_ST_SZ_BYTES(emulated_dev_db_cq_map)] = {0};
 	uint8_t out[DEVX_ST_SZ_BYTES(general_obj_out_cmd_hdr)] = {0};
 	uint8_t *cq_db_map_in;
 	struct snap_dpa_duar *duar;
+	uint32_t obj_id;
+	int ret;
 
 	duar = calloc(1, sizeof(*duar));
 	if (!duar)
@@ -1123,17 +1147,28 @@ struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, uint32_t dev
 	DEVX_SET(general_obj_in_cmd_hdr, in, obj_type, MLX5_OBJ_TYPE_DPA_DB_CQ_MAPPING);
 
 	cq_db_map_in = in + DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr);
-	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, device_emulation_id, dev_emu_id);
-	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, queue_id, queue_id);
-	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, cqn, cq_num);
+	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, device_type, attr->dev_type);
+	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, map_state, attr->map_state);
+	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, device_emulation_id, attr->dev_emu_id);
+	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, queue_id, attr->queue_id);
+	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, cqn, attr->cq_num);
+
+	if ((attr->queue_type == MLX5_DEV_DB_NVME_SQ) || (attr->queue_type == MLX5_DEV_DB_NVME_CQ))
+		DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, queue_type, attr->queue_type);
 
 	duar->obj = mlx5dv_devx_obj_create(ctx, in, sizeof(in), out, sizeof(out));
 	if (!duar->obj)
 		goto free_duar;
 
-	duar->duar_id = DEVX_GET(general_obj_out_cmd_hdr, out, obj_id);
+	obj_id = DEVX_GET(general_obj_out_cmd_hdr, out, obj_id);
+
+	ret = snap_dpa_duar_query(duar, obj_id);
+	if (ret)
+		goto destroy_duar;
 
 	return duar;
+destroy_duar:
+	mlx5dv_devx_obj_destroy(duar->obj);
 free_duar:
 	free(duar);
 	return NULL;
@@ -1162,7 +1197,7 @@ uint32_t snap_dpa_duar_id(struct snap_dpa_duar *duar)
 	return duar->duar_id;
 }
 
-struct snap_dpa_msix_eq *snap_dpa_msix_eq_create(struct ibv_context *ctx, uint32_t dev_emu_id, uint16_t msix_vector)
+struct snap_dpa_msix_eq *snap_dpa_msix_eq_create(struct ibv_context *ctx, uint32_t dev_emu_id, uint16_t msix_vector, uint8_t dev_type)
 {
 	uint8_t in[DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr) +
 		   DEVX_ST_SZ_BYTES(emulated_dev_eq)] = {0};
@@ -1178,6 +1213,7 @@ struct snap_dpa_msix_eq *snap_dpa_msix_eq_create(struct ibv_context *ctx, uint32
 	DEVX_SET(general_obj_in_cmd_hdr, in, obj_type, MLX5_OBJ_TYPE_EMULATED_DEV_EQ);
 
 	msix_eq_in = in + DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr);
+	DEVX_SET(emulated_dev_eq, msix_eq_in, device_type, dev_type);
 	DEVX_SET(emulated_dev_eq, msix_eq_in, device_emulation_id, dev_emu_id);
 	DEVX_SET(emulated_dev_eq, msix_eq_in, intr, msix_vector);
 

@@ -23,6 +23,7 @@
 #include "snap_dpa.h"
 #include "snap_dpa_virtq.h"
 
+#include "mlx5_ifc.h"
 
 #define SNAP_DPA_VIRTQ_BBUF_ALIGN 4096
 
@@ -57,6 +58,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	struct snap_dpa_rsp *rsp;
 	size_t desc_shadow_size;
 	struct snap_hw_cq db_hw_cq;
+	struct snap_dpa_duar_attr duar_attr;
 	int ret;
 
 	snap_debug("create dpa virtq\n");
@@ -119,8 +121,14 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	if (ret)
 		goto free_dpa_window_mr;
 
-	vq->duar = snap_dpa_duar_create(sdev->sctx->context, snap_get_dev_emu_id(sdev),
-			vq_attr->vattr.idx, db_hw_cq.cq_num);
+	duar_attr.dev_emu_id = virtio_emu_dev_emu_id(dev);
+	duar_attr.queue_id = vq_attr->vattr.idx;
+	duar_attr.cq_num = db_hw_cq.cq_num;
+	duar_attr.dev_type = MLX5_HOTPLUG_DEVICE_TYPE_VIRTIO_BLK;
+	duar_attr.queue_type = MLX5_DEV_DB_RESERVED;
+	duar_attr.map_state = MLX5_DEV_DB_MAPPED;
+	vq->duar = snap_dpa_duar_create(dev->dev_emu.context, &duar_attr);
+
 	if (!vq->duar) {
 		snap_error("Failed to create virt duar mapping: dev_emu_id %d queue_id %d cq_num 0x%x\n",
 				snap_get_dev_emu_id(sdev), vq_attr->vattr.idx, db_hw_cq.cq_num);
@@ -137,7 +145,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 		 * implemented only on 'devemu' branch
 		 */
 		vq->msix_eq = snap_dpa_msix_eq_create(sdev->sctx->context, snap_get_dev_emu_id(sdev),
-				vq->common.msix_vector);
+				vq->common.msix_vector, MLX5_HOTPLUG_DEVICE_TYPE_VIRTIO_BLK);
 		if (!vq->msix_eq) {
 			snap_error("Failed to create MSIX_EQ\n");
 			goto free_dpa_duar;

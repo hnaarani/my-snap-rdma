@@ -150,7 +150,24 @@ struct snap_dpa_duar {
 	uint32_t duar_id;
 };
 
-struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, uint32_t dev_emu_id, uint32_t queue_id, uint32_t cq_num);
+/*
+ * @dev_emu_id:   emuation object id
+ * @queue_id:  queue number (virtio/nvme)
+ * @cq_num:    completion queue (cq) number to use
+ * @dev_type: device type (virtio/nvme)
+ * @queue_type: queue type owning the db to be mapped (Only for dev_type nvme)
+ * @map_state: Mapping state of the db
+ */
+struct snap_dpa_duar_attr {
+	uint32_t dev_emu_id;
+	uint32_t queue_id;
+	uint32_t cq_num;
+	uint8_t dev_type;
+	uint8_t queue_type;
+	uint8_t map_state;
+};
+
+struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, struct snap_dpa_duar_attr *attr);
 void snap_dpa_duar_destroy(struct snap_dpa_duar *duar);
 uint32_t snap_dpa_duar_id(struct snap_dpa_duar *duar);
 
@@ -160,7 +177,8 @@ struct snap_dpa_msix_eq {
 	uint16_t msix_vector;
 };
 
-struct snap_dpa_msix_eq *snap_dpa_msix_eq_create(struct ibv_context *ctx, uint32_t dev_emu_id, uint16_t msix_vector);
+struct snap_dpa_msix_eq *snap_dpa_msix_eq_create(struct ibv_context *ctx, uint32_t dev_emu_id,
+	uint16_t msix_vector, uint8_t dev_type);
 void snap_dpa_msix_eq_destroy(struct snap_dpa_msix_eq *eq);
 uint32_t snap_dpa_msix_eq_id(struct snap_dpa_msix_eq *eq);
 uint16_t snap_dpa_msix_vector(struct snap_dpa_msix_eq *eq);

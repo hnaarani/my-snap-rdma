@@ -4661,7 +4661,8 @@ struct mlx5_ifc_create_cq_in_bits {
 struct mlx5_ifc_emulated_dev_eq_bits {
 	u8 modify_field_select[0x40];
 
-	u8 reserved_at_40[0x20];
+	u8 reserved_at_40[0x18];
+	u8 device_type[0x8];
 
 	u8 device_emulation_id[0x20];
 
@@ -4673,10 +4674,26 @@ struct mlx5_ifc_emulated_dev_eq_bits {
 	u8 reserved_1c0[0x40];
 };
 
+enum mlx5_ifc_emulated_dev_db_queue_type {
+	MLX5_DEV_DB_NVME_SQ = 0x0,
+	MLX5_DEV_DB_NVME_CQ = 0x1,
+	MLX5_DEV_DB_RESERVED = 0x2
+};
+
+enum {
+	MLX5_DEV_DB_MAPPED = 0x0,
+	MLX5_DEV_DB_UNMAPPED = 0x1
+};
+
 struct mlx5_ifc_emulated_dev_db_cq_map_bits {
 	u8 modify_field_select[0x40];
 
-	u8 reserved_at_40[0x40];
+	u8 reserved_at_40[0x10];
+	u8 map_state[0x4];
+	u8 queue_type[0x4];
+	u8 device_type[0x8];
+
+	u8 reserved_at_60[0x20];
 
 	u8 device_emulation_id[0x20];
 
@@ -4684,6 +4701,8 @@ struct mlx5_ifc_emulated_dev_db_cq_map_bits {
 
 	u8 cqn[0x20];
 
-	u8 reserved_at_e0[0x120];
+	u8 dbr_handle[0x20];
+
+	u8 reserved_at_100[0x100];
 };
 #endif /* MLX5_IFC_H */
