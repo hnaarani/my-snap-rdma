@@ -1473,7 +1473,8 @@ struct mlx5_ifc_nvme_emulation_cap_bits {
 	u8	 nvme_offload_type_command_capsule[0x1];
 	u8	 log_max_nvme_offload_namespaces[0x5];
 	u8	 nvme_cq_interrupt_disabled[0x1];
-	u8	 reserved_at_10[0x7];
+	u8	 nvme_emulation_object_event[0x1];
+	u8	 reserved_at_10[0x6];
 	u8	 max_emulated_devices[0x10];
 
 	u8	 reserved_at_20[0xb];
