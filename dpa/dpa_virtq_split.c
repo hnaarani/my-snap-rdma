@@ -530,6 +530,11 @@ static inline void virtq_progress()
 
 	dpa_debug("==> New avail idx: %d delta %d\n", host_avail_idx, delta);
 
+	if (snap_unlikely(delta > vq->common.size)) {
+		dpa_virtq_info(vq, "invalid host avail index: hw %d host %d\n", vq->hw_available_index, host_avail_idx);
+		goto fatal_err;
+	}
+
 	vq->stats.n_delta_total += delta;
 
 	if (snap_unlikely(delta < DPA_TABLE_THRESHOLD)) {
