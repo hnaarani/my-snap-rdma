@@ -46,6 +46,7 @@ enum {
 	DPA_VIRTQ_CMD_DESTROY,
 	DPA_VIRTQ_CMD_MODIFY,
 	DPA_VIRTQ_CMD_QUERY,
+	DPA_VIRTQ_CMD_HEALTH_CHECK
 };
 
 
@@ -103,6 +104,14 @@ struct dpa_virtq_rsp_query {
 	uint16_t hw_used_index;
 };
 
+struct dpa_virtq_rsp_health_check {
+	enum dpa_virtq_state state;
+	uint16_t hw_available_index;
+	uint16_t host_available_index;
+	uint16_t host_used_index;
+	uint16_t n_msix_pending;
+};
+
 struct dpa_virtq_cmd {
 	struct snap_dpa_cmd base;
 	union {
@@ -116,6 +125,7 @@ struct dpa_virtq_rsp {
 	union {
 		struct dpa_virtq_rsp_query vq_state;
 		struct dpa_virtq_stats vq_stats;
+		struct dpa_virtq_rsp_health_check vq_health;
 	};
 };
 

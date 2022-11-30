@@ -43,6 +43,11 @@ do { \
 	dpa_info("vq 0x%x#%d " _fmt, (_vq)->common.dev_emu_id, (_vq)->common.idx, ##__VA_ARGS__); \
 } while (0)
 
+#define dpa_virtq_debug(_vq, _fmt, ...) \
+do { \
+	dpa_debug("vq 0x%x#%d " _fmt, (_vq)->common.dev_emu_id, (_vq)->common.idx, ##__VA_ARGS__); \
+} while (0)
+
 static inline int dpa_virtq_msix_recv();
 static inline void dpa_virtq_msix_raise();
 
@@ -253,6 +258,55 @@ int dpa_virtq_query(struct snap_dpa_cmd *cmd)
 	return SNAP_DPA_RSP_OK;
 }
 
+int dpa_virtq_health_check(struct snap_dpa_cmd *cmd)
+{
+	struct dpa_virtq *vq = get_vq();
+	struct snap_dpa_tcb *tcb = dpa_tcb();
+	struct dpa_virtq_rsp *rsp;
+	struct virtq_device_ring *used_ring;
+	struct virtq_device_ring *avail_ring;
+	uint16_t host_available_index, host_used_index;
+	int msix_count;
+
+	dpa_virtq_debug(vq, "virtq health check\n");
+
+	dpa_window_set_active_mkey(vq->dpa_xmkey);
+	used_ring = (void *)dpa_window_get_base() + vq->common.device;
+	avail_ring = (void *)dpa_window_get_base() + vq->common.driver;
+	snap_memory_bus_fence();
+	host_available_index = avail_ring->idx;
+	host_used_index = used_ring->idx;
+	dpa_window_set_active_mkey(tcb->mbox_lkey);
+
+	rsp = (struct dpa_virtq_rsp *)snap_dpa_mbox_to_rsp(dpa_mbox());
+
+	if (host_available_index != vq->hw_available_index) {
+		dpa_virtq_error(vq, "missing doorbell(s) detected: vq avail %d != host avail %d\n",
+				vq->hw_available_index, host_available_index);
+		if (vq->state == DPA_VIRTQ_STATE_RDY)
+			vq->pending = 1;
+	}
+
+	rsp->vq_health.state = vq->state;
+	rsp->vq_health.hw_available_index = vq->hw_available_index;
+	rsp->vq_health.host_available_index = host_available_index;
+	rsp->vq_health.host_used_index = host_used_index;
+
+	/* check for missing msix */
+	msix_count = dpa_virtq_msix_recv();
+	if (msix_count > 0) {
+		if (vq->common.msix_vector != 0xFFFF) {
+			dpa_virtq_error(vq, "%d pending msix detected\n", msix_count);
+			if (vq->state == DPA_VIRTQ_STATE_RDY)
+				dpa_virtq_msix_raise();
+		} else
+			dpa_virtq_error(vq, "%d pending msix, but no msix vector\n", msix_count);
+	}
+	rsp->vq_health.n_msix_pending = msix_count;
+
+	return SNAP_DPA_RSP_OK;
+}
+
 static int do_command(int *done)
 {
 	struct snap_dpa_tcb *tcb = dpa_tcb();
@@ -296,6 +350,9 @@ static int do_command(int *done)
 			break;
 		case DPA_VIRTQ_CMD_QUERY:
 			rsp_status = dpa_virtq_query(cmd);
+			break;
+		case DPA_VIRTQ_CMD_HEALTH_CHECK:
+			rsp_status = dpa_virtq_health_check(cmd);
 			break;
 		default:
 			dpa_warn("unsupported command %d\n", cmd->cmd);
