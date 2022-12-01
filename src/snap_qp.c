@@ -522,6 +522,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 
 	DEVX_SET(create_qp_in, in, opcode, MLX5_CMD_OP_CREATE_QP);
 	DEVX_SET(qpc, qpc, st, MLX5_QPC_ST_RC);
+	DEVX_SET(qpc, qpc, isolate_vl_tc, 1);
 	DEVX_SET(qpc, qpc, pd, pd_id);
 	DEVX_SET(qpc, qpc, pm_state, MLX5_QPC_PM_STATE_MIGRATED);
 	DEVX_SET(qpc, qpc, uar_page, qp_uar->uar->page_id);

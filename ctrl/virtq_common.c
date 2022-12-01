@@ -33,6 +33,7 @@ static struct snap_dma_q *virtq_rdma_qp_init(struct virtq_create_attr *attr,
 	rdma_qp_create_attr.uctx = vq_priv;
 	rdma_qp_create_attr.rx_cb = cb;
 	rdma_qp_create_attr.mode = snap_env_getenv(SNAP_DMA_Q_OPMODE);
+	rdma_qp_create_attr.use_devx = true;
 
 	return snap_dma_q_create(attr->pd, &rdma_qp_create_attr);
 }
