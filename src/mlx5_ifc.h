@@ -4581,7 +4581,7 @@ struct mlx5_ifc_cqc_bits {
 	u8 cqe_comp_en[0x1];
 	u8 mini_cqe_res_format[0x2];
 	u8 st[0x4];
-	u8 reserved_at_18[0x1];
+	u8 always_armed_cq[0x1];
 	u8 apu_element_type[0x3];
 	u8 reserved_at_1c[0x2];
 	u8 cqe_compression_layout[0x2];
