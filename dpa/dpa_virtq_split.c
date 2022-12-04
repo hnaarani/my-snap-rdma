@@ -476,10 +476,17 @@ static inline void virtq_progress()
 			break;
 	}
 
+	/**
+	 * NOTE:
+	 * Wakeup can happen without cqe written to the doorbell CQ. This
+	 * is how hardware works.
+	 * It means that we must arm emualtion context (duar) every time we
+	 * wake up/poll.
+	 */
+	dpa_duar_arm(vq->duar_id, rt_ctx->db_cq.cq_num);
+
 	if (n == 0 && !vq->pending)
 		return;
-
-	dpa_duar_arm(vq->duar_id, rt_ctx->db_cq.cq_num);
 
 	vq->pending = 0;
 
