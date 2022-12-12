@@ -46,7 +46,8 @@ enum {
 	DPA_VIRTQ_CMD_DESTROY,
 	DPA_VIRTQ_CMD_MODIFY,
 	DPA_VIRTQ_CMD_QUERY,
-	DPA_VIRTQ_CMD_HEALTH_CHECK
+	DPA_VIRTQ_CMD_HEALTH_CHECK,
+	DPA_VIRTQ_CMD_GET_STATS
 };
 
 
@@ -58,13 +59,18 @@ enum dpa_virtq_state {
 };
 
 struct dpa_virtq_stats {
-	uint32_t n_vq_heads;
-	uint32_t n_vq_tables;
-	uint32_t n_sends;
-	uint32_t n_long_sends;
-	uint32_t n_delta_total;
+	uint32_t n_polls;
 	uint32_t n_msix_rcvd;
 	uint32_t n_msix_sent;
+	uint32_t n_db_cqes;
+
+	uint32_t n_db_empty;
+	uint32_t n_io_submited;
+	uint32_t n_vq_heads;
+	uint32_t n_vq_tables;
+
+	uint32_t n_sends;
+	uint32_t n_long_sends;
 };
 
 /* TODO: optimize field alignment */

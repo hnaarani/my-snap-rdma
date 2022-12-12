@@ -67,14 +67,20 @@ static inline struct dpa_virtq *get_vq()
 
 static void dump_stats(struct dpa_virtq *vq)
 {
-	dpa_virtq_info(vq, "sends %u long_sends %u delta_total %u vq_heads %u vq_tables %u msix_msg_rcvd %u msix_raised %u\n",
+	dpa_virtq_info(vq, "io_submited %u sends %u vq_heads %u vq_tables %u msix_msg_rcvd %u msix_raised %u\n",
+		vq->stats.n_io_submited,
 		vq->stats.n_sends,
-		vq->stats.n_long_sends,
-		vq->stats.n_delta_total,
 		vq->stats.n_vq_heads,
 		vq->stats.n_vq_tables,
 		vq->stats.n_msix_rcvd,
 		vq->stats.n_msix_sent);
+
+	/* have line len limit - split in two lines */
+	dpa_virtq_info(vq, "n_polls %u long_sends %u db_cqes %u no_db_cqes %u\n",
+		vq->stats.n_polls,
+		vq->stats.n_long_sends,
+		vq->stats.n_db_cqes,
+		vq->stats.n_db_empty);
 }
 
 static inline void dpa_virtq_duar_arm()
@@ -307,6 +313,19 @@ int dpa_virtq_health_check(struct snap_dpa_cmd *cmd)
 	return SNAP_DPA_RSP_OK;
 }
 
+int dpa_virtq_get_stats(struct snap_dpa_cmd *cmd)
+{
+	struct dpa_virtq *vq = get_vq();
+	struct dpa_virtq_rsp *rsp;
+
+	dpa_virtq_debug(vq, "get_stats\n");
+
+	rsp = (struct dpa_virtq_rsp *)snap_dpa_mbox_to_rsp(dpa_mbox());
+	memcpy(&rsp->vq_stats, &vq->stats, sizeof(vq->stats));
+
+	return SNAP_DPA_RSP_OK;
+}
+
 static int do_command(int *done)
 {
 	struct snap_dpa_tcb *tcb = dpa_tcb();
@@ -353,6 +372,9 @@ static int do_command(int *done)
 			break;
 		case DPA_VIRTQ_CMD_HEALTH_CHECK:
 			rsp_status = dpa_virtq_health_check(cmd);
+			break;
+		case DPA_VIRTQ_CMD_GET_STATS:
+			rsp_status = dpa_virtq_get_stats(cmd);
 			break;
 		default:
 			dpa_warn("unsupported command %d\n", cmd->cmd);
@@ -443,6 +465,8 @@ static inline void virtq_progress()
 	if (vq->state != DPA_VIRTQ_STATE_RDY)
 		return;
 
+	vq->stats.n_polls++;
+
 	rt_ctx = dpa_rt_ctx();
 
 	/* recv messages from DPU */
@@ -475,6 +499,11 @@ static inline void virtq_progress()
 		if (!cqe)
 			break;
 	}
+
+	if (n)
+		vq->stats.n_db_cqes += n;
+	else
+		vq->stats.n_db_empty++;
 
 	/**
 	 * NOTE:
@@ -542,7 +571,7 @@ static inline void virtq_progress()
 		goto fatal_err;
 	}
 
-	vq->stats.n_delta_total += delta;
+	vq->stats.n_io_submited += delta;
 
 	if (snap_unlikely(delta < DPA_TABLE_THRESHOLD)) {
 		/* post send */
