@@ -59,6 +59,9 @@ else
 	flexio = disabler()
 endif
 
+dpa_app_dir = '"' + meson.current_source_dir() / 'dpa_app' + '"'
+conf_data.set('DPA_DEFAULT_APP_DIR' , dpa_app_dir, description : 'DPA applications default directory')
+
 conf_data.set10('HAVE_DECL_IBV_QUERY_GID_EX',
 		cc.has_function('ibv_query_gid_ex', prefix : '#include <infiniband/verbs.h>', dependencies: libsnap_core_depends),
 		description: 'Set HAVE_DECL_IBV_QUERY_GID_EX if ibv_query_gid_ex() is supported')

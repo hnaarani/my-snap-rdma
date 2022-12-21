@@ -238,7 +238,7 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 		len = asprintf(&file_name, "%s/%s", getenv("LIBSNAP_DPA_DIR"),
 			       app_name);
 	else
-		len = asprintf(&file_name, "%s", app_name);
+		len = asprintf(&file_name, "%s/%s", DPA_DEFAULT_APP_DIR, app_name);
 
 	if (len < 0) {
 		snap_error("Failed to allocate memory\n");
