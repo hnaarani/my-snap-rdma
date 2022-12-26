@@ -42,10 +42,22 @@ libsnap_core_depends += dependency('libmlx5', required : true, native : true)
 
 conf_data = configuration_data()
 
+conf_data.set10('HAVE_DECL_IBV_QUERY_GID_EX',
+		cc.has_function('ibv_query_gid_ex', prefix : '#include <infiniband/verbs.h>', dependencies: libsnap_core_depends),
+		description: 'Set HAVE_DECL_IBV_QUERY_GID_EX if ibv_query_gid_ex() is supported')
+
 #todo: in the future consider subproject/system install
 flexio_include = []
 flexio_pfx = get_option('with-flexio')
-if (flexio_pfx != '')
+if (flexio_pfx == 'subproject')
+	message('Using flexio from subproject')
+	flexio_proj = subproject('flexio', default_options: ['werror=false'])
+	flexio = flexio_proj.get_variable('libflexio_dep')
+	flexio_pfx = 'subprojects/flexio'
+	flexio_include = []
+	libsnap_core_depends += flexio
+	conf_data.set10('HAVE_FLEXIO', 1, description : 'Enable DPA host side support')
+elif (flexio_pfx != '')
 	message('Checking flexio in ' + flexio_pfx)
 	flexio_include = [flexio_pfx + '/include', flexio_pfx + '/include/libflexio']
 	flexio = cc.find_library('flexio',
@@ -61,10 +73,6 @@ endif
 
 dpa_app_dir = '"' + meson.current_source_dir() / 'dpa_app' + '"'
 conf_data.set('DPA_DEFAULT_APP_DIR' , dpa_app_dir, description : 'DPA applications default directory')
-
-conf_data.set10('HAVE_DECL_IBV_QUERY_GID_EX',
-		cc.has_function('ibv_query_gid_ex', prefix : '#include <infiniband/verbs.h>', dependencies: libsnap_core_depends),
-		description: 'Set HAVE_DECL_IBV_QUERY_GID_EX if ibv_query_gid_ex() is supported')
 
 configure_file(output : 'config.h', configuration : conf_data)
 

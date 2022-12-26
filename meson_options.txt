@@ -12,6 +12,6 @@
 
 # Testing
 option('enable-gtest', type : 'boolean', value : false, description : 'build unit tests')
-option('with-flexio', type : 'string', description : 'flexio install prefix')
+option('with-flexio', type : 'string', value : 'subproject', description : 'flexio install prefix')
 option('enable-debug', type : 'boolean', value : false, description : 'enable extra debug prints and code')
 option('enable-simx', type : 'boolean', value : false, description : 'enable SIMX specific workaround. Must for SIMX')
