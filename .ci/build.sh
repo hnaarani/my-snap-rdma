@@ -52,7 +52,9 @@ fi
 
 if [[ -f /etc/debian_version ]]; then
     build_deb
-elif [[ -f /etc/redhat-release ]] || [[ -f /etc/euleros-release ]]; then
+elif [[ -f /etc/redhat-release ]] || \
+	[[ -f /etc/euleros-release ]] || \
+	[[ -f /etc/openEuler-release ]]; then
     build_rpm
 else
     echo "Not supported Linux version!"

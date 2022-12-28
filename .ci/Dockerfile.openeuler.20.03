@@ -1,4 +1,4 @@
-FROM centos:7.9.2009
+FROM openeuler/openeuler:20.03
 ARG _UID=6213
 ARG _GID=11429
 ARG _LOGIN=swx-jenkins
@@ -6,9 +6,6 @@ ARG _HOME=/var/home/$_LOGIN
 ARG MOFED_VER=5.9-0.1.9.0
 ENV LANG=en_US.utf-8
 USER root
-
-RUN yum install -y \
-    epel-release
 
 RUN yum install -y \
     atk \
@@ -41,32 +38,22 @@ RUN yum install -y \
     python3-pip \
     numactl-devel openssl-devel libaio-devel libaio \
     wget \
-    ccache
+    ccache \
+    bc
 
 RUN set -eux; \
-  if [ $(uname -m) == "aarch64" ]; then \
-    rhel_dist="rhel7.6alternate"; \
-  elif [ $(uname -m) == "x86_64" ]; then \
-    rhel_dist="rhel7.9"; \
-  fi; \
-  echo -e "[mlnx_ofed]\n\
+    echo -e "[mlnx_ofed]\n\
 name=Mellanox Technologies \$basearch mlnx_ofed\n\
-baseurl=http://webrepo.mtr.labs.mlnx/mswg/release/MLNX_OFED/MLNX_OFED_LINUX-${MOFED_VER}/MLNX_OFED_LINUX-${MOFED_VER}-${rhel_dist}-\$basearch/RPMS/\n\
+baseurl=http://webrepo.mtr.labs.mlnx/mswg/release/MLNX_OFED/MLNX_OFED_LINUX-${MOFED_VER}/MLNX_OFED_LINUX-${MOFED_VER}-openeuler20.03sp3-\$basearch/RPMS/\n\
 enabled=1\n\
 gpgcheck=0" > /etc/yum.repos.d/mellanox_mlnx_ofed.repo; \
     yum install -y mlnx-ofed-basic-user-only
-
-RUN pip3 -qq install gitlint
-RUN cd /usr/local/bin/ && wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl && chmod +x checkpatch.pl
-RUN cd /usr/local/bin/ && wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/spelling.txt
 
 RUN echo "${_LOGIN} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 RUN mkdir -p $_HOME
 RUN groupadd -f -g "$_GID" "$_LOGIN"
 RUN useradd -u "$_UID" -g "$_GID" -s /bin/bash -m -d ${_HOME} "$_LOGIN"
 RUN chown $_LOGIN $_HOME
-
-RUN yum clean all
 
 ENV MODULEPATH /hpc/local/etc/modulefiles
 SHELL ["/bin/bash"] 

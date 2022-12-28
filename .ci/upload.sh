@@ -1,5 +1,27 @@
 #!/bin/bash -eEx
 
+get_releasever() {
+
+    # rhel RPM macro should be available in centos >= 7
+    local releasever=$(rpm --eval "%{?rhel}")
+
+    if [ -z $releasever ]; then
+        if [ -f /etc/os-release ]; then
+            source /etc/os-release
+            if [ $ID == "openEuler" ]; then
+                # 20.03
+                if [ $VERSION_ID == "20.03" ]; then
+                    releasever="openEuler-20.03"
+                fi
+            elif [ $ID == "euleros" ]; then
+                releasever="euleros"
+            fi
+        fi
+    fi
+
+    echo $releasever
+}
+
 upload_deb_urm() {
     # Import gpg key
     gpg --import ${GPG_KEY_PATH}
@@ -57,17 +79,10 @@ upload_deb_nexus() {
 
 upload_rpm_nexus() {
 
-    if [ -e /etc/os-release ]; then
-        source /etc/os-release
-        if [ $ID = "euleros" ]; then
-            CUSTOM_DIST="euleros"
-        fi
-    fi
-
-    if [ ! -z $CUSTOM_DIST ]; then
-        releasever=$CUSTOM_DIST
-    else
-        releasever=$(rpm --eval "%{rhel}")
+    releasever=$(get_releasever)
+    if [ -z $releasever ]; then
+        echo "[ERROR]: Unsupported distro. Skip uploading.."
+        exit 1
     fi
 
     shopt -s nullglob
@@ -109,17 +124,10 @@ upload_rpm_nexus() {
 
 upload_rpm_urm() {
 
-    if [ -e /etc/os-release ]; then
-        source /etc/os-release
-        if [ $ID = "euleros" ]; then
-            CUSTOM_DIST="euleros"
-        fi
-    fi
-
-    if [ ! -z $CUSTOM_DIST ]; then
-        releasever=$CUSTOM_DIST
-    else
-        releasever=$(rpm --eval "%{rhel}")
+    releasever=$(get_releasever)
+    if [ -z $releasever ]; then
+        echo "[ERROR]: Unsupported distro. Skip uploading.."
+        exit 1
     fi
 
     shopt -s nullglob
@@ -213,7 +221,9 @@ if [[ -f /etc/debian_version ]]; then
         exit 1
     fi
 
-elif [[ -f /etc/redhat-release ]] || [[ -f /etc/euleros-release ]]; then
+elif [[ -f /etc/redhat-release ]] || \
+	[[ -f /etc/euleros-release ]] || \
+	[[ -f /etc/openEuler-release ]]; then
 
     arch=$(uname -m)
     if [ $1 == "urm" ]; then
