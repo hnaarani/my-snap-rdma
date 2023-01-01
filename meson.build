@@ -51,7 +51,7 @@ flexio_include = []
 flexio_pfx = get_option('with-flexio')
 if (flexio_pfx == 'subproject')
 	message('Using flexio from subproject')
-	flexio_proj = subproject('flexio', default_options: ['werror=false'])
+	flexio_proj = subproject('flexio', default_options: ['werror=false', 'default_library=static'])
 	flexio = flexio_proj.get_variable('libflexio_dep')
 	flexio_pfx = 'subprojects/flexio'
 	flexio_include = []
