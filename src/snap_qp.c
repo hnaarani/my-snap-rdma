@@ -150,8 +150,8 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 		dbr_umem_id = devx_cq->devx.umem.devx_umem->umem_id;
 		dbr_addr = 0;
 
-		snap_debug("memsize %lu umem_id %d umem_offset %lu eqn/thr_id %d dpa_va: 0x%0lx\n",
-				cq_mem_size + SNAP_MLX5_DBR_SIZE, umem_id, umem_offset,
+		snap_debug("memsize %lu umem_id %d umem_offset %lu type %d eqn/thr_id %d dpa_va: 0x%0lx\n",
+				cq_mem_size + SNAP_MLX5_DBR_SIZE, umem_id, umem_offset, attr->dpa_element_type,
 				devx_cq->eqn_or_dpa_element, snap_dpa_mem_addr(devx_cq->devx.dpa_mem));
 	}
 
