@@ -14,6 +14,7 @@
 
 #include "dpa.h"
 #include "snap_dma_internal.h"
+#include "snap_dpa_rt.h"
 
 int dpa_init()
 {
@@ -27,10 +28,11 @@ int dpa_run()
 	struct snap_dpa_tcb *tcb = dpa_tcb();
 	struct mlx5_cqe64 *cqe;
 
-	if (snap_unlikely(tcb->user_flag == 0)) {
+	if (tcb->user_flag == SNAP_DPA_RT_THR_EVENT) {
 		printf("RT event test starting\n");
 		dpa_rt_start();
-		tcb->user_flag = 1;
+		/* hack to run once in event mode */
+		tcb->user_flag++;
 		return 0;
 	}
 
@@ -40,8 +42,8 @@ int dpa_run()
 
 	printf("Got  DPU command, tcb %p\n", tcb);
 	snap_dpa_cmd_recv(dpa_mbox(), SNAP_DPA_CMD_STOP);
-	snap_dpa_rsp_send(dpa_mbox(), SNAP_DPA_RSP_OK);
 
 	printf("RT event test done. Exiting\n");
+	snap_dpa_rsp_send(dpa_mbox(), SNAP_DPA_RSP_OK);
 	return 0;
 }

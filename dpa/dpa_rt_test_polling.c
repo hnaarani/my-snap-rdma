@@ -28,8 +28,8 @@ int dpa_run()
 
 	printf("All done. Waiting for DPU command\n");
 	snap_dpa_cmd_recv(dpa_mbox(), SNAP_DPA_CMD_STOP);
-	snap_dpa_rsp_send(dpa_mbox(), SNAP_DPA_RSP_OK);
 
 	printf("RT test done. Exiting\n");
+	snap_dpa_rsp_send(dpa_mbox(), SNAP_DPA_RSP_OK);
 	return 0;
 }

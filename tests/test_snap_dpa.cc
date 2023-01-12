@@ -270,7 +270,7 @@ TEST_F(SnapDpaTest, create_rt_thread_single_event)
 	rt = snap_dpa_rt_get(get_ib_ctx(), "dpa_rt_test_event", &attr);
 	ASSERT_TRUE(rt);
 
-	f.mode = SNAP_DPA_RT_THR_POLLING;
+	f.mode = SNAP_DPA_RT_THR_EVENT;
 	f.queue_mux_mode = SNAP_DPA_RT_THR_SINGLE;
 	f.pd = NULL;
 	thr = snap_dpa_rt_thread_get(rt, &f);
