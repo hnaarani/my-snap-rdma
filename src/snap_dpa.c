@@ -17,12 +17,13 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "config.h"
 #include "snap_macros.h"
 
 #if HAVE_FLEXIO
-#include <libflexio/flexio_elf.h>
 #include <libflexio/flexio.h>
 #endif
 
@@ -36,6 +37,78 @@ SNAP_STATIC_ASSERT(sizeof(struct snap_dpa_tcb) % SNAP_MLX5_L2_CACHE_SIZE == 0,
 #if HAVE_FLEXIO
 
 SNAP_STATIC_ASSERT(CPU_SETSIZE > 256, "Static cpu set size must be greater than the max number of HARTS");
+
+/**
+ * we need dummy dpa eq if we want to use dpa cq in the pure polling mode.
+ * Use cases: polling mode for internal debug, in single queue/thread event
+ * mode we can use polling mode cq for tx completions
+ *
+ * since user mode eq does not make sense on dpu side, we keep implementation here and not
+ * in the snap_qp.c
+ */
+struct snap_dpa_eq {
+	struct snap_devx_common devx;
+};
+
+static struct snap_dpa_eq *snap_dpa_eq_create(struct snap_dpa_ctx *ctx)
+{
+	uint8_t in[DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr) +
+		   DEVX_ST_SZ_BYTES(dpa_eq)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(general_obj_out_cmd_hdr)] = {0};
+	struct snap_dpa_eq *eq;
+	uint8_t *eq_in;
+	const int EQ_LOG_SIZE = 4;
+	const int EQE_SIZE = 64;
+
+	eq = calloc(1, sizeof(*eq));
+	if (!eq)
+		return NULL;
+
+	DEVX_SET(general_obj_in_cmd_hdr, in, opcode, MLX5_CMD_OP_CREATE_GENERAL_OBJECT);
+	DEVX_SET(general_obj_in_cmd_hdr, in, obj_type, MLX5_OBJ_TYPE_DPA_EQ);
+
+	eq_in = in + DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr);
+
+	/* have some space, to handle improbably case when there will be an
+	 * event and we want to inspect it
+	 */
+	eq->devx.dpa_mem = snap_dpa_mem_alloc(ctx, EQE_SIZE * (1<<EQ_LOG_SIZE));
+	if (!eq->devx.dpa_mem)
+		goto free_eq;
+
+	/* TODO: set ownership bit on dpa mem*/
+	DEVX_SET(dpa_eq, eq_in, log_umem_size, EQ_LOG_SIZE);
+	DEVX_SET(dpa_eq, eq_in, oi, 1);
+	DEVX_SET(dpa_eq, eq_in, uar_page, ctx->uar->uar->page_id);
+	DEVX_SET(dpa_eq, eq_in, umem_id, snap_dpa_process_umem_id(ctx));
+	DEVX_SET64(dpa_eq, eq_in, umem_offset,
+			snap_dpa_process_umem_offset(ctx, snap_dpa_mem_addr(eq->devx.dpa_mem)));
+
+	eq->devx.devx_obj = mlx5dv_devx_obj_create(ctx->pd->context, in, sizeof(in), out, sizeof(out));
+	if (!eq->devx.devx_obj)
+		goto free_mem;
+
+	eq->devx.id = DEVX_GET(general_obj_out_cmd_hdr, out, obj_id);
+	return eq;
+
+free_mem:
+	snap_dpa_mem_free(eq->devx.dpa_mem);
+free_eq:
+	free(eq);
+	return NULL;
+}
+
+static void snap_dpa_eq_destroy(struct snap_dpa_eq *eq)
+{
+	mlx5dv_devx_obj_destroy(eq->devx.devx_obj);
+	snap_dpa_mem_free(eq->devx.dpa_mem);
+	free(eq);
+}
+
+static uint32_t snap_dpa_eq_id(struct snap_dpa_eq *eq)
+{
+	return eq->devx.id;
+}
 
 /**
  * snap_dpa_mem_alloc() - allocate memory on DPA
@@ -209,6 +282,95 @@ static void dma_q_destroy(struct snap_dpa_ctx *ctx)
 	snap_dma_q_destroy(ctx->dummy_q);
 }
 
+static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
+{
+	int ret;
+	char *file_name;
+	struct flexio_app_attr fattr;
+	flexio_status st;
+	FILE *fp;
+	struct stat app_st;
+
+	if (getenv("LIBSNAP_DPA_DIR"))
+		ret = asprintf(&file_name, "%s/%s", getenv("LIBSNAP_DPA_DIR"),
+			       app_name);
+	else
+		ret = asprintf(&file_name, "%s/%s", DPA_DEFAULT_APP_DIR, app_name);
+
+	/* TODO: support dpa app code embedding */
+
+	if (ret < 0) {
+		snap_error("Failed to allocate memory\n");
+		return -ENOMEM;
+	}
+
+	ret = stat(file_name, &app_st);
+	if (ret < 0) {
+		snap_error("Failed to stat %s: %m\n", file_name);
+		goto free_file;
+	}
+
+	if (!S_ISREG(app_st.st_mode)) {
+		snap_error("%s is not a regular file\n", file_name);
+		goto free_file;
+	}
+
+	fattr.app_name = app_name;
+	fattr.app_sig_sec_name = "";
+	fattr.app_bsize = app_st.st_size;
+
+	fattr.app_ptr = malloc(fattr.app_bsize);
+	if (!fattr.app_ptr) {
+		snap_error("Failed to alloc memory for %s\n", file_name);
+		goto free_file;
+	}
+
+	fp = fopen(file_name, "r");
+	if (!fp) {
+		snap_error("Failed to open %s: %m", file_name);
+		goto free_buf;
+	}
+
+	if (fread(fattr.app_ptr, fattr.app_bsize, 1, fp) != 1) {
+		snap_error("Failed to read app from %s: %m\n", file_name);
+		goto close_file;
+	}
+
+	/* load elf buffer */
+	st = flexio_app_create(&fattr, &dpa_ctx->dpa_app);
+	if (st != FLEXIO_STATUS_SUCCESS) {
+		snap_error("Failed to create flexio app\n");
+		goto close_file;
+	}
+
+	/* lookup entry point */
+	st = flexio_func_register(dpa_ctx->dpa_app, SNAP_DPA_THREAD_ENTRY_POINT, (flexio_func_t **)&dpa_ctx->dpa_app_entry_point);
+	if (st != FLEXIO_STATUS_SUCCESS) {
+		snap_error("Failed to find entry point\n");
+		goto free_app;
+	}
+
+	fclose(fp);
+	free(fattr.app_ptr);
+	return 0;
+
+free_app:
+	flexio_app_destroy(dpa_ctx->dpa_app);
+close_file:
+	fclose(fp);
+free_buf:
+	free(fattr.app_ptr);
+free_file:
+	free(file_name);
+	return -EINVAL;
+}
+
+static void snap_dpa_unload_app(struct snap_dpa_ctx *dpa_ctx)
+{
+	/* FLexio BUG: there is no flexio_func_unregister - memory leak -- must fix flexio */
+	flexio_app_destroy(dpa_ctx->dpa_app);
+}
+
 /**
  * snap_dpa_process_create() - create DPA application process
  * @ctx:         snap context
@@ -225,32 +387,10 @@ static void dma_q_destroy(struct snap_dpa_ctx *ctx)
  */
 struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char *app_name)
 {
-	struct flexio_eq_attr eq_attr = {0};
 	struct flexio_process_attr proc_attr = {0};
-	char *file_name;
 	flexio_status st;
-	int len;
-	void *app_buf;
-	size_t app_size;
 	struct snap_dpa_ctx *dpa_ctx;
-
-	if (getenv("LIBSNAP_DPA_DIR"))
-		len = asprintf(&file_name, "%s/%s", getenv("LIBSNAP_DPA_DIR"),
-			       app_name);
-	else
-		len = asprintf(&file_name, "%s/%s", DPA_DEFAULT_APP_DIR, app_name);
-
-	if (len < 0) {
-		snap_error("Failed to allocate memory\n");
-		return NULL;
-	}
-
-	st = flexio_get_elf_file(file_name, &app_buf, &app_size);
-	free(file_name);
-	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to find %s\n", app_name);
-		return NULL;
-	}
+	int ret;
 
 	dpa_ctx = calloc(1, sizeof(*dpa_ctx));
 	if (!dpa_ctx) {
@@ -258,15 +398,19 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 		return NULL;
 	}
 
+	ret = snap_dpa_load_app(dpa_ctx, app_name);
+	if (ret)
+		goto free_dpa_ctx;
+
 	dpa_ctx->pd = ibv_alloc_pd(ctx);
 	if (!dpa_ctx->pd) {
 		errno = -ENOMEM;
 		snap_error("%s: Failed to allocate pd for DPA context\n", app_name);
-		goto free_dpa_ctx;
+		goto free_dpa_app;
 	}
 
 	proc_attr.pd = dpa_ctx->pd;
-	st = flexio_process_create(ctx, app_buf, app_size, &proc_attr, &dpa_ctx->dpa_proc);
+	st = flexio_process_create(ctx, dpa_ctx->dpa_app, &proc_attr, &dpa_ctx->dpa_proc);
 	if (st != FLEXIO_STATUS_SUCCESS) {
 		snap_error("%s: Failed to create DPA process\n", app_name);
 		goto free_dpa_pd;
@@ -287,14 +431,17 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 		goto free_flexio_uar;
 	}
 
-	/* create a placeholder eq to attach cqs */
-	eq_attr.log_eq_ring_depth = 5; /* 32 elems */
-	eq_attr.uar_id = dpa_ctx->uar->uar->page_id;
-
-	st = flexio_eq_create(dpa_ctx->dpa_proc, ctx, &eq_attr, &dpa_ctx->dpa_eq);
+	st = flexio_window_create(dpa_ctx->dpa_proc, dpa_ctx->pd, &dpa_ctx->dpa_window);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("%s: Failed to create DPA event queue\n", app_name);
+		snap_error("Failed to create DPA thread mailbox window\n");
 		goto free_dpa_outbox;
+	}
+
+	/* create a placeholder eq to attach cqs */
+	dpa_ctx->dpa_eq = snap_dpa_eq_create(dpa_ctx);
+	if (!dpa_ctx->dpa_eq) {
+		snap_error("%s: Failed to create DPA event queue\n", app_name);
+		goto free_dpa_window;
 	}
 
 	if (dma_q_create(dpa_ctx))
@@ -303,7 +450,9 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 	return dpa_ctx;
 
 free_dpa_eq:
-	flexio_eq_destroy(dpa_ctx->dpa_eq);
+	snap_dpa_eq_destroy(dpa_ctx->dpa_eq);
+free_dpa_window:
+	flexio_window_destroy(dpa_ctx->dpa_window);
 free_dpa_outbox:
 	flexio_outbox_destroy(dpa_ctx->dpa_uar);
 free_flexio_uar:
@@ -314,6 +463,8 @@ free_dpa_proc:
 	flexio_process_destroy(dpa_ctx->dpa_proc);
 free_dpa_pd:
 	ibv_dealloc_pd(dpa_ctx->pd);
+free_dpa_app:
+	snap_dpa_unload_app(dpa_ctx);
 free_dpa_ctx:
 	free(dpa_ctx);
 	return NULL;
@@ -328,11 +479,13 @@ free_dpa_ctx:
 void snap_dpa_process_destroy(struct snap_dpa_ctx *ctx)
 {
 	dma_q_destroy(ctx);
-	flexio_eq_destroy(ctx->dpa_eq);
+	snap_dpa_eq_destroy(ctx->dpa_eq);
+	flexio_window_destroy(ctx->dpa_window);
 	flexio_outbox_destroy(ctx->dpa_uar);
 	snap_uar_put(ctx->uar);
 	flexio_process_destroy(ctx->dpa_proc);
 	ibv_dealloc_pd(ctx->pd);
+	snap_dpa_unload_app(ctx);
 	free(ctx);
 }
 
@@ -377,7 +530,7 @@ uint64_t snap_dpa_process_umem_size(struct snap_dpa_ctx *ctx)
  */
 uint32_t snap_dpa_process_eq_id(struct snap_dpa_ctx *ctx)
 {
-	return flexio_eq_get_hw_eq(ctx->dpa_eq)->eq_num;
+	return snap_dpa_eq_id(ctx->dpa_eq);
 }
 
 static void snap_dpa_thread_destroy_force(struct snap_dpa_thread *thr);
@@ -428,26 +581,26 @@ static int set_hart_mask(struct snap_dpa_ctx *dctx, struct snap_dpa_thread_attr 
 		struct flexio_event_handler_attr *f_thr_attr)
 {
 	int i, n;
-	flexio_status st;
+
+	f_thr_attr->affinity.type = FLEXIO_AFFINITY_NONE;
 
 	if (!attr->hart_set)
 		return 0;
 
-	/* convert cpu_set_t into hart mask */
+	/* convert cpu_set_t to strict affinity */
 	for (n = i = 0; n < CPU_COUNT(attr->hart_set) && i < CPU_SETSIZE; i++) {
 		if (!CPU_ISSET(i, attr->hart_set))
 			continue;
 
-		/* set hart mask */
+		/* set hart mask, only strict core affinity is supported so
+		 * we bind to the first cpu set
+		 */
 		snap_info("hart_mask: adding hart %d\n", i);
-		n++;
-		st = flexio_hart_mask_bit_set(dctx->dpa_proc, i, f_thr_attr->hart_bitmask);
-		if (st != FLEXIO_STATUS_SUCCESS) {
-			snap_error("Failed to add core %d to HART mask\n", i);
-			return -EINVAL;
-		}
+		f_thr_attr->affinity.type = FLEXIO_AFFINITY_STRICT;
+		f_thr_attr->affinity.id = i;
+		return 0;
+		//n++;
 	}
-
 	return 0;
 }
 
@@ -517,16 +670,10 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 		goto free_mbox;
 	}
 
-	st = flexio_window_create(thr->dctx->dpa_proc, thr->dctx->pd, &thr->cmd_window);
-	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to create DPA thread mailbox window\n");
-		goto free_mr;
-	}
-
 	tcb.heap_size = snap_max(attr->heap_size, SNAP_DPA_THREAD_MIN_HEAP_SIZE);
 	thr->mem = snap_dpa_mem_alloc(dctx, sizeof(tcb) + tcb.heap_size);
 	if (!thr->mem)
-		goto free_window;
+		goto free_mr;
 
 	dpa_tcb_addr = snap_dpa_mem_addr(thr->mem);
 	tcb.data_address = snap_dpa_thread_heap_base(thr);
@@ -541,16 +688,16 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 
 	ret = snap_dpa_memcpy(dctx, dpa_tcb_addr, &tcb, sizeof(tcb));
 	if (ret) {
-		snap_error("Failed to prepare DPA thread control block: %d\n", st);
+		snap_error("Failed to prepare DPA thread control block: %d\n", ret);
 		goto free_mem;
 	}
 
-	f_thr_attr.func_symbol = SNAP_DPA_THREAD_ENTRY_POINT;
 	f_thr_attr.arg = dpa_tcb_addr;
 	f_thr_attr.thread_local_storage_daddr = dpa_tcb_addr;
+	f_thr_attr.host_stub_func = dctx->dpa_app_entry_point;
 
 	st = flexio_event_handler_create(thr->dctx->dpa_proc, &f_thr_attr,
-			thr->cmd_window, thr->dctx->dpa_uar, &thr->dpa_thread);
+			thr->dctx->dpa_uar, &thr->dpa_thread);
 	if (st != FLEXIO_STATUS_SUCCESS) {
 		snap_error("Failed to create DPA thread: %d\n", st);
 		goto free_mem;
@@ -589,8 +736,6 @@ destroy_thread:
 	flexio_event_handler_destroy(thr->dpa_thread);
 free_mem:
 	snap_dpa_mem_free(thr->mem);
-free_window:
-	flexio_window_destroy(thr->cmd_window);
 free_mr:
 	ibv_dereg_mr(thr->cmd_mr);
 free_mbox:
@@ -611,7 +756,6 @@ static void snap_dpa_thread_destroy_force(struct snap_dpa_thread *thr)
 	trigger_q_destroy(thr);
 	flexio_event_handler_destroy(thr->dpa_thread);
 	snap_dpa_mem_free(thr->mem);
-	flexio_window_destroy(thr->cmd_window);
 	ibv_dereg_mr(thr->cmd_mr);
 	pthread_mutex_destroy(&thr->cmd_lock);
 	free(thr->cmd_mbox);

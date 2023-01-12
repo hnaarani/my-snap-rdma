@@ -69,5 +69,5 @@ void __snap_dpa_thread_start(uint64_t tcb_addr)
 
 	dpa_run();
 
-	flexio_dev_return();
+	flexio_os_event_wait();
 }

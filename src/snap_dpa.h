@@ -19,20 +19,6 @@
 #include <sched.h>
 #if HAVE_FLEXIO
 #include <libflexio/flexio.h>
-
-/* internal flexio structs that are not exposed */
-struct flexio_eq;
-
-struct flexio_eq_attr {
-	uint8_t log_eq_ring_depth;
-	uint32_t uar_id;
-};
-
-flexio_status flexio_eq_create(struct flexio_process *process, struct ibv_context *ibv_ctx,
-			       struct flexio_eq_attr *attr, struct flexio_eq **eq);
-flexio_status flexio_eq_destroy(struct flexio_eq *eq);
-struct flexio_hw_eq *flexio_eq_get_hw_eq(struct flexio_eq *eq);
-
 #endif
 
 #if !__DPA
@@ -45,7 +31,6 @@ bool snap_dpa_enabled(struct ibv_context *ctx);
 
 struct snap_dpa_ctx {
 	struct flexio_process  *dpa_proc;
-	struct flexio_eq       *dpa_eq;
 	struct flexio_outbox   *dpa_uar;
 	struct ibv_pd          *pd;
 	struct snap_uar        *uar;
@@ -53,6 +38,10 @@ struct snap_dpa_ctx {
 	struct snap_dma_q      *dummy_q;
 	struct snap_dpa_mkeyh  *dma_mkeyh;
 	struct flexio_uar      *flexio_uar;
+	struct flexio_app      *dpa_app;
+	void                   *dpa_app_entry_point;
+	struct flexio_window   *dpa_window;
+	struct snap_dpa_eq     *dpa_eq;
 	struct {
 		uint64_t heap_memory;
 	} stats;
@@ -118,7 +107,6 @@ struct snap_dpa_thread_attr {
 struct snap_dpa_thread {
 	struct snap_dpa_ctx   *dctx;
 	struct flexio_event_handler *dpa_thread;
-	struct flexio_window  *cmd_window;
 	void                  *cmd_mbox;
 	pthread_mutex_t       cmd_lock;
 	struct ibv_mr         *cmd_mr;

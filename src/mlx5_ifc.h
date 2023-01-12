@@ -2647,7 +2647,8 @@ enum mlx5_obj_type {
 	MLX5_OBJ_TYPE_APU_WINDOW = 0x200000000000000,
 
 	MLX5_OBJ_TYPE_EMULATED_DEV_EQ = 0x49,
-	MLX5_OBJ_TYPE_DPA_DB_CQ_MAPPING = 0x32
+	MLX5_OBJ_TYPE_DPA_DB_CQ_MAPPING = 0x32,
+	MLX5_OBJ_TYPE_DPA_EQ = 0x33
 };
 
 enum {
@@ -4705,4 +4706,38 @@ struct mlx5_ifc_emulated_dev_db_cq_map_bits {
 
 	u8 reserved_at_100[0x100];
 };
+
+struct mlx5_ifc_dpa_eq_bits {
+	u8 modify_field_select[0x40];
+
+	u8 reserved_at_40[0x40];
+
+	u8 status[0x4];
+	u8 reserved_at_84[0x9];
+	u8 ec[0x1];
+	u8 oi[0x1];
+	u8 reserved_at_8f[0x5];
+	u8 st[0x4];
+	u8 reserved_at_98[0x2];
+	u8 log_umem_size[0x6];
+
+	u8 reserved_at_a0[0x20];
+
+	u8 reserved_at_c0[0x8];
+	u8 uar_page[0x18];
+
+	u8 umem_id[0x20];
+
+	u8 umem_offset[0x40];
+
+	u8 reserved_at_140[0x8];
+	u8 consumer_counter[0x18];
+
+	u8 reserved_at_160[0x8];
+	u8 producer_counter[0x18];
+
+	u8 reserved_at_180[0x80];
+};
+
+
 #endif /* MLX5_IFC_H */
