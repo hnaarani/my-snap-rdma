@@ -50,8 +50,11 @@ conf_data.set10('HAVE_DECL_IBV_QUERY_GID_EX',
 flexio_include = []
 flexio_pfx = get_option('with-flexio')
 if (flexio_pfx == 'subproject')
+	if (meson.is_cross_build())
+		error('External flexio must be used for the cross compilation')
+	endif
 	message('Using flexio from subproject')
-	flexio_proj = subproject('flexio', default_options: ['werror=false', 'default_library=static'])
+	flexio_proj = subproject('flexio', default_options: ['default_library=static'])
 	flexio = flexio_proj.get_variable('libflexio_dep')
 	flexio_pfx = 'subprojects/flexio'
 	flexio_include = []
