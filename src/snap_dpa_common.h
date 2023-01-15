@@ -30,7 +30,7 @@
 
 #define SNAP_DPA_HW_THREADS_PER_CORE 16
 /* harts 254 and 255 are reserved by the rtos kerenel and should not be used */
-#define SNAP_DPA_HW_THREADS_COUNT 254
+#define SNAP_DPA_HW_THREADS_COUNT 170
 
 /* max length of *printf/log buffer on DPA */
 #define SNAP_DPA_PRINT_BUF_LEN 160 /* should be careful because this is allocated on stack */
