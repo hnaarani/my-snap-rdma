@@ -197,6 +197,33 @@ TEST_F(SnapDpaTest, create_thread_two_event) {
 	snap_dpa_process_destroy(dpa_ctx);
 }
 
+TEST_F(SnapDpaTest, create_thread_n_event) {
+	const int N = 1024;
+	struct snap_dpa_ctx *dpa_ctx;
+	struct snap_dpa_thread *dpa_thr[N];
+	int i;
+	uint64_t total_memory;
+
+	dpa_ctx = snap_dpa_process_create(get_ib_ctx(), "dpa_hello_event");
+	ASSERT_TRUE(dpa_ctx);
+
+	for (i = 0; i < N; i++) {
+		dpa_thr[i] = snap_dpa_thread_create(dpa_ctx, NULL);
+		if (!dpa_thr[i]) {
+			printf("Failed to create thread %d mem_used %ld bytes\n", i, dpa_ctx->stats.heap_memory);
+			ASSERT_TRUE(dpa_thr[i]);
+		}
+	}
+	total_memory = dpa_ctx->stats.heap_memory;
+	sleep(1);
+	for (i = 0; i < N; i++) {
+		snap_dpa_log_print(dpa_thr[i]->dpa_log);
+		snap_dpa_thread_destroy(dpa_thr[i]);
+	}
+	snap_dpa_process_destroy(dpa_ctx);
+	printf("total heap memory used %ld bytes\n", total_memory);
+}
+
 TEST_F(SnapDpaTest, dpa_memcpy) {
 	struct snap_dpa_ctx *dpa_ctx;
 	size_t i;
@@ -279,6 +306,40 @@ TEST_F(SnapDpaTest, create_rt_thread_single_event)
 	snap_dpa_log_print(thr->thread->dpa_log);
 	snap_dpa_rt_thread_put(thr);
 	snap_dpa_rt_put(rt);
+}
+
+TEST_F(SnapDpaTest, create_rt_thread_single_n_event)
+{
+	const int N = 1024;
+	int i;
+	struct snap_dpa_rt_attr attr = {};
+	struct snap_dpa_rt *rt;
+	struct snap_dpa_rt_thread *thr[N];
+	struct snap_dpa_rt_filter f;
+	uint64_t total_memory;
+
+	rt = snap_dpa_rt_get(get_ib_ctx(), "dpa_rt_test_event", &attr);
+	ASSERT_TRUE(rt);
+
+	f.mode = SNAP_DPA_RT_THR_EVENT;
+	f.queue_mux_mode = SNAP_DPA_RT_THR_SINGLE;
+	f.pd = NULL;
+
+	for (i = 0; i < N; i++) {
+		thr[i] = snap_dpa_rt_thread_get(rt, &f);
+		if (!thr[i]) {
+			printf("Failed to create thread %d mem_used %ld bytes\n", i, rt->dpa_proc->stats.heap_memory);
+			ASSERT_TRUE(thr[i]);
+		}
+	}
+	total_memory = rt->dpa_proc->stats.heap_memory;
+	sleep(1);
+	for (i = 0; i < N; i++) {
+		snap_dpa_log_print(thr[i]->thread->dpa_log);
+		snap_dpa_rt_thread_put(thr[i]);
+	}
+	snap_dpa_rt_put(rt);
+	printf("total heap memory used %ld bytes\n", total_memory);
 }
 
 void SnapDpaTest::run_cmd_lat_bench(int how)
