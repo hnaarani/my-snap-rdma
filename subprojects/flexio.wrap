@@ -1,6 +1,6 @@
 [wrap-git]
 directory = flexio
 url = http://l-gerrit.mtl.labs.mlnx:8080/flexio-sdk
-revision = RC4Ver1.0
+revision = RC5Ver1.0
 depth = 10
 patch_filename = flexio.tar.gz
