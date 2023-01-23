@@ -3,7 +3,7 @@
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 WD=${WORKSPACE:-$(dirname $SCRIPTPATH)}
-DIRS_TO_CHECK="blk src ctrl rpc"
+DIRS_TO_CHECK="blk src ctrl"
 
 code_style_check() {
 

@@ -3,7 +3,7 @@
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 WD=${WORKSPACE:-$(dirname $SCRIPTPATH)}
-DIRS_TO_CHECK="blk src ctrl rpc"
+DIRS_TO_CHECK="blk src ctrl"
 
 
 if ! command -v codespell &> /dev/null; then
