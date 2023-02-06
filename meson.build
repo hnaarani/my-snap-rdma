@@ -39,6 +39,7 @@ cpp = meson.get_compiler('cpp', native : true)
 libsnap_core_depends = []
 libsnap_core_depends += dependency('libibverbs', required : true, native : true)
 libsnap_core_depends += dependency('libmlx5', required : true, native : true)
+libsnap_core_depends += dependency('threads', required : true, native : true)
 
 conf_data = configuration_data()
 

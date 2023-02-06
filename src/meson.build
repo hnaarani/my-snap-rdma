@@ -10,7 +10,7 @@
 # provided with the software product.
 #
 
-libsnap_core_include = include_directories('.', '..', flexio_include)
+libsnap_core_include = include_directories('.', '..', '../ctrl', flexio_include)
 
 libsnap_core_sources = [
 	'snap_dma.c',
@@ -21,7 +21,8 @@ libsnap_core_sources = [
 	'snap_env.c',
 	'snap_mr.c',
 	'snap_qp.c',
-	'snap_umr.c'
+	'snap_umr.c',
+	'../ctrl/snap_dp_map.c'
 ]
 
 #TODO remove once DOCA moves to work over dev_emu_dma_* API

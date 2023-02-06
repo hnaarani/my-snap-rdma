@@ -16,9 +16,10 @@
 #include <linux/virtio_ring.h>
 
 #include "khash.h"
-#include "snap_dp_map.h"
-#include "snap_macros.h"
+/* this ugliness is needed by meson build */
+#include "../src/snap_macros.h"
 #include "snap_virtio_adm_spec.h"
+#include "snap_dp_map.h"
 
 KHASH_INIT(snap_dp_hash, uint64_t, char, 0, kh_int64_hash_func, kh_int64_hash_equal);
 
@@ -47,7 +48,7 @@ struct snap_dp_map *snap_dp_map_create(unsigned int page_size)
 
 void snap_dp_map_destroy(struct snap_dp_map *map)
 {
-	kh_init_inplace(snap_dp_hash, &map->dp_set);
+	kh_destroy_inplace(snap_dp_hash, &map->dp_set);
 	pthread_spin_destroy(&map->lock);
 }
 
@@ -185,7 +186,7 @@ uint32_t snap_dp_bmap_get_start_pa(struct snap_dp_bmap *map, uint64_t pa, uint32
 
 		range_pa += range_len;
 	}
-	return -EINVAL;
+	return 0;
 found:
 
 	snap_debug("range_pa: %ld, range_len %ld\n", range_pa, range_len);
