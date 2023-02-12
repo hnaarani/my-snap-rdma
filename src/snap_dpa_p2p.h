@@ -71,8 +71,8 @@ enum {
 
 	/* NVMe specific messages */
 	/* DPA->DPU */
-	SNAP_DPA_P2P_MSG_NVME_SQ_HEAD = 40,
-	SNAP_DPA_P2P_MSG_NVME_CQ_TAIL = 41,
+	SNAP_DPA_P2P_MSG_NVME_SQ_TAIL = 40,
+	SNAP_DPA_P2P_MSG_NVME_CQ_HEAD = 41,
 	/* DPU->DPA */
 	SNAP_DPA_P2P_MSGS_NVME_MSIX = 50
 };
@@ -104,6 +104,7 @@ struct snap_dpa_p2p_msg {
 		/sizeof(uint16_t) - 2)
 
 #define SNAP_DPA_DESC_SIZE 16
+#define SNAP_DPA_NVME_SQE_SIZE 64
 
 /* same for head/table updates */
 struct snap_dpa_p2p_msg_vq_update {
@@ -111,6 +112,16 @@ struct snap_dpa_p2p_msg_vq_update {
 	uint16_t avail_index;
 	uint16_t descr_head_count;
 	uint16_t descr_heads[SNAP_DPA_P2P_VQ_MAX_HEADS];
+};
+
+struct snap_dpa_p2p_msg_sq_tail {
+	struct snap_dpa_p2p_msg_base base;
+	uint32_t sq_tail;
+};
+
+struct snap_dpa_p2p_msg_cq_head {
+	struct snap_dpa_p2p_msg_base base;
+	uint32_t cq_head;
 };
 
 struct snap_dpa_p2p_msg_vq_msix {
@@ -153,6 +164,9 @@ int snap_dpa_p2p_send_vq_table(struct snap_dpa_p2p_q *q,
 int snap_dpa_p2p_send_vq_table_cont(struct snap_dpa_p2p_q *q, uint16_t vqid, uint16_t vqsize,
 		uint16_t last_avail_index, uint16_t avail_index, uint64_t driver,
 		uint32_t driver_mkey);
-
+int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t sq_tail,
+		uint64_t sqe_table, uint32_t driver_mkey, uint64_t shadow_sqes,
+		uint32_t shadow_sqes_mkey, uint32_t old_sq_tail, uint32_t depth);
+int snap_dpa_p2p_send_cq_head(struct snap_dpa_p2p_q *q, uint16_t cq_head);
 int snap_dpa_p2p_send_msix(struct snap_dpa_p2p_q *q, int credit);
 #endif

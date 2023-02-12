@@ -51,11 +51,6 @@ do { \
 static inline int dpa_virtq_msix_recv();
 static inline void dpa_virtq_msix_raise();
 
-static inline bool is_event_mode()
-{
-	return dpa_tcb()->user_flag == SNAP_DPA_RT_THR_EVENT;
-}
-
 static inline struct dpa_virtq *get_vq()
 {
 	/* will redo to be mt safe */

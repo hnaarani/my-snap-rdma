@@ -208,6 +208,75 @@ int snap_dpa_p2p_send_vq_table(struct snap_dpa_p2p_q *q,
 	return n;
 }
 
+int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t sq_tail,
+		uint64_t sqe_table, uint32_t driver_mkey, uint64_t shadow_sqes,
+		uint32_t shadow_sqes_mkey, uint32_t old_sq_tail, uint32_t depth)
+{
+	/*TODO_Doron - fix credit system and remove P2P_TODO*/
+#if P2P_TODO
+	if (!q->credit_count)
+		return -EAGAIN;
+#endif
+	int rc;
+	struct snap_dpa_p2p_msg_sq_tail msg;
+	int wrap_around_sqes;
+	int sqes_to_write;
+
+	uint32_t sqe_offset = old_sq_tail * SNAP_DPA_NVME_SQE_SIZE;
+
+	/* wrap around check */
+	if (snap_unlikely(old_sq_tail > sq_tail)) {
+		sqes_to_write = depth - old_sq_tail;
+		wrap_around_sqes = sq_tail;
+	} else {
+		sqes_to_write = sq_tail - old_sq_tail;
+		wrap_around_sqes = 0;
+	}
+
+	rc = snap_dma_q_write(q->dma_q,	(void *) sqe_table + sqe_offset,
+			SNAP_DPA_NVME_SQE_SIZE * sqes_to_write, driver_mkey,
+			shadow_sqes + sqe_offset, shadow_sqes_mkey, NULL);
+	if (snap_unlikely(rc)) {
+		snap_debug("send sq tail error: %d\n", rc);
+		return rc;
+	}
+	if (wrap_around_sqes) {
+		/* TODO - add stats, check if wrap_around_sqes is likely or not*/
+		/* wrap around requires extra write*/
+		sqes_to_write = wrap_around_sqes;
+		rc = snap_dma_q_write(q->dma_q, (void *) sqe_table,
+			SNAP_DPA_NVME_SQE_SIZE * sqes_to_write, driver_mkey, shadow_sqes,
+			shadow_sqes_mkey, NULL);
+		if (snap_unlikely(rc)) {
+			snap_debug("send sq tail error: %d\n", rc);
+			return rc;
+		}
+	}
+
+	msg.base.credit_delta = 1;
+	msg.base.type = SNAP_DPA_P2P_MSG_NVME_SQ_TAIL;
+	msg.base.qid = sqid;
+	msg.sq_tail = sq_tail;
+
+#if P2P_TODO
+	--q->credit_count;
+#endif
+
+	return snap_dpa_p2p_send_msg(q, (struct snap_dpa_p2p_msg *) &msg);
+}
+
+int snap_dpa_p2p_send_cq_head(struct snap_dpa_p2p_q *q, uint16_t cq_head)
+{
+	struct snap_dpa_p2p_msg_cq_head msg;
+
+	msg.base.credit_delta = 1;
+	msg.base.type = SNAP_DPA_P2P_MSG_NVME_CQ_HEAD;
+	msg.base.qid = q->qid;
+	msg.cq_head = cq_head;
+
+	return snap_dpa_p2p_send_msg(q, (struct snap_dpa_p2p_msg *) &msg);
+}
+
 int snap_dpa_p2p_send_msix(struct snap_dpa_p2p_q *q, int credit)
 {
 	struct snap_dpa_p2p_msg msg;

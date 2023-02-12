@@ -70,6 +70,14 @@ static inline void __outbox_write(dpa_outbox_value_t* ptr, dpa_outbox_value_t va
 	*ptr = value;
 }
 
+#define outbox_read(__outbox_page_ptr, __name) __outbox_read((OUTBOX_PAGE_FIELD_PTR(__outbox_page_ptr, __name)))
+static inline dpa_outbox_value_t __outbox_read(dpa_outbox_value_t* ptr)
+{
+	return *ptr;
+}
+
+#define BUFFER_SHIFT		_OUTBOX_P_BGN(RXT_DB, cqn)
+
 #define CQ_DB_CQN_SHIFT			_OUTBOX_P_BGN(CQ_DB, cqn)
 #define CQ_DB_CQ_CI_SHIFT		_OUTBOX_P_BGN(CQ_DB, cq_ci)
 #define OUTBOX_V_CQ_DB(__cqn, __cq_ci) (OUTBOX_VALUE2(__cqn, CQ_DB_CQN_SHIFT, __cq_ci, CQ_DB_CQ_CI_SHIFT))
@@ -97,6 +105,17 @@ static inline void __outbox_write(dpa_outbox_value_t* ptr, dpa_outbox_value_t va
 #define EMU_CAP_DUMMY_QPN_SHIFT               (_OUTBOX_P_BGN(EMU_CAP, dummy_qpn))
 #define EMU_CAP_EMULATION_INDEX_SHIFT         (_OUTBOX_P_BGN(EMU_CAP, emulation_index))
 #define OUTBOX_V_EMU_CAP(_dummy_qpn, _emulation_index) (OUTBOX_VALUE2(_dummy_qpn, EMU_CAP_TRIGGER_DUMMY_QPN_SHIFT, _emulation_index, EMU_CAP_TRIGGER_EMULATION_INDEX_SHIFT))
+
+#define RXC_READ_DW_NUM_SHIFT         (_OUTBOX_P_BGN(RXC_READ, dword_number))
+#define RXC_READ_SHIFT         (_OUTBOX_P_BGN(RXC_READ, queue_number))
+#define OUTBOX_V_RXC_READ(__qn)		(OUTBOX_VALUE1(__qn, RXC_READ_SHIFT))
+
+struct dpa_outbox_v9_reg_RXC_READ_rbits {		/* Little Endian */
+	unsigned char reserved_at_00[0x00002];
+	unsigned char queue_number[0x0001A];
+
+	unsigned char reserved_at_1c[0x00024];
+};
 
 struct dpa_outbox_v9_reg_CQ_DB_rbits {		/* Little Endian */
 	unsigned char cqn[0x00018];		/* Re-arm CQ, update CQ ci */

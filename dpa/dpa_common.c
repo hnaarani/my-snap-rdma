@@ -112,6 +112,68 @@ void dpa_thread_free(void *addr)
 {
 }
 
+inline bool is_event_mode()
+{
+	return dpa_tcb()->user_flag == SNAP_DPA_RT_THR_EVENT;
+}
+
+inline int dpa_p2p_recv()
+{
+	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
+	struct snap_dpa_p2p_msg *msgs[16];
+	int n, msix_count;
+
+	/* cq shall be armed before it is polled. See man ibv_get_cq_event */
+	if (is_event_mode())
+		snap_dv_arm_cq(&rt_ctx->dpa_cmd_chan.dma_q->sw_qp.dv_rx_cq);
+
+	msix_count = 0;
+	do {
+		n = snap_dpa_p2p_recv_msg(&rt_ctx->dpa_cmd_chan, msgs, 16);
+		if (n)
+			snap_debug("recv %d new messages\n", n);
+		msix_count += n;
+	} while (n != 0);
+
+	if (msix_count == 0)
+		return 0;
+
+#if 0
+	/* at the moment we are only getting msix messages for the one queue. no need to parse */
+	for (msix_count = i = 0; i < n; i++) {
+		rt_ctx->dpa_cmd_chan.credit_count += msgs[i]->base.credit_delta;
+		if (msgs[i]->base.type == SNAP_DPA_P2P_MSG_CR_UPDATE) {
+			//cr_update = 1;
+			continue;
+		}
+
+		if (msgs[i]->base.type != SNAP_DPA_P2P_MSG_VQ_MSIX)
+			continue;
+		/* TODO: log bad messages */
+		msix_count++;
+	}
+#endif
+
+	return msix_count;
+}
+
+inline void dpa_msix_arm()
+{
+	/* TODO_Doron: use always armed in event mode */
+	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
+	struct mlx5_cqe64 *cqe;
+	int n;
+
+	/* cq shall be armed before it is polled. See man ibv_get_cq_event */
+	snap_dv_arm_cq(&rt_ctx->msix_cq);
+
+	for (n = 0; n < SNAP_DPA_RT_THR_MSIX_CQE_CNT; n++) {
+		cqe = snap_dv_poll_cq(&rt_ctx->msix_cq, 64);
+		if (!cqe)
+			break;
+	}
+}
+
 static void __attribute__((unused)) dpa_log_add(const char *msg)
 {
 	struct snap_dpa_log *log = dpa_mbox() + SNAP_DPA_THREAD_MBOX_LEN;

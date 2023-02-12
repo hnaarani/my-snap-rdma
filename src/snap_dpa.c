@@ -1309,7 +1309,7 @@ struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, struct snap_
 	ret = snap_dpa_duar_query(duar, obj_id);
 	if (ret)
 		goto destroy_duar;
-
+	duar->obj_id = obj_id;
 	return duar;
 destroy_duar:
 	mlx5dv_devx_obj_destroy(duar->obj);

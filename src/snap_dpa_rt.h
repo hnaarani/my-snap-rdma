@@ -114,7 +114,7 @@ struct dpa_rt_context {
 	struct snap_hw_cq msix_cq;
 };
 
-#define SNAP_DPA_RT_QP_TX_SIZE 256
+#define SNAP_DPA_RT_QP_TX_SIZE 512
 #define SNAP_DPA_RT_QP_RX_SIZE 256
 #define SNAP_DPA_RT_QP_TX_ELEM_SIZE 64
 #define SNAP_DPA_RT_QP_RX_ELEM_SIZE 64

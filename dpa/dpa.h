@@ -164,6 +164,23 @@ static inline void dpa_duar_arm(uint32_t duar_id, uint32_t cq_num)
 	outbox_write(ctx->outbox_base, EMU_CAP, OUTBOX_V_EMU_CAP(cq_num, duar_id));
 }
 
+static inline uint64_t dpa_ctx_read(uint32_t cq_num)
+{
+	struct flexio_os_thread_ctx *ctx;
+	volatile uint64_t uctl = 1;
+	ctx = dpa_get_thread_ctx();
+
+	outbox_write(ctx->outbox_base, RXC_RD, OUTBOX_V_RXC_READ(cq_num));
+	/* TODO - review fences usage*/
+	while(uctl) {
+		snap_memory_bus_fence();
+		uctl = outbox_read(ctx->outbox_base, UCTL);
+	}
+	snap_memory_bus_fence();
+
+	return outbox_read(ctx->outbox_base, BUFFER);
+}
+
 static inline void dpa_msix_send(uint32_t cq_num)
 {
 	struct flexio_os_thread_ctx *ctx;
@@ -207,4 +224,7 @@ static inline struct dpa_rt_context *dpa_rt_ctx()
 
 void dpa_rt_init(void);
 void dpa_rt_start(void);
+int dpa_p2p_recv(void);
+void dpa_msix_arm(void);
+bool is_event_mode(void);
 #endif

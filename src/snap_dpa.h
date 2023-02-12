@@ -136,6 +136,7 @@ int snap_dpa_thread_mr_copy_sync(struct snap_dpa_thread *thr, uint64_t va, uint6
 struct snap_dpa_duar {
 	struct mlx5dv_devx_obj *obj;
 	uint32_t duar_id;
+	uint32_t obj_id;
 };
 
 /*

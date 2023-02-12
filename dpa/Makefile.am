@@ -27,7 +27,8 @@ noinst_PROGRAMS += dpa_hello \
 		   dpa_virtq_split \
 		   dpa_rt_test_polling \
 		   dpa_rt_test_event \
-		   dpa_cmd_lat_bench
+		   dpa_cmd_lat_bench \
+		   dpa_nvme
 
 noinst_LIBRARIES = libdpa.a
 
@@ -67,5 +68,8 @@ nodist_libdpa_a_SOURCES = dpa_snap_dma.c dpa_snap_dma_dv.c dpa_snap_dpa_p2p.c
 
 dpa_virtq_split_SOURCES = dpa_virtq_split.c
 dpa_virtq_split_LDADD = libdpa.a
+
+dpa_nvme_SOURCES = dpa_nvme.c
+dpa_nvme_LDADD = libdpa.a
 
 endif
