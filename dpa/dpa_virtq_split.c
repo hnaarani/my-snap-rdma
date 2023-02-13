@@ -657,6 +657,8 @@ int dpa_init()
 	if (vq != get_vq())
 		dpa_fatal("vq must follow rt context: vq@%p expected@%p\n", vq, get_vq());
 
+	vq->state = DPA_VIRTQ_STATE_ERR;
+
 	dpa_debug("VirtQ init done! vq@%p\n", vq);
 	return 0;
 }
