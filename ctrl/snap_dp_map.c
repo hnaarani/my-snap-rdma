@@ -58,7 +58,8 @@ int snap_dp_map_add_range(struct snap_dp_map *map, uint64_t pa, uint32_t length)
 	int ret;
 
 	pthread_spin_lock(&map->lock);
-	for (page = pa & ~(map->page_size - 1); page < pa + length; page += map->page_size) {
+	for (page = pa & ~((uint64_t)map->page_size - 1); page < pa + length;
+	     page += map->page_size) {
 		kh_put(snap_dp_hash, &map->dp_set, page, &ret);
 		if (ret == -1)
 			goto out;
