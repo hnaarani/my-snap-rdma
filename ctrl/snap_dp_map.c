@@ -69,6 +69,85 @@ out:
 	return ret;
 }
 
+static int compare(const void *a, const void *b)
+{
+	uint64_t a_val = *((uint64_t *)a);
+	uint64_t b_val = *((uint64_t *)b);
+
+	if (a_val == b_val)
+		return 0;
+	else if (a_val < b_val)
+		return -1;
+	else
+		return 1;
+}
+
+int snap_dp_map_serialize_sort(struct snap_dp_map *map, uint64_t pa, uint64_t length,
+			       uint64_t *buf, uint32_t buf_len)
+{
+	int i, k, j;
+	uint64_t page;
+	uint64_t *tmp_buf = NULL;
+	uint64_t *tmp_buf_p = buf;
+
+	pthread_spin_lock(&map->lock);
+
+	/* Find the number of pages in the range */
+	for (k = kh_begin(&map->dp_set), i = 0;
+	     k != kh_end(&map->dp_set); k++) {
+		if (!kh_exist(&map->dp_set, k))
+			continue;
+		page = kh_key(&map->dp_set, k);
+		if (page >= pa + length || page < pa)
+			continue;
+		i++;
+	}
+
+	//printf("Hash map has %d elements in range\n", i);
+
+	if (i * sizeof(uint64_t) > buf_len) {
+		//printf("Allocate a buffer of %u elements\n", i);
+		tmp_buf = calloc(i, sizeof(uint64_t));
+		if (!tmp_buf) {
+			printf("Can't allocate a buffer of %u elements\n", i);
+			return -1;
+		}
+		tmp_buf_p = tmp_buf;
+	}
+
+	/* Copy to the buffer */
+	for (k = kh_begin(&map->dp_set), i = 0;
+	     k != kh_end(&map->dp_set); k++) {
+		if (!kh_exist(&map->dp_set, k))
+			continue;
+		page = kh_key(&map->dp_set, k);
+		if (page >= pa + length || page < pa)
+			continue;
+		//printf("found k = %d i = %d, page %lu\n", k, i, page);
+		tmp_buf_p[i] = page;
+		i++;
+	}
+
+	/* Sort the buffer and delete from the hash map */
+	qsort(tmp_buf_p, i, sizeof(uint64_t), compare);
+	for (j = 0; j < buf_len / sizeof(uint64_t) && j < i; j++) {
+		k = kh_get(snap_dp_hash, &map->dp_set, tmp_buf_p[j]);
+		//printf("going to delete k = %d j = %d, page %lu\n", k, j, tmp_buf_p[j]);
+		kh_del(snap_dp_hash, &map->dp_set, k);
+	}
+
+	pthread_spin_unlock(&map->lock);
+
+	/* Copy to the original buffer if needed */
+	if (tmp_buf) {
+		//printf("Copy from temp buf to buf size %lu\n", j * sizeof(uint64_t));
+		memcpy(buf, tmp_buf, j * sizeof(uint64_t));
+		free(tmp_buf);
+	}
+
+	return j;
+}
+
 size_t snap_dp_map_get_size(struct snap_dp_map *map)
 {
 	return kh_size(&map->dp_set) * sizeof(uint64_t);

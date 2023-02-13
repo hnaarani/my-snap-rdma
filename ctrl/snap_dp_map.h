@@ -25,6 +25,8 @@ void snap_dp_map_destroy(struct snap_dp_map *map);
 int snap_dp_map_add_range(struct snap_dp_map *map, uint64_t pa, uint32_t length);
 size_t snap_dp_map_get_size(struct snap_dp_map *map);
 int snap_dp_map_serialize(struct snap_dp_map *map, uint64_t *buf, uint32_t length);
+int snap_dp_map_serialize_sort(struct snap_dp_map *map, uint64_t pa, uint64_t length,
+			       uint64_t *buf, uint32_t buf_len);
 
 /* page bit/byte map */
 
