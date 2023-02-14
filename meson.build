@@ -75,7 +75,7 @@ else
 	flexio = disabler()
 endif
 
-dpa_app_dir = '"' + meson.current_source_dir() / 'dpa_app' + '"'
+dpa_app_dir = '"' + get_option('prefix') + '/dpa_app' + '"'
 conf_data.set('DPA_DEFAULT_APP_DIR' , dpa_app_dir, description : 'DPA applications default directory')
 
 configure_file(output : 'config.h', configuration : conf_data)
@@ -91,4 +91,5 @@ endif
 
 subdir('src')
 subdir('dpa')
+subdir('dpa_app')
 subdir('tests')
