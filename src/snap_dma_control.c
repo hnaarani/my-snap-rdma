@@ -616,7 +616,7 @@ static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 	q->rx_elem_size = attr->rx_elem_size;
 	q->tx_elem_size = attr->tx_elem_size;
 
-	qp_init_attr->sq_size = attr->tx_qsize;
+	qp_init_attr->sq_size = q->tx_qsize;
 	/* Need more space in rx queue in order to avoid memcpy() on rx data */
 	qp_init_attr->rq_size = 2 * attr->rx_qsize;
 	/* we must be able to send CQEs inline */
