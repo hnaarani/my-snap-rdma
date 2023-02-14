@@ -487,7 +487,7 @@ static int _snap_alloc_functions(struct snap_context *sctx,
 	int i, j;
 	int ret, output_size, num_emulated_pfs;
 
-	pfs_ctx->dirty = false;
+	pfs_ctx->dirty = true;
 	pfs_ctx->pfs = calloc(pfs_ctx->max_pfs, sizeof(struct snap_pci));
 	if (!pfs_ctx->pfs)
 		return -ENOMEM;
@@ -3193,7 +3193,7 @@ int snap_get_pf_list(struct snap_context *sctx, enum snap_emulation_type type,
 		}
 
 		for (i = 0; i < pfs_ctx->max_pfs; i++) {
-			if (pfs[i]->hotplugged && !pfs[i]->pci_bdf.raw) {
+			if (pfs[i]->plugged && !pfs[i]->pci_bdf.raw) {
 				ret = snap_pf_get_pci_info(pfs[i], out);
 				if (ret) {
 					snap_warn("pf get pci info failed, ret:%d\n", ret);
@@ -3202,7 +3202,7 @@ int snap_get_pf_list(struct snap_context *sctx, enum snap_emulation_type type,
 				}
 			}
 
-			if (!pfs[i]->pci_bdf.raw)
+			if (pfs[i]->plugged && !pfs[i]->pci_bdf.raw)
 				clear_dirty = false;
 		}
 
