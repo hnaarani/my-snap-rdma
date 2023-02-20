@@ -51,7 +51,6 @@ int dpa_nvme_cq_create(struct snap_dpa_cmd *cmd)
 
 	memcpy(cq, &nvme_cmd->cmd_cq_create.cq, sizeof(nvme_cmd->cmd_cq_create.cq));
 
-	cq->state = DPA_NVME_STATE_RDY;
 	cq->host_cq_head = 0;
 	/* TODO_Doron: input validation/sanity check */
 	dpa_debug("nvme cq create\n");
@@ -77,11 +76,10 @@ int dpa_nvme_sq_create(struct snap_dpa_cmd *cmd)
 	/* TODO_Doron: input validation/sanity check */
 	TAILQ_INSERT_TAIL(&cq->sqs, sq, entry);
 
-	sq->state = DPA_NVME_STATE_RDY;
 	snap_dv_arm_cq(&rt_ctx->db_cq);
 	dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 	sq->host_sq_tail = 0;
-	snap_debug("sq create: id %d\n", sq->sqid);
+	snap_debug("sq create: id %d, state:%d\n", sq->sqid, sq->state);
 
 	dpa_write_rsp(sq->state);
 	return SNAP_DPA_RSP_OK;
@@ -93,10 +91,45 @@ int dpa_nvme_sq_destroy(struct snap_dpa_cmd *cmd)
 	struct dpa_nvme_sq *sq;
 
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
-		sq->state = DPA_NVME_STATE_SUSPEND;
+		sq->state = DPA_NVME_STATE_ERR;
 	}
 
 	return SNAP_DPA_RSP_OK;
+}
+
+int dpa_nvme_sq_modify(struct snap_dpa_cmd *cmd)
+{
+	struct dpa_nvme_cq *cq = get_nvme_cq();
+	struct dpa_nvme_sq *sq;
+	struct dpa_nvme_cmd *ncmd = (struct dpa_nvme_cmd *)cmd;
+	enum dpa_nvme_state next_state = ncmd->cmd_sq_modify.state;
+
+	TAILQ_FOREACH(sq, &cq->sqs, entry) {
+		if (sq->sqid == ncmd->cmd_sq_modify.sqid) {
+			sq->state = next_state;
+			return SNAP_DPA_RSP_OK;
+		}
+	}
+
+	dpa_debug("error modify: SQ id %d not found\n", ncmd->cmd_sq_modify.sqid);
+	return SNAP_DPA_RSP_OK;
+}
+
+int dpa_nvme_sq_query(struct snap_dpa_cmd *cmd)
+{
+	struct dpa_nvme_cq *cq = get_nvme_cq();
+	struct dpa_nvme_sq *sq;
+	struct dpa_nvme_cmd *ncmd = (struct dpa_nvme_cmd *)cmd;
+
+	TAILQ_FOREACH(sq, &cq->sqs, entry) {
+		if (sq->sqid == ncmd->cmd_sq_query.sqid) {
+			dpa_write_rsp(sq->state);
+			return SNAP_DPA_RSP_OK;
+		}
+	}
+
+	dpa_debug("error query: SQ id %d not found\n", ncmd->cmd_sq_query.sqid);
+	return SNAP_DPA_RSP_ERR;
 }
 
 int dpa_nvme_cq_destroy(struct snap_dpa_cmd *cmd)
@@ -151,10 +184,10 @@ static int do_command(int *done)
 			rsp_status = dpa_nvme_sq_destroy(cmd);
 			break;
 		case DPA_NVME_SQ_MODIFY:
-			rsp_status = SNAP_DPA_RSP_OK;
+			rsp_status = dpa_nvme_sq_modify(cmd);
 			break;
 		case DPA_NVME_SQ_QUERY:
-			rsp_status = SNAP_DPA_RSP_OK;
+			rsp_status = dpa_nvme_sq_query(cmd);
 			break;
 		default:
 			dpa_warn("unsupported command %d\n", cmd->cmd);
@@ -201,7 +234,7 @@ static inline void nvme_progress()
 
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
 		if (snap_unlikely(sq->state != DPA_NVME_STATE_RDY))
-			break;
+			continue;
 		snap_dv_arm_cq(&rt_ctx->db_cq);
 		dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 

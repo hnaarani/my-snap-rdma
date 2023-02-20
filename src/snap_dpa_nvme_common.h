@@ -29,8 +29,8 @@ enum {
 enum dpa_nvme_state {
 	DPA_NVME_STATE_INIT = 0,
 	DPA_NVME_STATE_RDY,
-	DPA_NVME_STATE_SUSPEND,
 	DPA_NVME_STATE_ERR,
+	DPA_NVME_STATE_SUSPEND,
 };
 
 TAILQ_HEAD(dpa_nvme_sq_list, dpa_nvme_sq);
@@ -69,8 +69,14 @@ struct __attribute__((packed)) dpa_nvme_cmd_sq_create {
 };
 
 struct dpa_nvme_cmd_sq_modify {
+	uint32_t sqid;
 	enum dpa_nvme_state state;
 };
+
+struct dpa_nvme_cmd_sq_query {
+	uint32_t sqid;
+};
+
 struct dpa_nvme_rsp_query {
 	enum dpa_nvme_state state;
 };
@@ -81,6 +87,7 @@ struct dpa_nvme_cmd {
 		struct dpa_nvme_cmd_cq_create cmd_cq_create;
 		struct dpa_nvme_cmd_sq_create cmd_sq_create;
 		struct dpa_nvme_cmd_sq_modify cmd_sq_modify;
+		struct dpa_nvme_cmd_sq_query cmd_sq_query;
 	};
 };
 
