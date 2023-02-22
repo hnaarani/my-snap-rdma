@@ -4688,8 +4688,8 @@ enum {
 
 struct mlx5_ifc_emulated_dev_db_cq_map_bits {
 	u8 modify_field_select[0x40];
-
-	u8 reserved_at_40[0x10];
+	u8 keep_db_value_on_create[0x1];
+	u8 reserved_at_41[0xF];
 	u8 map_state[0x4];
 	u8 queue_type[0x4];
 	u8 device_type[0x8];
@@ -4704,7 +4704,9 @@ struct mlx5_ifc_emulated_dev_db_cq_map_bits {
 
 	u8 dbr_handle[0x20];
 
-	u8 reserved_at_100[0x100];
+	u8 db_value[0x40];
+
+	u8 reserved_at_140[0xc0];
 };
 
 struct mlx5_ifc_dpa_eq_bits {

@@ -146,6 +146,8 @@ struct snap_dpa_duar {
  * @dev_type: device type (virtio/nvme)
  * @queue_type: queue type owning the db to be mapped (Only for dev_type nvme)
  * @map_state: Mapping state of the db
+ * @keep_db_value: get db value from host (1) or set new value (0)
+ * @db_value: if keep_db_value is 0, set new db value
  */
 struct snap_dpa_duar_attr {
 	uint32_t dev_emu_id;
@@ -154,6 +156,9 @@ struct snap_dpa_duar_attr {
 	uint8_t dev_type;
 	uint8_t queue_type;
 	uint8_t map_state;
+	uint8_t keep_db_value;
+	uint64_t db_value;
+
 };
 
 struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, struct snap_dpa_duar_attr *attr);

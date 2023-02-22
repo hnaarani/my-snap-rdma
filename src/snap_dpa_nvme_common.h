@@ -20,6 +20,7 @@
 enum {
 	DPA_NVME_CQ_CREATE = SNAP_DPA_CMD_APP_FIRST,
 	DPA_NVME_CQ_DESTROY,
+	DPA_NVME_CQ_QUERY,
 	DPA_NVME_SQ_CREATE,
 	DPA_NVME_SQ_DESTROY,
 	DPA_NVME_SQ_MODIFY,
@@ -79,6 +80,7 @@ struct dpa_nvme_cmd_sq_query {
 
 struct dpa_nvme_rsp_query {
 	enum dpa_nvme_state state;
+	uint32_t db_value;
 };
 
 struct dpa_nvme_cmd {

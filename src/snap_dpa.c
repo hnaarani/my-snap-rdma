@@ -1296,6 +1296,8 @@ struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, struct snap_
 	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, device_emulation_id, attr->dev_emu_id);
 	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, queue_id, attr->queue_id);
 	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, cqn, attr->cq_num);
+	DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, keep_db_value_on_create, attr->keep_db_value);
+	DEVX_SET64(emulated_dev_db_cq_map, cq_db_map_in, db_value, attr->db_value);
 
 	if ((attr->queue_type == MLX5_DEV_DB_NVME_SQ) || (attr->queue_type == MLX5_DEV_DB_NVME_CQ))
 		DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, queue_type, attr->queue_type);
