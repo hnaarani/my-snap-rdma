@@ -254,8 +254,15 @@ void dpa_logger(const char *file_name, unsigned int line_num,
 		int level, const char *level_c, const char *format, ...)
 {
 	va_list ap;
+	char *file;
 
-	printf("%s:%s:%d ", level_c, file_name, line_num);
+	file = strrchr(file_name, '/');
+	if (!file)
+		file = (char *)file_name;
+	else
+		file++;
+
+	printf("[%s][%s:%d] ", level_c, file, line_num);
 	va_start(ap, format);
 	do_print(format, ap);
 	va_end(ap);

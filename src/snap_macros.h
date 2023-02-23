@@ -89,6 +89,13 @@
 
 #define PFX "snap: "
 
+#if __DPA
+#include "dpa_log.h"
+#define snap_debug dpa_debug
+#define snap_error dpa_error
+#define snap_warn  dpa_warn
+#define snap_info  dpa_info
+#else
 #define snap_debug(fmt, ...) \
 	do { if (SNAP_DEBUG) \
 		printf("%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__); \
@@ -98,6 +105,7 @@
 #define snap_error printf
 #define snap_warn  printf
 #define snap_info  printf
+#endif
 
 static inline int snap_ref_safe(int *refcnt)
 {

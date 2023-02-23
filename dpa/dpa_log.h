@@ -17,8 +17,8 @@
 enum {
 	DPA_LOG_LEVEL_MAX = 0,
 	DPA_LOG_LEVEL_DBG,
-	DPA_LOG_LEVEL_INFO,
-	DPA_LOG_LEVEL_WARN,
+	DPA_LOG_LEVEL_INF,
+	DPA_LOG_LEVEL_WRN,
 	DPA_LOG_LEVEL_ERR,
 };
 
@@ -44,10 +44,10 @@ enum {
 #endif
 
 #define dpa_info(_fmt, ...) \
-	_DPA_LOG_COMMON(INFO, _fmt, ## __VA_ARGS__)
+	_DPA_LOG_COMMON(INF, _fmt, ## __VA_ARGS__)
 
 #define dpa_warn(_fmt, ...) \
-	_DPA_LOG_COMMON(WARN, _fmt, ## __VA_ARGS__)
+	_DPA_LOG_COMMON(WRN, _fmt, ## __VA_ARGS__)
 
 #define dpa_error(_fmt, ...) \
 	_DPA_LOG_COMMON(ERR, _fmt, ## __VA_ARGS__)
