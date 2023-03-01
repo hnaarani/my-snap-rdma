@@ -304,15 +304,21 @@ static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 		return -ENOMEM;
 	}
 
-	ret = stat(file_name, &app_st);
+	fp = fopen(file_name, "r");
+	if (!fp) {
+		snap_error("Failed to open %s: %m", file_name);
+		goto free_file;
+	}
+
+	ret = fstat(fileno(fp), &app_st);
 	if (ret < 0) {
 		snap_error("Failed to stat %s: %m\n", file_name);
-		goto free_file;
+		goto close_file;
 	}
 
 	if (!S_ISREG(app_st.st_mode)) {
 		snap_error("%s is not a regular file\n", file_name);
-		goto free_file;
+		goto close_file;
 	}
 
 	fattr.app_name = app_name;
@@ -322,25 +328,19 @@ static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 	fattr.app_ptr = malloc(fattr.app_bsize);
 	if (!fattr.app_ptr) {
 		snap_error("Failed to alloc memory for %s\n", file_name);
-		goto free_file;
-	}
-
-	fp = fopen(file_name, "r");
-	if (!fp) {
-		snap_error("Failed to open %s: %m", file_name);
-		goto free_buf;
+		goto close_file;
 	}
 
 	if (fread(fattr.app_ptr, fattr.app_bsize, 1, fp) != 1) {
 		snap_error("Failed to read app from %s: %m\n", file_name);
-		goto close_file;
+		goto free_buf;
 	}
 
 	/* load elf buffer */
 	st = flexio_app_create(&fattr, &dpa_ctx->dpa_app);
 	if (st != FLEXIO_STATUS_SUCCESS) {
 		snap_error("Failed to create flexio app\n");
-		goto close_file;
+		goto free_buf;
 	}
 
 	/* lookup entry point */
@@ -350,16 +350,17 @@ static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 		goto free_app;
 	}
 
-	fclose(fp);
 	free(fattr.app_ptr);
+	fclose(fp);
+	free(file_name);
 	return 0;
 
 free_app:
 	flexio_app_destroy(dpa_ctx->dpa_app);
-close_file:
-	fclose(fp);
 free_buf:
 	free(fattr.app_ptr);
+close_file:
+	fclose(fp);
 free_file:
 	free(file_name);
 	return -EINVAL;
