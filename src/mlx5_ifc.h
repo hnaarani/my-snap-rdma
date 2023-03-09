@@ -1487,7 +1487,16 @@ struct mlx5_ifc_nvme_emulation_cap_bits {
 	u8	 reserved_at_58[0x3];
 	u8	 log_max_emulated_cq[0x5];
 
-	u8	 reserved_at_60[0x7a0];
+	u8	 reserved_at_60[0x10];
+	u8	 nvme_max_device_doorbell_range[0x10];
+
+	u8	 max_num_vf_dynamic_msix[0x10];
+	u8	 min_num_vf_dynamic_msix[0x10];
+
+	u8	 reserved_at_100[0x10];
+	u8	 max_num_pf_msix[0x10];
+
+	u8	 reserved_at_120[0x740];
 };
 
 enum {
@@ -2677,7 +2686,8 @@ enum {
 	MLX5_NVME_DEVICE_MODIFY_BAR_CC = 1 << 1,
 	MLX5_NVME_DEVICE_MODIFY_BAR_AQA_ASQ_ACQ = 1 << 2,
 	MLX5_NVME_DEVICE_MODIFY_PCI_HOTPLUG_STATE = 1 << 3,
-
+	MLX5_NVME_DEVICE_MODIFY_NUM_MSIX = 1 << 8,
+	MLX5_NVME_DEVICE_MODIFY_DYN_VF_MSIX_RESET = 1 << 9,
 };
 
 struct mlx5_ifc_general_obj_in_cmd_hdr_bits {
@@ -3162,9 +3172,12 @@ struct mlx5_ifc_nvme_device_emulation_bits {
 
 	u8	   enabled[0x1];
 	u8	   resources_on_emulation_manager[0x1];
-	u8	   reserved_at_62[0x3];
+	u8	   reserved_at_62[0x1];
+	u8	   dynamic_vf_msix_control[0x1];
+	u8	   dynamic_vf_msix_reset[0x1];
 	u8	   pci_hotplug_state[0x3];
-	u8	   reserved_at_68[0x18];
+	u8	   reserved_at_68[0x8];
+	u8	   num_free_dynamic_vfs_msix[0x10];
 
 	u8	   counter_set_id[0x20];
 
