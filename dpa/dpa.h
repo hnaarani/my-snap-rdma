@@ -171,7 +171,7 @@ static inline uint64_t dpa_ctx_read(uint32_t cq_num)
 	ctx = dpa_get_thread_ctx();
 
 	outbox_write(ctx->outbox_base, RXC_RD, OUTBOX_V_RXC_READ(cq_num));
-	/* TODO - review fences usage*/
+
 	while(uctl) {
 		snap_memory_bus_fence();
 		uctl = outbox_read(ctx->outbox_base, UCTL);

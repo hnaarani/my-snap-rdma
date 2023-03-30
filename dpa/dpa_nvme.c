@@ -264,7 +264,10 @@ static inline void nvme_progress()
 			sq->dpu_mkey, sq->dpu_sqe_shadow_addr, sq->dpu_sqe_shadow_mkey, sq->host_sq_tail, sq->queue_depth);
 			sq->host_sq_tail = (uint32_t) sq_tail;
 		}
+		/* kick off sq tail message fast */
+		rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q);
 	}
+
 	snap_dv_arm_cq(&cq->cq_head_db_hw_cq);
 	cq_head = dpa_ctx_read(cq->cq_head_duar_id);
 	if (cq->host_cq_head != cq_head) {
@@ -272,7 +275,7 @@ static inline void nvme_progress()
 		cq->host_cq_head = cq_head;
 	}
 
-	/* kick off doorbells */
+	/* kick off cq head message */
 	rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q);
 }
 
