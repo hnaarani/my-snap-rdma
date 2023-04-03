@@ -110,8 +110,8 @@ int snap_dp_map_serialize_sort(struct snap_dp_map *map, uint64_t pa, uint64_t le
 		//printf("Allocate a buffer of %u elements\n", i);
 		tmp_buf = calloc(i, sizeof(uint64_t));
 		if (!tmp_buf) {
-			printf("Can't allocate a buffer of %u elements\n", i);
-			return -1;
+			snap_error("Can't allocate a buffer of %u elements\n", i);
+			goto err;
 		}
 		tmp_buf_p = tmp_buf;
 	}
@@ -147,6 +147,10 @@ int snap_dp_map_serialize_sort(struct snap_dp_map *map, uint64_t pa, uint64_t le
 	}
 
 	return j;
+
+err:
+	pthread_spin_unlock(&map->lock);
+	return -1;
 }
 
 size_t snap_dp_map_get_size(struct snap_dp_map *map)
