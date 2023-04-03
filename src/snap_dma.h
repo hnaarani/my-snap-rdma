@@ -324,7 +324,8 @@ enum {
 	SNAP_DMA_Q_DPA_MODE_NONE = 0,
 	SNAP_DMA_Q_DPA_MODE_POLLING,
 	SNAP_DMA_Q_DPA_MODE_EVENT,
-	SNAP_DMA_Q_DPA_MODE_TRIGGER
+	SNAP_DMA_Q_DPA_MODE_TRIGGER,
+	SNAP_DMA_Q_DPA_MODE_MSIX_TRIGGER
 };
 
 /**
@@ -364,18 +365,28 @@ enum {
  *                SNAP_DMA_Q_DPA_MODE_NONE or 0 - regular queue is created
  *                SNAP_DMA_Q_DPA_MODE_POLLING   - QP and CQ are in dpa memory.
  *                                                CQs are bound to dummy dpa EQ
- *                SMAP_DMA_Q_DPA_MODE_EVENT     - QP and CQ are in dpa memory.
+ *                SNAP_DMA_Q_DPA_MODE_EVENT     - QP and CQ are in dpa memory.
  *                                                CQs are bound to the @dpa_thread
- *                SMAP_DMA_Q_DPA_MODE_TRIGGER   - QP is in host memory, CQs are in dpa memory
+ *                SNAP_DMA_Q_DPA_MODE_TRIGGER   - QP is in host memory, CQs are in dpa memory
  *                                                CQs are bound to the @dpa_thread.
+ *                SNAP_DMA_Q_DPA_MODE_MSIX_TRIGGER - QP is in host memory, CQs are in dpa memory,
+ *                                                   CQs are bound to the emulated device EQ given
+ *                                                   by @emu_dev_eqn.
  *                In all DPA modes, CQs have doorbell records on host memory. It means
  *                that they can be also armed from host.
  *                Basically polling mode is for polling dpa application, event
  *                mode is used to wake up and schedule dpa thread, trigger mode
  *                is used to wake up and schedule dpa thread from the dpu side.
+ *                MSIX trigger mode can be used to raise interrupt from the DPU
+ *                side when coordination with DPA is needed.
  * @dpa_proc:     snap dpa process context. Must be valid if @dpa_mode is SNAP_DMA_Q_DPA_MODE_POLLING
+ *                or SNAP_DMA_Q_DPA_MODE_MSIX_TRIGGER.
  * @dpa_thread:   snap dpa thread context. Must be valid if @dpa_mode is
  *                SNAP_DMA_Q_DPA_MODE_EVENT or SMAP_DMA_Q_DPA_MODE_TRIGGER
+ * @use_emu_dev_eqn: If true CQs will be connected to the emulated device msix EQ
+ *                given by @emu_dev_eqn. CQs are always armed and completions will
+ *                trigger MSIX interrupt.
+ * @emu_dev_eqn:  emulated device msix EQ number
  */
 struct snap_dma_q_create_attr {
 	uint32_t tx_qsize;
@@ -400,6 +411,9 @@ struct snap_dma_q_create_attr {
 		struct snap_dpa_ctx *dpa_proc;
 		struct snap_dpa_thread *dpa_thread;
 	};
+
+	bool use_emu_dev_eqn;
+	uint32_t emu_dev_eqn;
 };
 
 /* TODO add support for worker mode single and SRQ*/

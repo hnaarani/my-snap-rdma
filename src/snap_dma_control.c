@@ -252,7 +252,22 @@ static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_crea
 		cq_attr.dpa_thread = dma_q_attr->dpa_thread;
 		break;
 
+	case SNAP_DMA_Q_DPA_MODE_MSIX_TRIGGER:
+		qp_init_attr->qp_on_dpa = false;
+
+		cq_attr.cq_type = SNAP_OBJ_DEVX;
+		cq_attr.cq_on_dpa = true;
+		cq_attr.dpa_element_type = MLX5_APU_ELEMENT_TYPE_EMULATED_DEV_EQ;
+		cq_attr.dpa_proc = dma_q_attr->dpa_proc;
+		cq_attr.use_eqn = true;
+		cq_attr.eqn = dma_q_attr->emu_dev_eqn;
+		break;
+
 	case SNAP_DMA_Q_DPA_MODE_NONE:
+		if (dma_q_attr->use_emu_dev_eqn) {
+			cq_attr.use_eqn = true;
+			cq_attr.eqn = dma_q_attr->emu_dev_eqn;
+		}
 		break;
 	default:
 		snap_error("unsupported dpa mode %d\n", dma_q_attr->dpa_mode);

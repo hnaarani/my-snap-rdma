@@ -72,12 +72,15 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 	devx_cq->devx.on_dpa = attr->cq_on_dpa;
 
 	if (!attr->cq_on_dpa) {
-		/* get eqn
-		 * TODO: support non - polling mode
-		 */
-		if (attr->use_eqn)
+		if (attr->use_eqn) {
+			/* at the moment the only external eqn supported is emulated_dev_eq
+			 * so that we can send msix interrupts from the DPU side
+			 */
+			DEVX_SET(cqc, cqctx, ext_element_type, MLX5_APU_ELEMENT_TYPE_EMULATED_DEV_EQ);
+			DEVX_SET(cqc, cqctx, ext_element, 1);
+			DEVX_SET(cqc, cqctx, always_armed_cq, 1);
 			devx_cq->eqn_or_dpa_element = attr->eqn;
-		else {
+		} else {
 			ret = mlx5dv_devx_query_eqn(ctx, 0, &devx_cq->eqn_or_dpa_element);
 			if (ret)
 				goto deref_uar;
@@ -132,8 +135,8 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 			goto deref_uar;
 		}
 
-		DEVX_SET(cqc, cqctx, apu_cq, 1);
-		DEVX_SET(cqc, cqctx, apu_element_type, attr->dpa_element_type);
+		DEVX_SET(cqc, cqctx, ext_element, 1);
+		DEVX_SET(cqc, cqctx, ext_element_type, attr->dpa_element_type);
 
 		umem_id = snap_dpa_process_umem_id(dpa_proc);
 		umem_offset = snap_dpa_process_umem_offset(dpa_proc, snap_dpa_mem_addr(devx_cq->devx.dpa_mem));
