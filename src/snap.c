@@ -3188,8 +3188,7 @@ int snap_get_pf_list(struct snap_context *sctx, enum snap_emulation_type type,
 				SNAP_UNINITIALIZED_VHCA_ID, out, output_size);
 		if (ret) {
 			snap_warn("query functions info failed, ret:%d\n", ret);
-			free(out);
-			goto out;
+			goto free_out;
 		}
 
 		for (i = 0; i < pfs_ctx->max_pfs; i++) {
@@ -3197,8 +3196,7 @@ int snap_get_pf_list(struct snap_context *sctx, enum snap_emulation_type type,
 				ret = snap_pf_get_pci_info(pfs[i], out);
 				if (ret) {
 					snap_warn("pf get pci info failed, ret:%d\n", ret);
-					free(out);
-					goto out;
+					goto free_out;
 				}
 			}
 
@@ -3208,6 +3206,9 @@ int snap_get_pf_list(struct snap_context *sctx, enum snap_emulation_type type,
 
 		if (clear_dirty)
 			pfs_ctx->dirty = false;
+
+free_out:
+		free(out);
 	}
 
 out:
