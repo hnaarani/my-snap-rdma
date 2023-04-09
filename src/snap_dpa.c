@@ -483,6 +483,7 @@ void snap_dpa_process_destroy(struct snap_dpa_ctx *ctx)
 	snap_dpa_eq_destroy(ctx->dpa_eq);
 	flexio_window_destroy(ctx->dpa_window);
 	flexio_outbox_destroy(ctx->dpa_uar);
+	flexio_uar_destroy(ctx->flexio_uar);
 	snap_uar_put(ctx->uar);
 	flexio_process_destroy(ctx->dpa_proc);
 	ibv_dealloc_pd(ctx->pd);
