@@ -722,7 +722,6 @@ static inline void dv_dma_q_get_rx_comp(struct snap_dma_q *q, struct mlx5_cqe64 
 	 **/
 	rq_mask = q->sw_qp.dv_qp.hw_qp.rq.wqe_cnt - 1;
 	if (snap_likely(cqe->op_own & MLX5_INLINE_SCATTER_64)) {
-		__builtin_prefetch(cqe - 1);
 		rx_comp->data = cqe - 1;
 	} else if (cqe->op_own & MLX5_INLINE_SCATTER_32) {
 		rx_comp->data = cqe;
