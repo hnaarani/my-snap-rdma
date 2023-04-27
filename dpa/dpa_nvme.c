@@ -267,7 +267,7 @@ static inline void nvme_progress()
 		/* kick off sq tail message fast */
 		rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q);
 	}
-
+	dpa_duar_arm(cq->cq_head_duar_id, rt_ctx->db_cq.cq_num);
 	snap_dv_arm_cq(&cq->cq_head_db_hw_cq);
 	cq_head = dpa_ctx_read(cq->cq_head_duar_id);
 	if (cq->host_cq_head != cq_head) {
