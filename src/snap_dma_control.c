@@ -203,7 +203,7 @@ static int dummy_progress(struct snap_dma_q *q)
  * This is done to keep creation attribute 'const'
  */
 static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_create_attr *dma_q_attr,
-		struct snap_qp_attr *qp_init_attr, struct snap_dma_ibv_qp *qp, int mode)
+		struct snap_qp_attr *qp_init_attr, struct snap_dma_ibv_qp *qp, int mode, bool use_devx)
 {
 	struct snap_cq_attr cq_attr = {
 		.cq_context = dma_q_attr->comp_context,
@@ -220,7 +220,7 @@ static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_crea
 	if (mode == SNAP_DMA_Q_MODE_VERBS)
 		cq_attr.cq_type = SNAP_OBJ_VERBS;
 	else
-		cq_attr.cq_type = dma_q_attr->use_devx ? SNAP_OBJ_DEVX : SNAP_OBJ_DV;
+		cq_attr.cq_type = use_devx ? SNAP_OBJ_DEVX : SNAP_OBJ_DV;
 
 	switch (dma_q_attr->dpa_mode) {
 	case SNAP_DMA_Q_DPA_MODE_POLLING:
@@ -618,7 +618,7 @@ static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 	 * to pick up events.
 	 * At the moment this is only relevant for the unit tests
 	 */
-	if (attr->use_devx)
+	if (attr->sw_use_devx)
 		q->no_events = true;
 
 	/* make sure that the completion is requested at least once */
@@ -770,7 +770,7 @@ static int snap_create_sw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 				q->ops->mode);
 	else
 		rc = snap_create_qp_helper(pd, attr, &qp_init_attr, &q->sw_qp,
-				q->ops->mode);
+				q->ops->mode, attr->sw_use_devx);
 	if (rc)
 		return rc;
 
@@ -783,6 +783,23 @@ static void snap_destroy_fw_qp(struct snap_dma_q *q)
 		snap_destroy_qp_helper(&q->fw_qp, true);
 }
 
+/*
+ * Since SNAP need to set isolate_vl_tc bit for fw_qp,
+ * devx type qp is the only option to do it, this is why
+ * change fw qp from verbs qp to devx qp. BUT, we have
+ * already use fw qp as verbs qp in many other place,
+ * in order to minimize the impact of this change, fake
+ * a verbs type fw qp for it.
+ **/
+static void snap_fill_fw_verbs_qp(struct snap_dma_ibv_qp *devx_qp,
+				struct ibv_qp *verbs_qp)
+{
+	verbs_qp->pd = devx_qp->qp->devx_qp.devx.pd;
+	verbs_qp->context = devx_qp->qp->devx_qp.devx.pd->context;
+	verbs_qp->qp_num = devx_qp->qp->devx_qp.devx.id;
+	/* should also init verbs_qp->handle, but handle cannot get from devx_qp. */
+}
+
 static int snap_create_fw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 			     const struct snap_dma_q_create_attr *attr)
 {
@@ -792,8 +809,10 @@ static int snap_create_fw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 
 	/* refactor fw qp creation code */
 	memcpy(&fw_dma_q_attr, attr, sizeof(*attr));
-	fw_dma_q_attr.mode = SNAP_DMA_Q_MODE_VERBS;
-	fw_dma_q_attr.use_devx = false;
+	if (attr->fw_use_devx)
+		fw_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
+	else
+		fw_dma_q_attr.mode = SNAP_DMA_Q_MODE_VERBS;
 	fw_dma_q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_NONE;
 	fw_dma_q_attr.comp_channel = NULL;
 	fw_dma_q_attr.comp_context = NULL;
@@ -801,15 +820,24 @@ static int snap_create_fw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 
 	/* cannot create empty cq or a qp without one */
 	qp_init_attr.sq_size = snap_max(attr->tx_qsize / 4, SNAP_DMA_FW_QP_MIN_SEND_WR);
-	qp_init_attr.rq_size = 1;
+	qp_init_attr.rq_size = attr->rx_qsize;
 	/* give one sge so that we can post which is useful for testing */
 	qp_init_attr.sq_max_sge = 1;
 
 	/* the qp 'resources' are going to be replaced by the fw. We do not
 	 * need use DV or GGA here
 	 **/
-	rc = snap_create_qp_helper(pd, &fw_dma_q_attr, &qp_init_attr, &q->fw_qp, fw_dma_q_attr.mode);
-	return rc;
+	rc = snap_create_qp_helper(pd, &fw_dma_q_attr, &qp_init_attr, &q->fw_qp, fw_dma_q_attr.mode, attr->fw_use_devx);
+	if (rc) {
+		snap_error("create fw_qp failed, rc:%d\n", rc);
+		return rc;
+	}
+
+	q->fw_use_devx = attr->fw_use_devx;
+	if (q->fw_use_devx)
+		snap_fill_fw_verbs_qp(&q->fw_qp, &q->fw_verbs_qp);
+
+	return 0;
 }
 
 static int snap_modify_lb_qp_init2init(struct snap_qp *qp)

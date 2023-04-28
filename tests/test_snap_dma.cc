@@ -115,6 +115,7 @@ void SnapDmaTest::SetUp()
 	m_dma_q_attr.rx_elem_size = 64;
 	m_dma_q_attr.rx_cb = dma_rx_cb;
 	m_dma_q_attr.mode = snap_env_getenv(SNAP_DMA_Q_OPMODE);
+	m_dma_q_attr.fw_use_devx = false;
 
 	m_pd = NULL;
 	dev_list = ibv_get_device_list(&n_dev);
@@ -335,14 +336,14 @@ static void dma_read_short_test(struct ibv_pd *pd, struct snap_dma_q_create_attr
 
 TEST_F(SnapDmaTest, dma_read_short_dv_verbs) {
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = false;
+	m_dma_q_attr.sw_use_devx = false;
 
 	dma_read_short_test(m_pd, &m_dma_q_attr, m_lbuf, 32, m_rbuf,  m_rmr->rkey);
 }
 
 TEST_F(SnapDmaTest, dma_read_short_dv_devx) {
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 
 	dma_read_short_test(m_pd, &m_dma_q_attr, m_lbuf, 32, m_rbuf,  m_rmr->rkey);
 }
@@ -382,7 +383,7 @@ TEST_F(SnapDmaTest, dma_read_inline_verbs) {
 TEST_F(SnapDmaTest, dma_read_inline_devx) {
 	struct snap_dma_q *q;
 
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 	m_bsize = 32;
 
 	q = snap_dma_q_create(m_pd, &m_dma_q_attr);
@@ -1338,7 +1339,7 @@ TEST_F(SnapDmaTest, devx_dma_only_q) {
 	int ret;
 
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 	m_dma_q_attr.tx_qsize = 16;
 	m_dma_q_attr.tx_elem_size = 0;
 	m_dma_q_attr.rx_qsize = 0;
@@ -1347,7 +1348,7 @@ TEST_F(SnapDmaTest, devx_dma_only_q) {
 	ASSERT_TRUE(dma_q);
 
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 	m_dma_q_attr.tx_qsize = 0;
 	m_dma_q_attr.rx_qsize = 0;
 
@@ -1372,7 +1373,7 @@ TEST_F(SnapDmaTest, devx_dma_q_connect_via_qpn) {
 	int dummy_q_qpn;
 
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 	m_dma_q_attr.tx_qsize = 16;
 	m_dma_q_attr.tx_elem_size = 0;
 	m_dma_q_attr.rx_qsize = 0;
@@ -1382,7 +1383,7 @@ TEST_F(SnapDmaTest, devx_dma_q_connect_via_qpn) {
 	dma_q_qpn = snap_qp_get_qpnum(dma_q->sw_qp.qp);
 
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 	m_dma_q_attr.tx_qsize = 0;
 	m_dma_q_attr.rx_qsize = 0;
 
@@ -1411,7 +1412,7 @@ TEST_F(SnapDmaTest, dma_pd_mismatch) {
 	int ret;
 
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 	m_dma_q_attr.tx_qsize = 16;
 	m_dma_q_attr.tx_elem_size = 0;
 	m_dma_q_attr.rx_qsize = 0;
@@ -1420,7 +1421,7 @@ TEST_F(SnapDmaTest, dma_pd_mismatch) {
 	ASSERT_TRUE(dma_q);
 
 	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	m_dma_q_attr.use_devx = true;
+	m_dma_q_attr.sw_use_devx = true;
 	m_dma_q_attr.tx_qsize = 0;
 	m_dma_q_attr.rx_qsize = 0;
 

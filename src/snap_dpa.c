@@ -245,7 +245,7 @@ static int dma_q_create(struct snap_dpa_ctx *ctx)
 
 	dma_q_attr.rx_cb = dummy_rx_cb;
 	dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	dma_q_attr.use_devx = true;
+	dma_q_attr.sw_use_devx = true;
 	dma_q_attr.tx_qsize = 16;
 	dma_q_attr.rx_qsize = 0;
 
@@ -544,7 +544,7 @@ static int trigger_q_create(struct snap_dpa_thread *thr)
 
 	dma_q_attr.rx_cb = dummy_rx_cb;
 	dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
-	dma_q_attr.use_devx = true;
+	dma_q_attr.sw_use_devx = true;
 	dma_q_attr.tx_qsize = 16;
 	dma_q_attr.rx_qsize = 0;
 	dma_q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_TRIGGER;

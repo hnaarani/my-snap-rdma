@@ -296,6 +296,9 @@ struct snap_dma_q {
 	struct snap_dma_ibv_qp fw_qp;
 	const struct snap_dma_q_ops  *ops;
 
+	struct ibv_qp fw_verbs_qp;
+	bool fw_use_devx;
+
 	struct snap_dma_q_iov_ctx *iov_ctx;
 	struct snap_dma_q_crypto_ctx *crypto_ctx;
 	void *ir_buf;
@@ -355,7 +358,9 @@ enum {
  * @comp_vector:  completion vector
  * @comp_context: completion context that will be returned by the
  *                ibv_get_cq_event(). See man ibv_get_cq_event
- * @use_devx:     use DEVX to create CQs and QP instead of mlx5dv/verbs api. Works
+ * @sw_use_devx:  use DEVX to create CQs and QP for sw instead of mlx5dv/verbs api. Works
+ *                only if @mode is dv or gga
+ * @fw_use_devx:  use DEVX to create CQs and QP for fw instead of mlx5dv/verbs api. Works
  *                only if @mode is dv or gga
  * @wk:           if not NULL, the dma_queue will be attached to the given
  *                worker. In such case worker progress/polling functions must
@@ -403,7 +408,8 @@ struct snap_dma_q_create_attr {
 	int                      comp_vector;
 	void                    *comp_context;
 
-	bool use_devx;
+	bool sw_use_devx;
+	bool fw_use_devx;
 	struct snap_dma_worker *wk;
 
 	int  dpa_mode;
