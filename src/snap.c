@@ -259,42 +259,6 @@ free_out:
 	free(out);
 }
 
-static void snap_query_vfs_vuid(struct snap_pci *pf)
-{
-	int output_size, i, vuid_len;
-	uint8_t *out;
-	struct snap_pci *vf;
-
-	output_size = DEVX_ST_SZ_BYTES(query_vuid_out) +
-		DEVX_ST_SZ_BYTES(vuid) * (pf->num_vfs + 1);
-
-	out = calloc(1, output_size);
-	if (!out) {
-		snap_warn("Alloc memory for output structure failed\n");
-		return;
-	}
-
-	if (snap_query_vuid(pf, out, output_size, (pf->num_vfs > 0)))
-		goto free_out;
-
-	vuid_len = DEVX_FLD_SZ_BYTES(vuid, vuid) - 1;
-
-	// set vuid for PF
-	strncpy(pf->vuid, (char *)DEVX_ADDR_OF(query_vuid_out, out, vuid), vuid_len);
-	pf->vuid[vuid_len] = '\0';
-
-	// set vuid for VFs
-	for (i = 0; i < pf->num_vfs; i++) {
-		vf = &pf->vfs[i];
-		strncpy(vf->vuid, (char *)DEVX_ADDR_OF(query_vuid_out, out, vuid[i + 1]),
-			vuid_len);
-		vf->vuid[vuid_len] = '\0';
-	}
-
-free_out:
-	free(out);
-}
-
 static int snap_alloc_virtual_functions(struct snap_pci *pf, size_t num_vfs)
 {
 	int i, j, ret;
@@ -342,14 +306,13 @@ static int snap_alloc_virtual_functions(struct snap_pci *pf, size_t num_vfs)
 		vf->mpci.vhca_id = DEVX_GET(query_emulated_functions_info_out,
 					    out, emulated_function_info[i].vhca_id);
 
+		snap_query_pci_vuid(vf);
+
 		ret = snap_alloc_pci_bar(vf);
 		if (ret)
 			goto free_vfs;
 
 	}
-
-	if (num_vfs > 0)
-		snap_query_vfs_vuid(pf);
 
 	free(out);
 	return 0;
