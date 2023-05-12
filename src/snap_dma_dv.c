@@ -958,7 +958,7 @@ static inline int do_gga_dma_xfer(struct snap_dma_q *q, uint64_t saddr, size_t l
 	gga_wqe = (struct mlx5_dma_wqe *)ctrl;
 	gga_wqe->gga_ctrl2 = 0;
 	gga_wqe->opaque_lkey = dv_qp->opaque_lkey;
-	gga_wqe->opaque_vaddr = htobe64((uint64_t)&dv_qp->opaque_buf[comp_idx]);
+	gga_wqe->opaque_vaddr = htobe64((uint64_t)dv_qp->opaque_buf);
 
 	mlx5dv_set_data_seg(&gga_wqe->gather, len, s_lkey, saddr);
 	mlx5dv_set_data_seg(&gga_wqe->scatter, len, d_lkey, daddr);

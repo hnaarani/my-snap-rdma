@@ -34,10 +34,10 @@ struct mlx5_dma_opaque {
 	uint32_t reserved;
 	uint32_t scattered_length;
 	uint32_t gathered_length;
-	uint8_t  reserved2[240];
+	uint8_t  reserved2[48];
 } __attribute__((packed));
 
-SNAP_STATIC_ASSERT(sizeof(struct mlx5_dma_opaque) == 256, "Bad mlx5_dma_opaque size");
+SNAP_STATIC_ASSERT(sizeof(struct mlx5_dma_opaque) == 64, "Bad mlx5_dma_opaque size");
 
 struct mlx5_dma_wqe {
 	uint32_t opcode;

@@ -352,12 +352,12 @@ static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_crea
 	/* TODO: gga on dpa */
 	rc = posix_memalign((void **)&qp->dv_qp.opaque_buf,
 			    sizeof(struct mlx5_dma_opaque),
-			    qp->dv_qp.hw_qp.sq.wqe_cnt * sizeof(struct mlx5_dma_opaque));
+			    sizeof(struct mlx5_dma_opaque));
 	if (rc)
 		goto free_comps;
 
 	qp->dv_qp.opaque_mr = ibv_reg_mr(pd, qp->dv_qp.opaque_buf,
-					 qp->dv_qp.hw_qp.sq.wqe_cnt * sizeof(struct mlx5_dma_opaque),
+					 sizeof(struct mlx5_dma_opaque),
 					 IBV_ACCESS_LOCAL_WRITE);
 	if (!qp->dv_qp.opaque_mr)
 		goto free_opaque;
@@ -695,13 +695,13 @@ static int snap_create_worker_qp_helper(struct ibv_pd *pd,
 	/* TODO: gga on dpa */
 	rc = posix_memalign(
 		(void **)&qp->dv_qp.opaque_buf, sizeof(struct mlx5_dma_opaque),
-		qp->dv_qp.hw_qp.sq.wqe_cnt * sizeof(struct mlx5_dma_opaque));
+		sizeof(struct mlx5_dma_opaque));
 	if (rc)
 		goto free_comps;
 
 	qp->dv_qp.opaque_mr =
 		ibv_reg_mr(pd, qp->dv_qp.opaque_buf,
-					qp->dv_qp.hw_qp.sq.wqe_cnt * sizeof(struct mlx5_dma_opaque),
+					sizeof(struct mlx5_dma_opaque),
 					IBV_ACCESS_LOCAL_WRITE);
 	if (!qp->dv_qp.opaque_mr)
 		goto free_opaque;
