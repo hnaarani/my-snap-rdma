@@ -850,7 +850,7 @@ static int snap_modify_lb_qp_init2init(struct snap_qp *qp)
 	DEVX_SET(init2init_qp_in, in, opcode, MLX5_CMD_OP_INIT2INIT_QP);
 	DEVX_SET(init2init_qp_in, in, qpn, snap_qp_get_qpnum(qp));
 
-	DEVX_SET(rst2init_qp_in, in, opt_param_mask, 0);
+	DEVX_SET(init2init_qp_in, in, opt_param_mask, 0);
 
 	/* Set mmo parameter in qpc_ext */
 	DEVX_SET(init2init_qp_in, in, qpc_ext, 1);

@@ -213,6 +213,7 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 		.rx_qsize = SNAP_DPA_RT_QP_RX_SIZE,
 		.rx_elem_size = SNAP_DPA_RT_QP_RX_ELEM_SIZE,
 		.mode = snap_env_getenv(SNAP_DMA_Q_OPMODE),
+		.sw_use_devx = true,
 		.dpa_mode = SNAP_DMA_Q_DPA_MODE_NONE
 	};
 	struct snap_cq_attr db_cq_attr = {
