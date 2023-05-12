@@ -3678,17 +3678,18 @@ struct mlx5_ifc_create_qp_in_bits {
 	u8	 opcode[0x10];
 	u8	 uid[0x10];
 
-	u8	 reserved_at_20[0x10];
+	u8	 vhca_tunnel_id[0x10];
 	u8	 op_mod[0x10];
 
-	u8	 reserved_at_40[0x8];
+	u8	 qpc_ext[0x1];
+	u8	 reserved_at_41[0x7];
 	u8	 input_qpn[0x18];
 
 	u8	 reserved_at_60[0x20];
 
 	u8	 opt_param_mask[0x20];
 
-	u8	 reserved_at_a0[0x20];
+	u8	 ece[0x20];
 
 	struct mlx5_ifc_qpc_bits qpc;
 
@@ -3698,6 +3699,8 @@ struct mlx5_ifc_create_qp_in_bits {
 
 	u8	 wq_umem_valid[0x1];
 	u8	 reserved_at_861[0x1f];
+
+	struct mlx5_ifc_qpc_ext_bits qpc_data_extension;
 
 	u8	 pas[0][0x40];
 };

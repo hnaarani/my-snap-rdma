@@ -468,6 +468,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 	struct snap_devx_qp *devx_qp = &qp->devx_qp;
 	struct ibv_context *ctx = pd->context;
 	void *qpc = DEVX_ADDR_OF(create_qp_in, in, qpc);
+	void *qpc_ext = DEVX_ADDR_OF(create_qp_in, in, qpc_data_extension);
 	const uint32_t log_page_size = snap_u32log2(sysconf(_SC_PAGESIZE));
 	struct snap_uar *qp_uar;
 	int ret;
@@ -585,6 +586,9 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 	DEVX_SET(create_qp_in, in, wq_umem_id, umem_id);
 	DEVX_SET(create_qp_in, in, wq_umem_valid, 1);
 	DEVX_SET64(create_qp_in, in, wq_umem_offset, umem_offset);
+
+	DEVX_SET(create_qp_in, in, qpc_ext, 1);
+	DEVX_SET(qpc_ext, qpc_ext, mmo, 1);
 
 	devx_qp->devx.devx_obj = mlx5dv_devx_obj_create(ctx, in, sizeof(in), out, sizeof(out));
 	if (!devx_qp->devx.devx_obj) {
