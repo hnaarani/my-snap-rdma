@@ -148,6 +148,8 @@ int snap_dpa_p2p_send_msg(struct snap_dpa_p2p_q *q,
 int snap_dpa_p2p_recv_msg(struct snap_dpa_p2p_q *q,
 		struct snap_dpa_p2p_msg **msgs, int n);
 
+int snap_dpa_p2p_recv_msg_nvme(struct snap_dpa_p2p_q *q, struct snap_dpa_p2p_msg **msgs, int *imm);
+
 int snap_dpa_p2p_send_cr_update(struct snap_dpa_p2p_q *q, int credit);
 
 int snap_dpa_p2p_send_vq_heads(struct snap_dpa_p2p_q *q, uint16_t vqid, uint16_t vqsize,

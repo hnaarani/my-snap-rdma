@@ -524,7 +524,7 @@ static int verbs_dma_q_flush_nowait(struct snap_dma_q *q, struct snap_dma_comple
 
 static inline int verbs_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
 				    uint64_t addr, int len, uint32_t key,
-				    int *n_bb)
+				    int *n_bb, uint32_t *imm)
 {
 	return -ENOTSUP;
 }

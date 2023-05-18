@@ -83,6 +83,20 @@ int snap_dpa_p2p_recv_msg(struct snap_dpa_p2p_q *q, struct snap_dpa_p2p_msg **ms
 	return comps;
 }
 
+int snap_dpa_p2p_recv_msg_nvme(struct snap_dpa_p2p_q *q, struct snap_dpa_p2p_msg **msgs, int *imm)
+{
+	int comp;
+	struct snap_rx_completion rx_comp;
+
+	comp = snap_dma_q_poll_rx(q->dma_q, &rx_comp, 1);
+	if (comp) {
+		msgs[0] = rx_comp.data;
+		*imm = rx_comp.imm_data;
+	}
+
+	return comp;
+}
+
 static inline int send_vq_update(struct snap_dpa_p2p_q *q, int cr_delta, int type,
 			uint16_t vqid, uint16_t vqsize, uint16_t last_avail_index, uint16_t avail_index,
 			uint64_t driver, uint32_t driver_mkey)
@@ -112,7 +126,7 @@ static inline int send_vq_update(struct snap_dpa_p2p_q *q, int cr_delta, int typ
 	desc_hdr_idx_addr = driver + 4 + (2 * avail_pos);
 	rc = snap_dma_q_send(q->dma_q, &msg.base,
 			sizeof(struct snap_dpa_p2p_msg_vq_update) - sizeof(msg.descr_heads),
-			desc_hdr_idx_addr, desc_heads_count * sizeof(uint16_t), driver_mkey);
+			desc_hdr_idx_addr, desc_heads_count * sizeof(uint16_t), driver_mkey, NULL);
 	if (snap_unlikely(rc))
 		return rc;
 
@@ -221,6 +235,7 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 	struct snap_dpa_p2p_msg_sq_tail msg;
 	int wrap_around_sqes;
 	int sqes_to_write;
+	uint32_t imm;
 
 	uint32_t sqe_offset = old_sq_tail * SNAP_DPA_NVME_SQE_SIZE;
 
@@ -233,6 +248,12 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 		wrap_around_sqes = 0;
 	}
 
+	msg.base.credit_delta = 1;
+	msg.base.type = SNAP_DPA_P2P_MSG_NVME_SQ_TAIL;
+	msg.base.qid = sqid;
+
+	msg.sq_tail = sq_tail;
+
 	rc = snap_dma_q_write(q->dma_q,	(void *) sqe_table + sqe_offset,
 			SNAP_DPA_NVME_SQE_SIZE * sqes_to_write, driver_mkey,
 			shadow_sqes + sqe_offset, shadow_sqes_mkey, NULL);
@@ -240,6 +261,7 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 		snap_debug("send sq tail error: %d\n", rc);
 		return rc;
 	}
+
 	if (wrap_around_sqes) {
 		/* TODO - add stats, check if wrap_around_sqes is likely or not*/
 		/* wrap around requires extra write*/
@@ -253,15 +275,15 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 		}
 	}
 
-	msg.base.credit_delta = 1;
-	msg.base.type = SNAP_DPA_P2P_MSG_NVME_SQ_TAIL;
-	msg.base.qid = sqid;
-	msg.sq_tail = sq_tail;
-
 #if P2P_TODO
 	--q->credit_count;
 #endif
-
+	/* if only 1 sqe, faster to send it immediate in cqe */
+	if (sqes_to_write == 1 && wrap_around_sqes == 0) {
+		imm = 1;
+		return snap_dma_q_send(q->dma_q, NULL, 0, sqe_table + sqe_offset,
+			SNAP_DPA_NVME_SQE_SIZE, driver_mkey, &imm);
+	}
 	return snap_dpa_p2p_send_msg(q, (struct snap_dpa_p2p_msg *) &msg);
 }
 

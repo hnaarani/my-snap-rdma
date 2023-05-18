@@ -213,7 +213,7 @@ struct snap_dma_q_ops {
 			size_t len, int *n_bb);
 	int (*send)(struct snap_dma_q *q, void *in_buf, size_t in_len,
 		    uint64_t addr, int len, uint32_t key,
-		    int *n_bb);
+		    int *n_bb, uint32_t *imm);
 	int (*progress_tx)(struct snap_dma_q *q);
 	int (*progress_rx)(struct snap_dma_q *q);
 	int (*flush)(struct snap_dma_q *q);
@@ -296,9 +296,6 @@ struct snap_dma_q {
 	struct snap_dma_ibv_qp fw_qp;
 	const struct snap_dma_q_ops  *ops;
 
-	struct ibv_qp fw_verbs_qp;
-	bool fw_use_devx;
-
 	struct snap_dma_q_iov_ctx *iov_ctx;
 	struct snap_dma_q_crypto_ctx *crypto_ctx;
 	void *ir_buf;
@@ -321,6 +318,11 @@ struct snap_dma_q {
 	bool                  crypto_support;
 	bool                  no_events;
 	int                   rx_qsize;
+
+#if !defined(__DPA)
+	struct ibv_qp fw_verbs_qp;
+	bool fw_use_devx;
+#endif
 };
 
 enum {
@@ -512,7 +514,7 @@ struct snap_dma_q *snap_dma_ep_create(struct ibv_pd *pd,
 int snap_dma_ep_connect(struct snap_dma_q *q1, struct snap_dma_q *q2);
 int snap_dma_ep_connect_remote_qpn(struct snap_dma_q *q1, int remote_qp2_num);
 int snap_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
-		uint64_t addr, size_t len, uint32_t key);
+		uint64_t addr, size_t len, uint32_t key, uint32_t *imm);
 int snap_dma_q_post_recv(struct snap_dma_q *q);
 struct snap_dma_ep_copy_cmd {
 	struct snap_dpa_cmd base;

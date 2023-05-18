@@ -484,9 +484,9 @@ static int dv_dma_q_send_completion(struct snap_dma_q *q, void *src_buf,
 	return do_dv_xfer_inline(q, src_buf, len, MLX5_OPCODE_SEND, 0, 0, NULL, n_bb);
 }
 
-static inline int dv_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
+static inline int do_dv_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
 				    uint64_t addr, int len, uint32_t key,
-				    int *n_bb)
+				    int *n_bb, int op, uint32_t imm)
 {
 	struct snap_dv_qp *dv_qp = &q->sw_qp.dv_qp;
 	uint16_t complement = 0;
@@ -512,9 +512,9 @@ static inline int dv_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_le
 	fm_ce_se |= snap_dv_get_cq_update(dv_qp, NULL);
 
 	ctrl = (struct mlx5_wqe_ctrl_seg *)snap_dv_get_wqe_bb(dv_qp);
-	snap_set_ctrl_seg(ctrl, dv_qp->hw_qp.sq.pi, MLX5_OPCODE_SEND, 0,
+	snap_set_ctrl_seg(ctrl, dv_qp->hw_qp.sq.pi, op, 0,
 			dv_qp->hw_qp.qp_num, fm_ce_se,
-			    round_up(wqe_size, 16), 0, 0);
+			    round_up(wqe_size, 16), 0, imm);
 
 	in_seg = (struct mlx5_wqe_inl_data_seg *)(ctrl + 1);
 	in_seg->byte_count = htobe32(in_len | MLX5_INLINE_SEG);
@@ -545,6 +545,15 @@ static inline int dv_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_le
 	return 0;
 }
 
+static inline int dv_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
+				    uint64_t addr, int len, uint32_t key,
+				    int *n_bb, uint32_t *imm)
+{
+	if (imm)
+		return do_dv_send(q, in_buf, in_len, addr, len, key, n_bb, MLX5_OPCODE_SEND_IMM, *imm);
+	else
+		return do_dv_send(q, in_buf, in_len, addr, len, key, n_bb, MLX5_OPCODE_SEND, 0);
+}
 
 static int dv_dma_q_write_short(struct snap_dma_q *q, void *src_buf, size_t len,
 				uint64_t dstaddr, uint32_t rmkey, int *n_bb)

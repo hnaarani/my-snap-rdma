@@ -638,6 +638,7 @@ struct ibv_qp *snap_dma_q_get_fw_qp(struct snap_dma_q *q)
  * @addr:    address of memory pointer data segment
  * @len:     length of data in memory pointer
  * @key:     local key of the memory pointer data segment
+ * @imm:     pointer to data to send in immediate field
  *
  * The function sends data segments in the following way:
  * first an inline data segment followed by a memory pointer data segment
@@ -655,11 +656,11 @@ struct ibv_qp *snap_dma_q_get_fw_qp(struct snap_dma_q *q)
  *
  */
 int snap_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
-		uint64_t addr, size_t len, uint32_t key)
+		uint64_t addr, size_t len, uint32_t key, uint32_t *imm)
 {
 	int n_bb = 0, rc;
 
-	rc = q->ops->send(q, in_buf, in_len, addr, len, key, &n_bb);
+	rc = q->ops->send(q, in_buf, in_len, addr, len, key, &n_bb, imm);
 	if (snap_unlikely(rc))
 		return rc;
 

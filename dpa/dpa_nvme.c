@@ -75,7 +75,6 @@ int dpa_nvme_sq_create(struct snap_dpa_cmd *cmd)
 	/* TODO_Doron: input validation/sanity check */
 	TAILQ_INSERT_TAIL(&cq->sqs, sq, entry);
 
-	snap_dv_arm_cq(&rt_ctx->db_cq);
 	dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 	snap_debug("sq create: id %d, state:%d\n", sq->sqid, sq->state);
 
@@ -122,7 +121,6 @@ int dpa_nvme_sq_query(struct snap_dpa_cmd *cmd)
 
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
 		if (sq->sqid == ncmd->cmd_sq_query.sqid) {
-			snap_dv_arm_cq(&rt_ctx->db_cq);
 			dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 			host_sq_tail = dpa_ctx_read(sq->duar_id);
 			dpa_write_rsp(sq->state, host_sq_tail);
@@ -139,9 +137,7 @@ int dpa_nvme_cq_query(struct snap_dpa_cmd *cmd)
 {
 	struct dpa_nvme_cq *cq = get_nvme_cq();
 	volatile uint64_t host_cq_head;
-	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
 
-	snap_dv_arm_cq(&rt_ctx->db_cq);
 	host_cq_head = dpa_ctx_read(cq->cq_head_duar_id);
 	dpa_write_rsp(cq->state, host_cq_head);
 
@@ -254,7 +250,6 @@ static inline void nvme_progress()
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
 		if (snap_unlikely(sq->state != DPA_NVME_STATE_RDY))
 			continue;
-		snap_dv_arm_cq(&rt_ctx->db_cq);
 		dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 
 		sq_tail = dpa_ctx_read(sq->duar_id);
@@ -268,7 +263,6 @@ static inline void nvme_progress()
 		rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q);
 	}
 	dpa_duar_arm(cq->cq_head_duar_id, rt_ctx->db_cq.cq_num);
-	snap_dv_arm_cq(&cq->cq_head_db_hw_cq);
 	cq_head = dpa_ctx_read(cq->cq_head_duar_id);
 	if (cq->host_cq_head != cq_head) {
 		snap_dpa_p2p_send_cq_head(&rt_ctx->dpa_cmd_chan, cq_head);
