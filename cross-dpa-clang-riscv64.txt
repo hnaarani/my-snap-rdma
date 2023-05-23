@@ -1,0 +1,12 @@
+[host_machine]
+system = 'unknown'
+cpu_family = 'riscv64'
+cpu = 'riscv64'
+endian = 'little'
+
+[binaries]
+c = 'dpa-clang'
+ar = 'dpa-ar'
+nm = 'dpa-nm'
+cpp = 'g++'
+

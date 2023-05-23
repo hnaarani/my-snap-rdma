@@ -20,10 +20,23 @@ if not flexio.found()
 	subdirt_done()
 endif
 
+cross_cc = meson.get_compiler('c')
+message('cross compiler is ' + cross_cc.get_id() + ' ' + cross_cc.version())
+
+subproject('picolibc', default_options: [
+		'optimization=3',
+		'multilib=false',
+		'picolib=false',
+		'picocrt=false',
+		'semihost=false',
+		'c_std=c11',
+		'newlib-iconv-encodings=none',
+		'werror=false'
+])
+
 message('DPA applications will be compiled')
 
 dpa_cflags = [
-	'-mno-relax', '-mcmodel=medany', '-march=rv64imac', '-mabi=lp64',
 	'-fno-builtin-fprintf', '-fno-builtin-printf',
 	'-DE_MODE_LE', '-DUSER_SPACE', '-D__DPA=1'
 ]
@@ -40,8 +53,20 @@ dpa_ldflags = [
 	'-static', '-nostartfiles',
 	'-T', dpa_link_script,
 	'-L' + flexio_pfx + '/lib',
-	'-lflexio_dev', '-lflexio_os'
+	'-lflexio_os'
 ]
+
+#
+# GCC can compile with the picolibc but app is not loaded on DPA
+# TODO: check why
+# meanwhile if compiler has builtin libc use it, if not (like clang)
+# fallback to picolibc
+#
+picolibc_dep = cross_cc.find_library('libc', required: false)
+if not picolibc_dep.found()
+	dpa_ldflags += ['-nostdlib']
+	picolibc_dep = dependency('libc', fallback: ['picolibc', 'picolibc_dep'])
+endif
 
 libdpa_include = include_directories('.', '..', '../src', flexio_include)
 libdpa_sources = [
@@ -55,7 +80,7 @@ libdpa_sources = [
 libdpa = static_library('dpa',
 			libdpa_sources,
 			c_args : dpa_cflags,
-			dependencies : [],
+			dependencies : [ picolibc_dep ],
 			include_directories : libdpa_include,
 			install: false,
 			native: false)
@@ -80,7 +105,7 @@ foreach t : dpa_tests
 		c_args : dpa_cflags,
 		link_args : dpa_ldflags,
 		link_depends : dpa_link_script,
-		dependencies : [ libdpa_dep ],
+		dependencies : [ libdpa_dep, picolibc_dep ],
 		install : false,
 		native : false
 		)
@@ -100,7 +125,7 @@ foreach app : dpa_apps
 		c_args : dpa_cflags,
 		link_args : dpa_ldflags,
 		link_depends : dpa_link_script,
-		dependencies : [ libdpa_dep ],
+		dependencies : [ libdpa_dep, picolibc_dep ],
 		install : true,
 		native : false
 		)

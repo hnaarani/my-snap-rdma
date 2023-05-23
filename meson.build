@@ -16,7 +16,7 @@
 #the buildtype option, or you can set the optimization and debug options
 #which give finer control over the same.
 #
-project('libsnap_core', 'C', 'CPP',
+project('libsnap_core', 'C',
 	# Get version number from file.
 	# Fallback to "more" for Windows compatibility.
 	version: run_command(find_program('cat', 'more'),
@@ -34,7 +34,7 @@ project('libsnap_core', 'C', 'CPP',
 )
 
 cc = meson.get_compiler('c', native : true)
-cpp = meson.get_compiler('cpp', native : true)
+#cpp = meson.get_compiler('cpp', native : true)
 
 libsnap_core_depends = []
 libsnap_core_depends += dependency('libibverbs', required : true, native : true)
@@ -73,6 +73,11 @@ elif (flexio_pfx != '')
 	conf_data.set10('HAVE_FLEXIO', 1, description : 'Enable DPA host side support')
 else
 	flexio = disabler()
+endif
+
+if (meson.is_cross_build())
+	add_global_arguments('-mno-relax', '-mcmodel=medany', '-march=rv64imac',
+			'-mabi=lp64', '-Wno-ignored-optimization-argument', language: 'c')
 endif
 
 dpa_app_dir = '"' + get_option('prefix') + '/dpa_app' + '"'
