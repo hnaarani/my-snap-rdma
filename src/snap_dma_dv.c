@@ -119,7 +119,7 @@ snap_use_klm_mkey_done(struct snap_dma_completion *comp, int status)
 		orig_comp->func(orig_comp, status);
 }
 
-static inline int snap_iov_to_klm_mtt(struct iovec *iov, int iov_cnt,
+__attribute__((unused)) static inline int snap_iov_to_klm_mtt(struct iovec *iov, int iov_cnt,
 			uint32_t *mkey, struct mlx5_klm *klm_mtt, size_t *len)
 {
 	int i;

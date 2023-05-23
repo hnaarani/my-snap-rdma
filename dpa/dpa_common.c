@@ -270,7 +270,7 @@ void dpa_logger(const char *file_name, unsigned int line_num,
 
 void dpa_error_freeze()
 {
-	int dummy;
+	int dummy = 0;
 
 	/* freeze calling thread so that we can debug it */
 	while (1) { dummy++; }

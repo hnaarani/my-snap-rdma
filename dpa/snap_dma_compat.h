@@ -21,6 +21,9 @@
 typedef void * cpu_set_t;
 
 typedef unsigned long size_t;
+
+typedef unsigned pthread_mutex_t;
+
 /* from sys/uio.h */
 
 /* Structure for scatter/gather I/O.  */
@@ -44,7 +47,11 @@ typedef uint16_t __be16;
 typedef uint32_t __be32;
 typedef uint64_t __be64;
 
+#ifdef __clang__
 /* from endian.h */
+#include <endian.h>
+#else
+#ifdef __GNUC__
 static inline uint32_t htobe32(uint32_t host_32bits)
 {
 	return __builtin_bswap32(host_32bits);
@@ -64,6 +71,8 @@ static inline uint32_t be32toh(uint32_t big_endian_32bits)
 {
 	return __builtin_bswap32(big_endian_32bits);
 }
+#endif
+#endif
 
 /* from infiniband/mlx5dv.h */
 

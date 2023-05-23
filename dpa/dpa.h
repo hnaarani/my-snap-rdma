@@ -15,9 +15,6 @@
 
 #include <stddef.h>
 
-#include <libflexio-dev/flexio_dev.h>
-#include <libflexio-dev/flexio_dev_debug.h>
-#include <libflexio-dev/flexio_dev_queue_access.h>
 #include <libflexio-os/flexio_os_syscall.h>
 #include <libflexio-os/flexio_os.h>
 

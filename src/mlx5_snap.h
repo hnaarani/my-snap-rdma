@@ -14,9 +14,9 @@
 #define MLX5_SNAP_H
 
 #include <stdlib.h>
+#if !defined(__DPA)
 #include <pthread.h>
 
-#if !defined(__DPA)
 #include <infiniband/verbs.h>
 #include <infiniband/mlx5dv.h>
 #include <linux/types.h>

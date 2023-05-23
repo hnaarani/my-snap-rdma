@@ -757,7 +757,7 @@ TEST_F(SnapDmaTest, inline_data_test) {
 	memset(m_rbuf, 0, 64);
 	memset(cqe, 0xDA, sizeof(cqe));
 	memset(rem_data, 0xAD, 32);
-	rc = snap_dma_q_send(q, cqe, sizeof(cqe),(uint64_t) rem_data, 32, rem_mr->rkey);
+	rc = snap_dma_q_send(q, cqe, sizeof(cqe),(uint64_t) rem_data, 32, rem_mr->rkey, NULL);
 
 	ASSERT_EQ(0, rc);
 	n = 0;

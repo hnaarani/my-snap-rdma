@@ -19,7 +19,9 @@
 #include <string.h>
 #include <stdbool.h>
 #include <errno.h>
+#if !defined(__DPA)
 #include <pthread.h>
+#endif
 #include <time.h>
 #include <unistd.h>
 #include <sys/queue.h>
