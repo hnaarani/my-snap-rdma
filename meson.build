@@ -86,7 +86,7 @@ conf_data.set('DPA_DEFAULT_APP_DIR' , dpa_app_dir, description : 'DPA applicatio
 configure_file(output : 'config.h', configuration : conf_data)
 
 # common cflags
-common_cflags = ['-Werror', '-Wall', '-fms-extensions']
+common_cflags = ['-Werror', '-Wall', '-fms-extensions', '-DSNAP_QP_ISOLATE_VL_TC_ENABLE_DEFAULT=0']
 if get_option('enable-debug')
 	common_cflags += '-DSNAP_DEBUG=1'
 endif
