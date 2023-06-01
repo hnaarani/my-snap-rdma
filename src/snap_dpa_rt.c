@@ -251,6 +251,7 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 		return -EINVAL;
 
 	q_attr.rx_cb = dummy_rx_cb;
+	q_attr.iov_enable = true;
 	rt_thr->dpu_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
 	if (!rt_thr->dpu_cmd_chan.dma_q)
 		goto free_dpa_thread;
@@ -270,6 +271,7 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 	} else
 		goto free_dpu_qp;
 
+	q_attr.iov_enable = false;
 	rt_thr->dpa_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
 	if (!rt_thr->dpa_cmd_chan.dma_q)
 		goto free_dpu_qp;

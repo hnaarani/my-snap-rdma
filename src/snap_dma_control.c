@@ -1651,9 +1651,16 @@ struct snap_dma_q *snap_dma_ep_create(struct ibv_pd *pd,
 	if (rc)
 		goto free_q;
 
+	rc = snap_create_io_ctx(q, pd, attr);
+	if (rc)
+		goto destroy_sw_qp;
+
 	q->uctx = attr->uctx;
 	q->rx_cb = attr->rx_cb;
 	return q;
+
+destroy_sw_qp:
+	snap_destroy_sw_qp(q);
 
 free_q:
 	if (!attr->wk)
@@ -1710,10 +1717,6 @@ struct snap_dma_q *snap_dma_q_create(struct ibv_pd *pd,
 	if (rc)
 		goto free_fw_qp;
 
-	rc = snap_create_io_ctx(q, pd, attr);
-	if (rc)
-		goto free_fw_qp;
-
 	return q;
 
 free_fw_qp:
@@ -1730,6 +1733,7 @@ free_sw_qp:
  */
 void snap_dma_ep_destroy(struct snap_dma_q *q)
 {
+	snap_destroy_io_ctx(q);
 	snap_destroy_sw_qp(q);
 	if (q->worker)
 		snap_dma_worker_queue_put(q);
@@ -1744,7 +1748,6 @@ void snap_dma_ep_destroy(struct snap_dma_q *q)
  */
 void snap_dma_q_destroy(struct snap_dma_q *q)
 {
-	snap_destroy_io_ctx(q);
 	snap_destroy_fw_qp(q);
 	snap_dma_ep_destroy(q);
 }
