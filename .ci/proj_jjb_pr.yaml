@@ -33,7 +33,7 @@
             description: "Release rpm"
         - string:
             name: "release_dir"
-            default: "/auto/mtrswgwork/swx_devops/{jjb_proj}"
+            default: "/auto/sw/work/swx_devops/{jjb_proj}"
             description: "Location to release rpm to"
         - string:
             name: "script"
@@ -45,7 +45,7 @@
             description: "Repository manager URL"
         - string:
             name: "GPG_KEY_PATH"
-            default: "/auto/mtrswgwork/swx_devops/swx-debs-keyring/mellanox-debs-keyring.key"
+            default: "/auto/sw/work/swx_devops/swx-debs-keyring/mellanox-debs-keyring.key"
             description: "GPG key file location"
         - string:
             name: "DEBUG"

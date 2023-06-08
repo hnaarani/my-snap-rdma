@@ -21,13 +21,14 @@ volumes:
   - {mountPath: /hpc/local, hostPath: /hpc/local}
   - {mountPath: /auto/sw_tools, hostPath: /auto/sw_tools}
   - {mountPath: /auto/mtrswgwork, hostPath: /auto/mtrswgwork}
+  - {mountPath: /auto/sw/work, hostPath: /auto/sw/work}
   - {mountPath: /.autodirect/sw/release/mlnx_ofed, hostPath: /.autodirect/sw/release/mlnx_ofed}
   - {mountPath: /auto/sw/release/sw_acceleration, hostPath: /auto/sw/release/sw_acceleration}
 
 env:
   MOFED_VER: 23.04-0.5.3.2
   CCACHE_ENABLE: 'true'
-  CCACHE_DIR: '/auto/mtrswgwork/swx_devops/ccache/$job'
+  CCACHE_DIR: '/auto/sw/work/swx_devops/ccache/$job'
   CCACHE_TEMPDIR: '/tmp'
 
 runs_on_dockers:
