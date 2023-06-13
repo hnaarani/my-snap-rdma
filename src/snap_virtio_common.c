@@ -882,17 +882,14 @@ snap_virtio_create_queue(struct snap_device *sdev,
 			 vattr->ctrs_obj_id);
 
 		if (offload_type == MLX5_VIRTIO_Q_OFFLOAD_TYPE_ETH_FRAME) {
-			if (attr->features & VIRTIO_NET_F_HOST_TSO4)
-				DEVX_SET(virtio_net_q, virtq_in, tso_ipv4, 1);
-
-			if (attr->features & VIRTIO_NET_F_HOST_TSO6)
-				DEVX_SET(virtio_net_q, virtq_in, tso_ipv6, 1);
-
-			if (attr->features & VIRTIO_NET_F_CSUM)
-				DEVX_SET(virtio_net_q, virtq_in, tx_csum, 1);
-
-			if (attr->features & VIRTIO_NET_F_GUEST_CSUM)
-				DEVX_SET(virtio_net_q, virtq_in, rx_csum, 1);
+			DEVX_SET(virtio_net_q, virtq_in, tso_ipv4,
+				 attr->tso_ipv4);
+			DEVX_SET(virtio_net_q, virtq_in, tso_ipv6,
+				 attr->tso_ipv6);
+			DEVX_SET(virtio_net_q, virtq_in, tx_csum,
+				 attr->tx_csum);
+			DEVX_SET(virtio_net_q, virtq_in, rx_csum,
+				 attr->rx_csum);
 		}
 
 	} else if (sdev->pci->type == SNAP_VIRTIO_FS_PF ||
