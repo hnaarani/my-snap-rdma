@@ -1683,6 +1683,33 @@ struct mlx5_ifc_crypto_cap_bits {
 	u8	   reserved_at_0x60[0x7a0];
 };
 
+struct mlx5_ifc_dpa_cap_bits {
+	u8 thread_affinity_single_hart[0x1];
+	u8 thread_affinity_hart_group[0x1];
+	u8 reserved_at_2[0x1];
+	u8 log_max_num_dpa_mem_blocks[0x5];
+	u8 reserved_at_8[0x3];
+	u8 log_max_dpa_mem[0x5];
+	u8 reserved_at_10[0x3];
+	u8 log_max_dpa_threads_per_process[0x5];
+	u8 reserved_at_18[0x3];
+	u8 log_max_dpa_process[0x5];
+
+	u8 dpa_mem_block_size[0x20];
+
+	u8 reserved_at_40[0x3];
+	u8 log_max_dpa_thread[0x5];
+	u8 reserved_at_48[0x3];
+	u8 log_max_dpa_outbox[0x5];
+	u8 max_num_dpa_thread_per_group[0x10];
+
+	u8 reserved_at_60[0x3];
+	u8 log_max_dpa_window[0x5];
+	u8 reserved_at_68[0x18];
+
+	u8 reserved_at_80[0x780];
+};
+
 union mlx5_ifc_hca_cap_union_bits {
 	struct mlx5_ifc_atomic_caps_bits atomic_caps;
 	struct mlx5_ifc_cmd_hca_cap_bits cmd_hca_cap;
@@ -1696,6 +1723,7 @@ union mlx5_ifc_hca_cap_union_bits {
 	struct mlx5_ifc_hotplug_cap_bits hotplug_cap;
 	struct mlx5_ifc_roce_cap_bits roce_cap;
 	struct mlx5_ifc_crypto_cap_bits crypto_cap;
+	struct mlx5_ifc_dpa_cap_bits dpa_cap;
 	u8	 reserved_at_0[0x8000];
 };
 
@@ -1816,6 +1844,7 @@ enum {
 	MLX5_SET_HCA_CAP_OP_MOD_CRYPTO		     = 0x1A << 1,
 	MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE2	     = 0x20 << 1,
 	MLX5_SET_HCA_CAP_OP_MOD_VIRTIO_FS_DEVICE_EMULATION  = 0x23 << 1,
+	MLX5_SET_HCA_CAP_OP_MOD_DPA = 0x24 << 1,
 };
 
 struct mlx5_ifc_mac_address_layout_bits {

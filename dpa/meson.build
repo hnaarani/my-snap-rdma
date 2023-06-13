@@ -53,6 +53,7 @@ dpa_ldflags = [
 	'-static', '-nostartfiles',
 	'-T', dpa_link_script,
 	'-L' + flexio_pfx + '/lib',
+	'-L../' + flexio_pfx + '/libflexio-os/lib',
 	'-lflexio_os'
 ]
 
@@ -80,7 +81,7 @@ libdpa_sources = [
 libdpa = static_library('dpa',
 			libdpa_sources,
 			c_args : dpa_cflags,
-			dependencies : [ picolibc_dep ],
+			dependencies : [ picolibc_dep, libflexio_os_dep ],
 			include_directories : libdpa_include,
 			install: false,
 			native: false)
@@ -105,7 +106,7 @@ foreach t : dpa_tests
 		c_args : dpa_cflags,
 		link_args : dpa_ldflags,
 		link_depends : dpa_link_script,
-		dependencies : [ libdpa_dep, picolibc_dep ],
+		dependencies : [ libdpa_dep, picolibc_dep, libflexio_os_dep ],
 		install : false,
 		native : false
 		)
@@ -125,7 +126,7 @@ foreach app : dpa_apps
 		c_args : dpa_cflags,
 		link_args : dpa_ldflags,
 		link_depends : dpa_link_script,
-		dependencies : [ libdpa_dep, picolibc_dep ],
+		dependencies : [ libdpa_dep, picolibc_dep, libflexio_os_dep ],
 		install : true,
 		native : false
 		)

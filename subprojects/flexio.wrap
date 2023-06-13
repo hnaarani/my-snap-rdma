@@ -1,6 +1,15 @@
 [wrap-git]
 directory = flexio
+
+#
+# Use flexio release with the meson 'patch file'
+# Note that it is not a diff file!!!
 url = http://l-gerrit.mtl.labs.mlnx:8080/flexio-sdk
-revision = RC8Ver1.0
+revision = RC8Ver23.7
 depth = 10
 patch_filename = flexio.tar.gz
+
+# This is an example how to work with private flexio branch
+# Comment out lines above and uncomment/modify line below
+#url = /mtrswgwork/amikheev/NVME/apu/flexio-sdk-june2023
+#revision = RC8Ver23.7_snap

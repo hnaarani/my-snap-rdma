@@ -25,6 +25,7 @@
 
 #if HAVE_FLEXIO
 #include <libflexio/flexio.h>
+#include <flexio_exp.h>
 #endif
 
 #include "snap_dpa.h"
@@ -372,6 +373,26 @@ static void snap_dpa_unload_app(struct snap_dpa_ctx *dpa_ctx)
 	flexio_app_destroy(dpa_ctx->dpa_app);
 }
 
+static uint64_t snap_dpa_get_mem_size(struct ibv_context *ctx)
+{
+	uint8_t in[DEVX_ST_SZ_BYTES(query_hca_cap_in)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(query_hca_cap_out)] = {0};
+	int ret;
+	uint32_t log_mem_blocks, block_size;
+
+	DEVX_SET(query_hca_cap_in, in, opcode, MLX5_CMD_OP_QUERY_HCA_CAP);
+	DEVX_SET(query_hca_cap_in, in, op_mod, MLX5_SET_HCA_CAP_OP_MOD_DPA);
+
+	ret = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out, sizeof(out));
+	if (ret)
+		return 0;
+
+	block_size = DEVX_GET(query_hca_cap_out, out, capability.dpa_cap.dpa_mem_block_size);
+	log_mem_blocks = DEVX_GET(query_hca_cap_out, out, capability.dpa_cap.log_max_num_dpa_mem_blocks);
+	snap_debug("block size %u log %u\n", block_size, log_mem_blocks);
+	return block_size * (1 << log_mem_blocks);
+}
+
 /**
  * snap_dpa_process_create() - create DPA application process
  * @ctx:         snap context
@@ -389,6 +410,7 @@ static void snap_dpa_unload_app(struct snap_dpa_ctx *dpa_ctx)
 struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char *app_name)
 {
 	struct flexio_process_attr proc_attr = {0};
+	struct flexio_outbox_attr outbox_attr = {0};
 	flexio_status st;
 	struct snap_dpa_ctx *dpa_ctx;
 	int ret;
@@ -398,6 +420,10 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 		snap_error("%s: Failed to allocate memory for DPA context\n", app_name);
 		return NULL;
 	}
+
+	dpa_ctx->dpa_mem_size = snap_dpa_get_mem_size(ctx);
+	if (!dpa_ctx->dpa_mem_size)
+		goto free_dpa_ctx;
 
 	ret = snap_dpa_load_app(dpa_ctx, app_name);
 	if (ret)
@@ -426,7 +452,8 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 	if (st != FLEXIO_STATUS_SUCCESS)
 		goto deref_uar;
 
-	st = flexio_outbox_create(dpa_ctx->dpa_proc, NULL, dpa_ctx->flexio_uar, &dpa_ctx->dpa_uar);
+	outbox_attr.uar = dpa_ctx->flexio_uar;
+	st = flexio_outbox_create(dpa_ctx->dpa_proc, NULL, &outbox_attr, &dpa_ctx->dpa_uar);
 	if (st != FLEXIO_STATUS_SUCCESS) {
 		snap_error("%s: Failed to create DPA outbox (uar)\n", app_name);
 		goto free_flexio_uar;
@@ -499,7 +526,7 @@ void snap_dpa_process_destroy(struct snap_dpa_ctx *ctx)
  */
 uint32_t snap_dpa_process_umem_id(struct snap_dpa_ctx *ctx)
 {
-	return flexio_process_get_dumem_id(ctx->dpa_proc);
+	return ctx->dpa_proc->dumem.id;
 }
 
 /**
@@ -510,7 +537,7 @@ uint32_t snap_dpa_process_umem_id(struct snap_dpa_ctx *ctx)
  */
 uint64_t snap_dpa_process_umem_addr(struct snap_dpa_ctx *ctx)
 {
-	return flexio_process_get_dumem_addr(ctx->dpa_proc);
+	return ctx->dpa_proc->heap_process_umem_base_daddr;
 }
 
 /**
@@ -521,7 +548,7 @@ uint64_t snap_dpa_process_umem_addr(struct snap_dpa_ctx *ctx)
  */
 uint64_t snap_dpa_process_umem_size(struct snap_dpa_ctx *ctx)
 {
-	return flexio_process_get_dumem_size(ctx->dpa_proc);
+	return ctx->dpa_mem_size;
 }
 
 /**
@@ -698,8 +725,7 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 	f_thr_attr.thread_local_storage_daddr = dpa_tcb_addr;
 	f_thr_attr.host_stub_func = dctx->dpa_app_entry_point;
 
-	st = flexio_event_handler_create(thr->dctx->dpa_proc, &f_thr_attr,
-			thr->dctx->dpa_uar, &thr->dpa_thread);
+	st = flexio_event_handler_create(thr->dctx->dpa_proc, &f_thr_attr, &thr->dpa_thread);
 	if (st != FLEXIO_STATUS_SUCCESS) {
 		snap_error("Failed to create DPA thread: %d\n", st);
 		goto free_mem;
@@ -796,7 +822,7 @@ void snap_dpa_thread_destroy(struct snap_dpa_thread *thr)
  */
 uint32_t snap_dpa_thread_id(struct snap_dpa_thread *thr)
 {
-	return flexio_event_handler_get_thread_id(thr->dpa_thread);
+	return thr->dpa_thread->thread->aliasable.id;
 }
 
 /**

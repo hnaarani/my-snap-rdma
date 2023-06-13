@@ -42,6 +42,7 @@ struct snap_dpa_ctx {
 	void                   *dpa_app_entry_point;
 	struct flexio_window   *dpa_window;
 	struct snap_dpa_eq     *dpa_eq;
+	uint64_t                dpa_mem_size;
 	struct {
 		uint64_t heap_memory;
 	} stats;

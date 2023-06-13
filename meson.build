@@ -47,17 +47,20 @@ conf_data.set10('HAVE_DECL_IBV_QUERY_GID_EX',
 		cc.has_function('ibv_query_gid_ex', prefix : '#include <infiniband/verbs.h>', dependencies: libsnap_core_depends),
 		description: 'Set HAVE_DECL_IBV_QUERY_GID_EX if ibv_query_gid_ex() is supported')
 
+if (meson.is_cross_build())
+	add_global_arguments('-mno-relax', '-mcmodel=medany', '-march=rv64imac',
+			'-mabi=lp64', '-Wno-ignored-optimization-argument', language: 'c')
+endif
+
 #todo: in the future consider subproject/system install
 flexio_include = []
 flexio_pfx = get_option('with-flexio')
 if (flexio_pfx == 'subproject')
-	if (meson.is_cross_build())
-		error('External flexio must be used for the cross compilation')
-	endif
 	message('Using flexio from subproject')
 	flexio_proj = subproject('flexio', default_options: ['default_library=static'])
 	flexio = flexio_proj.get_variable('libflexio_dep')
 	flexio_pfx = 'subprojects/flexio'
+	libflexio_os_dep = flexio_proj.get_variable('libflexio_os_dep')
 	flexio_include = []
 	libsnap_core_depends += flexio
 	conf_data.set10('HAVE_FLEXIO', 1, description : 'Enable DPA host side support')
@@ -71,13 +74,13 @@ elif (flexio_pfx != '')
 			required : true)
 	libsnap_core_depends += flexio
 	conf_data.set10('HAVE_FLEXIO', 1, description : 'Enable DPA host side support')
+	if (meson.is_cross_build())
+		libflexio_os_dep = declare_dependency(
+				include_directories : include_directories(flexio_pfx + '/include/libflexio-os')
+				)
+	endif
 else
 	flexio = disabler()
-endif
-
-if (meson.is_cross_build())
-	add_global_arguments('-mno-relax', '-mcmodel=medany', '-march=rv64imac',
-			'-mabi=lp64', '-Wno-ignored-optimization-argument', language: 'c')
 endif
 
 dpa_app_dir = '"' + get_option('prefix') + '/dpa_app' + '"'
