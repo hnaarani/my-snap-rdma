@@ -114,8 +114,8 @@ struct dpa_rt_context {
 	struct snap_hw_cq msix_cq;
 };
 
-#define SNAP_DPA_RT_QP_TX_SIZE 1024
-#define SNAP_DPA_RT_QP_RX_SIZE 256
+#define SNAP_DPA_RT_QP_TX_SIZE 2048
+#define SNAP_DPA_RT_QP_RX_SIZE 1024
 #define SNAP_DPA_RT_QP_TX_ELEM_SIZE 64
 #define SNAP_DPA_RT_QP_RX_ELEM_SIZE 64
 
@@ -125,7 +125,7 @@ struct dpa_rt_context {
 #define SNAP_DPA_RT_THR_MSIX_CQE_SIZE 64
 #define SNAP_DPA_RT_THR_MSIX_CQE_CNT 2
 
-#define SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE (96 * 1024)
+#define SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE (96 * 4096)
 
 struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt, struct snap_dpa_rt_filter *filter);
 void snap_dpa_rt_thread_put(struct snap_dpa_rt_thread *rt);
