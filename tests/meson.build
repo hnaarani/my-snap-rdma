@@ -36,9 +36,15 @@ gtest_snap_dma_srcs = [
 	'tests_common.cc'
 	]
 
+cpp_args_optional = []
+
+if meson.get_compiler('c').get_id() == 'clang'
+	cpp_args_optional += '-Wno-extern-c-compat'
+endif
+
 gtest_snap_dma = executable('gtest_snap_dma',
 		gtest_snap_dma_srcs,
-		cpp_args : cpp_args,
+		cpp_args : cpp_args + cpp_args_optional,
 		dependencies : [ libsnap_core_dep, gtest ],
 		pie : false,
 		install : false,
@@ -61,7 +67,7 @@ gtest_snap_dpa_srcs = [
 
 gtest_snap_dpa = executable('gtest_snap_dpa',
 		gtest_snap_dpa_srcs,
-		cpp_args : cpp_args,
+		cpp_args : cpp_args + cpp_args_optional,
 		dependencies : [ libdpa_core_dep, gtest ],
 		pie : false,
 		install : false,

@@ -25,6 +25,10 @@ libsnap_core_sources = [
 	'../ctrl/snap_dp_map.c'
 ]
 
+if meson.get_compiler('c').get_id() == 'clang'
+	common_cflags += '-Wno-microsoft-anon-tag'
+endif
+
 #TODO remove once DOCA moves to work over dev_emu_dma_* API
 install_headers('snap_dma.h', 'snap_qp.h', 'snap_macros.h', 'snap_mr.h', 'snap_env.h', 'snap_dma_stat.h', 'snap_mb.h', 'snap_dpa_common.h')
 
