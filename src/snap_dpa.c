@@ -283,14 +283,112 @@ static void dma_q_destroy(struct snap_dpa_ctx *ctx)
 	snap_dma_q_destroy(ctx->dummy_q);
 }
 
+static int load_file(const char *file_name, void **buf, size_t *size)
+{
+	int ret;
+	FILE *fp;
+	struct stat file_st;
+	size_t fbuf_size;
+	void *fbuf;
+
+	fp = fopen(file_name, "r");
+	if (!fp) {
+		snap_error("Failed to open %s: %m", file_name);
+		return -1;
+	}
+
+	ret = fstat(fileno(fp), &file_st);
+	if (ret < 0) {
+		snap_error("Failed to stat %s: %m\n", file_name);
+		goto close_file;
+	}
+
+	if (!S_ISREG(file_st.st_mode)) {
+		snap_error("%s is not a regular file\n", file_name);
+		goto close_file;
+	}
+
+	fbuf_size = file_st.st_size;
+	fbuf = malloc(fbuf_size);
+	if (!fbuf) {
+		snap_error("Failed to alloc memory for %s\n", file_name);
+		goto close_file;
+	}
+
+	if (fread(fbuf, fbuf_size, 1, fp) != 1) {
+		snap_error("Failed to load file %s: %m\n", file_name);
+		goto free_buf;
+	}
+
+	*buf = fbuf;
+	*size = fbuf_size;
+	return 0;
+
+free_buf:
+	free(fbuf);
+close_file:
+	fclose(fp);
+	return -1;
+}
+
+/* first bytes of the flexio app, so we can load signature */
+struct snap_flexio_app {
+	CIRCLEQ_ENTRY(snap_flexio_app) node;
+	char app_name[FLEXIO_MAX_NAME_LEN + 1];
+	void *elf_buffer;
+	size_t elf_size;
+	uint32_t sig_exist;
+	void *sig_buffer;
+	size_t sig_size;
+};
+
+static int snap_dpa_load_app_sig(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
+{
+	struct snap_flexio_app *app = (struct snap_flexio_app *)dpa_ctx->dpa_app;
+	int ret;
+	char *file_name;
+	void *sig_buf;
+	size_t sig_buf_size;
+	struct stat st;
+
+	if (getenv("LIBSNAP_DPA_DIR"))
+		ret = asprintf(&file_name, "%s/%s.sig", getenv("LIBSNAP_DPA_DIR"),
+			       app_name);
+	else
+		ret = asprintf(&file_name, "%s/%s.sig", DPA_DEFAULT_APP_DIR, app_name);
+
+	if (ret < 0) {
+		snap_error("Failed to allocate memory\n");
+		return -ENOMEM;
+	}
+
+	if (stat(file_name, &st)) {
+		snap_debug("App has no signature\n");
+		return 0;
+	}
+
+	snap_info("%s has signature\n", app_name);
+	ret = load_file(file_name, &sig_buf, &sig_buf_size);
+	if (ret)
+		goto free_file;
+
+	app->sig_exist = 1;
+	app->sig_buffer = sig_buf;
+	app->sig_size = sig_buf_size;
+
+	return 0;
+
+free_file:
+	free(file_name);
+	return -EINVAL;
+}
+
 static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 {
 	int ret;
 	char *file_name;
 	struct flexio_app_attr fattr;
 	flexio_status st;
-	FILE *fp;
-	struct stat app_st;
 
 	if (getenv("LIBSNAP_DPA_DIR"))
 		ret = asprintf(&file_name, "%s/%s", getenv("LIBSNAP_DPA_DIR"),
@@ -305,37 +403,12 @@ static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 		return -ENOMEM;
 	}
 
-	fp = fopen(file_name, "r");
-	if (!fp) {
-		snap_error("Failed to open %s: %m", file_name);
-		goto free_file;
-	}
-
-	ret = fstat(fileno(fp), &app_st);
-	if (ret < 0) {
-		snap_error("Failed to stat %s: %m\n", file_name);
-		goto close_file;
-	}
-
-	if (!S_ISREG(app_st.st_mode)) {
-		snap_error("%s is not a regular file\n", file_name);
-		goto close_file;
-	}
-
 	fattr.app_name = app_name;
 	fattr.app_sig_sec_name = "";
-	fattr.app_bsize = app_st.st_size;
 
-	fattr.app_ptr = malloc(fattr.app_bsize);
-	if (!fattr.app_ptr) {
-		snap_error("Failed to alloc memory for %s\n", file_name);
-		goto close_file;
-	}
-
-	if (fread(fattr.app_ptr, fattr.app_bsize, 1, fp) != 1) {
-		snap_error("Failed to read app from %s: %m\n", file_name);
-		goto free_buf;
-	}
+	ret = load_file(file_name, &fattr.app_ptr, &fattr.app_bsize);
+	if (ret)
+		goto free_file;
 
 	/* load elf buffer */
 	st = flexio_app_create(&fattr, &dpa_ctx->dpa_app);
@@ -352,16 +425,15 @@ static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 	}
 
 	free(fattr.app_ptr);
-	fclose(fp);
 	free(file_name);
+
+	snap_dpa_load_app_sig(dpa_ctx, app_name);
 	return 0;
 
 free_app:
 	flexio_app_destroy(dpa_ctx->dpa_app);
 free_buf:
 	free(fattr.app_ptr);
-close_file:
-	fclose(fp);
 free_file:
 	free(file_name);
 	return -EINVAL;
