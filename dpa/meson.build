@@ -102,7 +102,7 @@ dpa_tests = [
 ]
 
 foreach t : dpa_tests
-	executable(t, t + '.c',
+	exec = executable(t, t + '.c',
 		c_args : dpa_cflags,
 		link_args : dpa_ldflags,
 		link_depends : dpa_link_script,
@@ -110,7 +110,20 @@ foreach t : dpa_tests
 		install : false,
 		native : false
 		)
+
+    if get_option('dpa-signed-apps')
+        custom_target(t + '.sig',
+                build_by_default : true,
+                depends : exec,
+                input : exec,
+                output : t + '.sig',
+                command : ['dpa_sign.sh', '@INPUT@', get_option('dpa-cert'), get_option('dpa-private-key')],
+                install : false
+                )
+    endif
+
 endforeach
+
 
 #
 # installable (todo) apps
@@ -122,7 +135,7 @@ dpa_apps = [
 #
 # TODO: setup install path
 foreach app : dpa_apps
-	executable(app, app + '.c',
+	exec = executable(app, app + '.c',
 		c_args : dpa_cflags,
 		link_args : dpa_ldflags,
 		link_depends : dpa_link_script,
@@ -130,4 +143,16 @@ foreach app : dpa_apps
 		install : true,
 		native : false
 		)
+
+    if get_option('dpa-signed-apps')
+        custom_target(app + '.sig',
+                build_by_default : true,
+                depends : exec,
+                input : exec,
+                output : app + '.sig',
+                command : ['dpa_sign.sh', '@INPUT@', get_option('dpa-cert'), get_option('dpa-private-key')],
+                install : false
+                )
+    endif
+
 endforeach

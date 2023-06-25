@@ -15,3 +15,8 @@ option('enable-gtest', type : 'boolean', value : false, description : 'build uni
 option('with-flexio', type : 'string', value : 'subproject', description : 'flexio install prefix')
 option('enable-debug', type : 'boolean', value : false, description : 'enable extra debug prints and code')
 option('enable-simx', type : 'boolean', value : false, description : 'enable SIMX specific workaround. Must for SIMX')
+
+# DPA Signing
+option('dpa-signed-apps', type : 'boolean', value : false, description : 'sign DPA applications')
+option('dpa-cert', type : 'string', description : 'certificate used to sign DPA applications')
+option('dpa-private-key', type : 'string', description : 'private key used to sign DPA applications')

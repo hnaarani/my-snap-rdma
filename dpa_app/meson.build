@@ -11,5 +11,13 @@
 #
 
 install_dir=get_option('prefix') + '/dpa_app'
+
 install_data('dpa_virtq_split', install_dir: install_dir)
 install_data('dpa_nvme', install_dir: install_dir)
+
+# TODO because signature is dependant on the fw version
+#if get_option('dpa-signed-apps')
+#    install_data('dpa_virtq_split.sig', install_dir: install_dir)
+#    install_data('dpa_nvme.sig', install_dir: install_dir)
+#endif
+
