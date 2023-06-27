@@ -32,10 +32,7 @@ struct snap_virtio_net_queue_attr {
 	/* create: */
 	uint16_t			vhca_id;
 	uint32_t			tisn_or_qpn;
-	bool				tso_ipv4;
-	bool				tso_ipv6;
-	bool				tx_csum;
-	bool				rx_csum;
+	uint64_t			features;
 	/* query result: */
 	uint64_t			modifiable_fields;//mask of snap_virtio_net_queue_modify
 	uint16_t			hw_available_index;
