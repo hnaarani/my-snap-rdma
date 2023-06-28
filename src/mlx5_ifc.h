@@ -1532,7 +1532,9 @@ struct mlx5_ifc_virtio_emulation_cap_bits {
 	u8	 tso_ipv6[0x1];
 	u8	 tx_csum[0x1];
 	u8	 rx_csum[0x1];
-	u8	 reserved_at_7[0x9];
+	u8	 reserved_at_7[0x6];
+	u8	 mrg_rxbuf[0x1];
+	u8	 reserved_at_0e[0x2];
 	u8	 event_mode[0x8];
 	u8	 virtio_queue_type[0x8];
 
@@ -4169,7 +4171,8 @@ struct mlx5_ifc_virtio_net_q_bits {
 
 	u8	   dirty_map_mode[0x2];
 	u8	   reserved_at_a2[0x3];
-	u8	   queue_feature_bit_mask_2_0[0x3];
+	u8	   mrg_rxbuf[0x1];
+	u8	   queue_feature_bit_mask_1_0[0x2];
 	u8	   tisn_or_qpn[0x18];
 
 	u8	   dirty_map_mkey[0x20];

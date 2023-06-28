@@ -772,6 +772,9 @@ static void snap_fill_virtio_caps(struct snap_virtio_caps *virtio,
 		     capability.virtio_emulation_cap.virtio_version_1_0))
 		virtio->features |= SNAP_VIRTIO_F_VERSION_1;
 	if (DEVX_GET(query_hca_cap_out, out,
+		     capability.virtio_emulation_cap.mrg_rxbuf))
+		virtio->features |= SNAP_VIRTIO_NET_F_MRG_RXBUF;
+	if (DEVX_GET(query_hca_cap_out, out,
 		     capability.virtio_emulation_cap.tso_ipv4))
 		virtio->features |= SNAP_VIRTIO_NET_F_HOST_TSO4;
 	if (DEVX_GET(query_hca_cap_out, out,

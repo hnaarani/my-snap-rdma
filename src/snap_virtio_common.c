@@ -894,6 +894,9 @@ snap_virtio_create_queue(struct snap_device *sdev,
 
 			if (attr->features & (1ULL << VIRTIO_NET_F_GUEST_CSUM))
 				DEVX_SET(virtio_net_q, virtq_in, rx_csum, 1);
+
+			if (attr->features & (1ULL << VIRTIO_NET_F_MRG_RXBUF))
+				DEVX_SET(virtio_net_q, virtq_in, mrg_rxbuf, 1);
 		}
 
 	} else if (sdev->pci->type == SNAP_VIRTIO_FS_PF ||
