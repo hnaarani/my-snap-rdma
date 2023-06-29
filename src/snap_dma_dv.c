@@ -1032,40 +1032,83 @@ const struct snap_dma_q_ops gga_ops = {
 
 int dv_worker_progress_rx(struct snap_dma_worker *wk)
 {
-	struct mlx5_cqe64 *cqe[SNAP_DMA_MAX_RX_COMPLETIONS];
-	int n, i, cqe_id;
-	int op;
-	struct snap_rx_completion rx_comp[SNAP_DMA_MAX_RX_COMPLETIONS];
+	int n, i;
+	int op, dma_cqe_id;
 	struct snap_dma_q *q;
+	struct mlx5_cqe64 *cqe[SNAP_DMA_MAX_RX_COMPLETIONS];
+	struct snap_rx_completion rx_comp[SNAP_DMA_MAX_RX_COMPLETIONS];
 
 	n = 0;
 	do {
 		cqe[n] = snap_dv_poll_cq(&wk->dv_rx_cq, SNAP_DMA_Q_RX_CQE_SIZE);
 		if (!cqe[n])
 			break;
+
+		dma_cqe_id = be32toh(cqe[n]->srqn_uidx);
+		q = wk->queues[dma_cqe_id];
+
 		op = mlx5dv_get_cqe_opcode(cqe[n]);
 		if (snap_unlikely(op != MLX5_CQE_RESP_SEND &&
 				  op != MLX5_CQE_RESP_SEND_IMM)) {
 			snap_dv_cqe_err(cqe[n]);
-			return n;
+			q->flush_count++;
+			/* Receive buffers twice the size of RQ are posted */
+			if (q->flush_count == q->rx_qsize*SNAP_DMA_Q_POST_RECV_BUF_FACTOR) {
+				/* Q flushed completely. We can free
+				 * the resources
+				 */
+				pthread_mutex_lock(&q->lock);
+				if (q->destroy_done) {
+					/* User has already issued destroy CQ
+					 * and is waiting for the Q to drain
+					 * completely before the resources
+					 * can be freed.
+					 * uctx contains dpa_cq
+					 */
+					pthread_mutex_unlock(&q->lock);
+					q->free_dma_q_resources_cb(q->uctx);
+				} else {
+					snap_debug("%s: DMA_Q:%p flushed completely before user could destroy the CQ\n",
+						__func__, q);
+					q->destroy_done = true;
+					pthread_mutex_unlock(&q->lock);
+				}
+			}
+			if (n) {
+				/* Process valid completions before going back */
+				goto process_comps;
+			} else
+				return n;
 		}
-		cqe_id = be32toh(cqe[n]->srqn_uidx);
-#if SNAP_DEBUG
-		if (snap_unlikely(!wk->queues[cqe_id].in_use)) {
-			snap_debug("%s: Queue %d is not valid, dropping CQE\n", __func__, cqe_id);
+
+		/* TODO Lokesh: Keep this check for now to verify if
+		 * we get some scenario while extensive tests where this
+		 * condition will be true
+		 * In general, this should never be true since we clean
+		 * the DMA Q only when it is completely drained.
+		 * But, this code was never used till now and there may be
+		 * some scenarios that may come where the below condition
+		 * will be executed
+		 */
+		if (snap_unlikely(!wk->queues[dma_cqe_id])) {
+			snap_debug("%s: Queue %d is not valid, dropping CQE\n", __func__, dma_cqe_id);
 			continue;
 		}
-#endif
 
-		q = &wk->queues[cqe_id].q;
 		dv_dma_q_get_rx_comp(q, cqe[n], &rx_comp[n]);
 		n++;
 	} while (n < SNAP_DMA_MAX_RX_COMPLETIONS);
+
+	/* Return from here as it will save from unnecessary load / store fence */
+	if (n == 0)
+		return n;
+
+process_comps:
 	snap_memory_cpu_load_fence();
 
 	for (i = 0; i < n; i++) {
-		cqe_id = be32toh(cqe[i]->srqn_uidx);
-		q = &wk->queues[cqe_id].q;
+		dma_cqe_id = be32toh(cqe[i]->srqn_uidx);
+		q = wk->queues[dma_cqe_id];
 		q->rx_cb(q, rx_comp[i].data, rx_comp[i].byte_len, rx_comp[i].imm_data);
 		q->sw_qp.dv_qp.hw_qp.rq.ci++;
 		snap_dv_update_rx_db(&q->sw_qp.dv_qp);
@@ -1073,36 +1116,30 @@ int dv_worker_progress_rx(struct snap_dma_worker *wk)
 	snap_memory_bus_store_fence();
 
 	return n;
+
 }
 
 static inline void dv_worker_ring_all_doorbells(struct snap_dma_worker *wk)
 {
-	int i;
-	struct snap_dv_qp *dv_qp;
+	struct snap_dma_q *q;
 
-	for (i = 0; i < wk->max_queues; i++) {
-		dv_qp = &wk->queues[i].q.sw_qp.dv_qp;
-		if (snap_likely(wk->queues[i].in_use)) {
-			if (dv_qp->tx_need_ring_db)
-				snap_dv_update_tx_db(dv_qp);
-		}
-	}
+	SLIST_FOREACH(q, &wk->pending_dbs, entry)
+		snap_dv_update_tx_db(&q->sw_qp.dv_qp);
 
 	snap_memory_bus_store_fence();
 
-	for (i = 0; i < wk->max_queues; i++) {
-		dv_qp = &wk->queues[i].q.sw_qp.dv_qp;
-		if (snap_likely(wk->queues[i].in_use)) {
-			if (dv_qp->tx_need_ring_db) {
-				dv_qp->tx_need_ring_db = false;
-				snap_dv_flush_tx_db(dv_qp, dv_qp->ctrl);
+	SLIST_FOREACH(q, &wk->pending_dbs, entry) {
+		struct snap_dv_qp *dv_qp = &q->sw_qp.dv_qp;
+
+		dv_qp->tx_need_ring_db = false;
+		snap_dv_flush_tx_db(dv_qp, dv_qp->ctrl);
 #if !defined(__aarch64__)
-				if (!dv_qp->hw_qp.sq.tx_db_nc)
-					snap_memory_bus_store_fence();
+	if (!dv_qp->hw_qp.sq.tx_db_nc)
+		snap_memory_bus_store_fence();
 #endif
-			}
-		}
 	}
+
+	SLIST_INIT(&wk->pending_dbs);
 }
 
 int dv_worker_progress_tx(struct snap_dma_worker *wk)
@@ -1130,7 +1167,7 @@ int dv_worker_progress_tx(struct snap_dma_worker *wk)
 		}
 #endif
 
-		q = &wk->queues[cqe_id].q;
+		q = wk->queues[cqe_id];
 		comp[n] = dv_dma_q_get_comp(q, cqe[n]);
 		n++;
 	} while (n < SNAP_DMA_MAX_TX_COMPLETIONS);
@@ -1175,19 +1212,19 @@ int dv_worker_flush(struct snap_dma_worker *wk)
 		n += dv_worker_progress_tx(wk);
 
 	for (i = 0 ; i < wk->max_queues; i++) {
-		if (snap_unlikely(!wk->queues[i].in_use))
+		if (snap_unlikely(!wk->queues[i]))
 			continue;
-		q = &wk->queues[i].q;
+		q = wk->queues[i];
 		n += worker_flush_helper(q);
 	}
 
 	for (i = 0 ; i < wk->max_queues; i++) {
-		if (snap_unlikely(!wk->queues[i].in_use))
+		if (snap_unlikely(wk->queues[i]))
 			continue;
 		/* api is highly experimental and not in use at the moment */
 		snap_error("WORKER FLUSH NEEDS TO BE FIXED\n");
-		tx_available = wk->queues[i].q.sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
-		while (wk->queues[i].q.tx_available < tx_available)
+		tx_available = wk->queues[i]->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
+		while (wk->queues[i]->tx_available < tx_available)
 			n += dv_worker_progress_tx(wk);
 	}
 

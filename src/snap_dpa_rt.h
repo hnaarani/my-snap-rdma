@@ -15,6 +15,7 @@
 
 #include "snap_dpa.h"
 #include "snap_dpa_p2p.h"
+#include "snap_dma.h"
 
 /**
  * Regardless of the storage emulation logic we always have following
@@ -33,6 +34,20 @@ struct snap_dpa_rt_attr {
 };
 
 #define SNAP_DPA_RT_NAME_LEN 32
+
+struct  snap_dma_worker;
+
+/**
+ * struct snap_dma_q_init_attr DMA queue init attributes
+ *
+ * @cq:	CQ for this DMA queue
+ * @wk:	Worker where the queue is attached
+ */
+struct snap_dma_q_init_attr {
+	void *cq;
+	struct snap_dma_worker *wk;
+	snap_dma_rx_cb_t rx_cb;
+};
 
 struct snap_dpa_rt {
 	struct snap_dpa_ctx *dpa_proc;
@@ -127,7 +142,9 @@ struct dpa_rt_context {
 
 #define SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE (96 * 4096)
 
-struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt, struct snap_dpa_rt_filter *filter);
+struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt,
+			struct snap_dpa_rt_filter *filter,
+			struct snap_dma_q_init_attr *q_init_attr);
 void snap_dpa_rt_thread_put(struct snap_dpa_rt_thread *rt);
 
 int snap_dpa_rt_thread_msix_add(struct snap_dpa_rt_thread *rt_thr, struct snap_dpa_msix_eq *msix_eq, uint32_t *msix_cqnum);

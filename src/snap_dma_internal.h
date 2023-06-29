@@ -67,9 +67,9 @@ static inline bool worker_qps_can_tx(struct snap_dma_worker *wk, int bb_needed)
 	int i;
 
 	for (i = 0; i < wk->max_queues; i++) {
-		if (snap_unlikely(!wk->queues[i].in_use))
+		if (snap_unlikely(!wk->queues[i]))
 			continue;
-		if (wk->queues[i].q.tx_available < bb_needed)
+		if (wk->queues[i]->tx_available < bb_needed)
 			return false;
 	}
 
@@ -199,6 +199,10 @@ static inline void snap_dv_wqe_submit(struct snap_dv_qp *dv_qp, struct mlx5_wqe_
 {
 	dv_qp->hw_qp.sq.pi++;
 	if (dv_qp->db_flag == SNAP_DB_RING_BATCH) {
+		struct snap_dma_q *q = container_of(dv_qp, struct snap_dma_q, sw_qp.dv_qp);
+
+		if (q->worker && dv_qp->tx_need_ring_db == false)
+			SLIST_INSERT_HEAD(&q->worker->pending_dbs, q, entry);
 		dv_qp->tx_need_ring_db = true;
 		dv_qp->ctrl = ctrl;
 		return;

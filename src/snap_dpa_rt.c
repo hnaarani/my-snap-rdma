@@ -202,7 +202,7 @@ void dummy_rx_cb(struct snap_dma_q *q, const void *data, uint32_t data_len, uint
 	snap_error("OOPS: rx cb called\n");
 }
 
-static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_in)
+static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_in, struct snap_dma_q_init_attr *q_init_attr)
 {
 	struct snap_dpa_thread_attr attr = {
 		.heap_size = SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE
@@ -252,6 +252,12 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 
 	q_attr.rx_cb = dummy_rx_cb;
 	q_attr.iov_enable = true;
+
+	if (q_init_attr) {
+		q_attr.wk = q_init_attr->wk;
+		q_attr.uctx = q_init_attr->cq;
+		q_attr.rx_cb = q_init_attr->rx_cb;
+	}
 	rt_thr->dpu_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
 	if (!rt_thr->dpu_cmd_chan.dma_q)
 		goto free_dpa_thread;
@@ -272,6 +278,9 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 		goto free_dpu_qp;
 
 	q_attr.iov_enable = false;
+	q_attr.wk = NULL;
+	if (q_init_attr)
+		q_attr.uctx = q_init_attr->cq;
 	rt_thr->dpa_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
 	if (!rt_thr->dpa_cmd_chan.dma_q)
 		goto free_dpu_qp;
@@ -338,8 +347,9 @@ static void rt_thread_reset(struct snap_dpa_rt_thread *rt_thr)
 
 /**
  * snap_dpa_rt_thread_get() - get dpa thread according to the set of constrains
- * @rt:      dpa runtime
- * @filter:  the set of constrains
+ * @rt:			dpa runtime
+ * @filter:		the set of constrains
+ * @q_init_attr:	init attributes to set in DMA q
  *
  * The function returns a thread that matches constrains given in the @filter
  * argument. If necessary, the thread will be created.
@@ -347,10 +357,12 @@ static void rt_thread_reset(struct snap_dpa_rt_thread *rt_thr)
  * At the moment we only support single/polling thread. In the future a single
  * rt thread can be shared among several queues.
  */
-struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt, struct snap_dpa_rt_filter *filter)
+struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt,
+			struct snap_dpa_rt_filter *filter,
+			struct snap_dma_q_init_attr *q_init_attr)
 {
-	struct snap_dpa_rt_thread *rt_thr;
 	int ret;
+	struct snap_dpa_rt_thread *rt_thr;
 
 	if (filter->mode != SNAP_DPA_RT_THR_POLLING && filter->mode != SNAP_DPA_RT_THR_EVENT)
 		return NULL;
@@ -368,7 +380,7 @@ struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt, struct
 	rt_thr->refcount = 1;
 
 	/* TODO: modify attribute to accept external snap_dma_q */
-	ret = rt_thread_init(rt_thr, filter->pd);
+	ret = rt_thread_init(rt_thr, filter->pd, q_init_attr);
 	if (ret)
 		goto free_mem;
 

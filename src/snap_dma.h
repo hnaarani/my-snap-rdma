@@ -35,6 +35,7 @@
 #define SNAP_DMA_Q_MAX_IOV_CNT		128
 #define SNAP_DMA_Q_MAX_SGE_NUM		20
 #define SNAP_DMA_Q_MAX_WR_CNT		128
+#define SNAP_DMA_Q_POST_RECV_BUF_FACTOR	2
 
 #define SNAP_CRYPTO_KEYTAG_SIZE              8
 #define SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE   16
@@ -81,6 +82,17 @@ typedef void (*snap_dma_rx_cb_t)(struct snap_dma_q *q, const void *data,
 typedef void (*snap_dma_comp_cb_t)(struct snap_dma_completion *comp, int status);
 
 /**
+ * typedef free_dma_q_resources - Free DMA Q resources callback
+ * @dpa_cq: CQ for which resources have to cleaned
+ *
+ * This cb is set when the user issues CQ destroy command and dma q is not
+ * yet drained.
+ * Cllabck will be invoked from the rx poller once the DMA Q has been
+ * drained completely
+ */
+typedef void (*free_dma_q_resources)(void *dpa_cq);
+
+/**
  * struct snap_dma_completion - completion handle and callback
  *
  * This structure should be allocated by the user and can be passed to communication
@@ -109,6 +121,7 @@ struct snap_rx_completion {
 	void *data;
 	uint32_t imm_data;
 	uint32_t byte_len;
+	struct snap_dma_q *q;
 };
 
 struct snap_dv_dma_completion {
@@ -308,8 +321,15 @@ struct snap_dma_q {
 
 	TAILQ_HEAD(, snap_dma_q_ir_ctx) free_ir_ctx;
 
+	SLIST_ENTRY(snap_dma_q) entry;
+
 	struct snap_dma_q_ops  *custom_ops;
 	struct snap_dma_worker *worker;
+
+	pthread_mutex_t	lock;
+	bool destroy_done;
+	int flush_count;
+	free_dma_q_resources free_dma_q_resources_cb;
 
 	/* public: */
 	/** @uctx:  user supplied context */
@@ -426,9 +446,19 @@ struct snap_dma_q_create_attr {
 
 /* TODO add support for worker mode single and SRQ*/
 enum snap_dma_worker_mode {
-	SNAP_DMA_WORKER_MODE_SINGLE, /* cq per qp, suitable for small numbers of qps */
-	SNAP_DMA_WORKER_MODE_CQ_POOL, /* cq pool, rx cq size is exp_queue_num * exp_queue_rx_size */
-	SNAP_DMA_WORKER_MODE_SRQ /* use to receive */
+	/* shared cq size is exp_queue_num * exp_queue_rx_size */
+	SNAP_DMA_WORKER_MODE_SHARED_CQ,
+	SNAP_DMA_WORKER_MODE_SHARED_CQ_TX_ONLY,
+	SNAP_DMA_WORKER_MODE_SHARED_CQ_RX_ONLY,
+
+	/* TODO: Remove the below? */
+
+	/* cq per qp, suitable for small numbers of qps */
+	SNAP_DMA_WORKER_MODE_SINGLE,
+	/* cq pool, rx cq size is exp_queue_num * exp_queue_rx_size */
+	SNAP_DMA_WORKER_MODE_CQ_POOL,
+	/* use to receive */
+	SNAP_DMA_WORKER_MODE_SRQ
 };
 
 struct snap_dma_worker_create_attr {
@@ -436,14 +466,6 @@ struct snap_dma_worker_create_attr {
 	int exp_queue_num; /* hint to the worker: how many queues it is going to serve */
 	int exp_queue_rx_size; /* hint to the worker: queue rx size */
 	int id;
-};
-
-struct snap_dma_worker_queue {
-	struct snap_dma_q q;
-	uint16_t index;
-	bool in_use;
-
-	SLIST_ENTRY(snap_dma_worker_queue) entry;
 };
 
 struct snap_dma_worker {
@@ -456,8 +478,8 @@ struct snap_dma_worker {
 	enum snap_dma_worker_mode mode;
 	int max_queues;
 
-	SLIST_HEAD(, snap_dma_worker_queue) free_queues;
-	struct snap_dma_worker_queue queues[0];
+	SLIST_HEAD(, snap_dma_q) pending_dbs;
+	struct snap_dma_q *queues[0];
 };
 struct snap_dma_worker *snap_dma_worker_create(struct ibv_pd *pd,
 		const struct snap_dma_worker_create_attr *attr);
@@ -516,6 +538,9 @@ int snap_dma_ep_connect_remote_qpn(struct snap_dma_q *q1, int remote_qp2_num);
 int snap_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
 		uint64_t addr, size_t len, uint32_t key, uint32_t *imm);
 int snap_dma_q_post_recv(struct snap_dma_q *q);
+
+int snap_dma_q_modify_to_err_state(struct snap_dma_q *q);
+
 struct snap_dma_ep_copy_cmd {
 	struct snap_dpa_cmd base;
 	struct snap_dma_q q;
@@ -562,6 +587,9 @@ static inline int snap_dma_q_dv_get_tx_avail_max(struct snap_dma_q *q)
 /* how many tx and rx completions to process during a single progress call */
 #define SNAP_DMA_MAX_TX_COMPLETIONS  128
 #define SNAP_DMA_MAX_RX_COMPLETIONS  128
+
+/* Number of completions for Shared RX CQ in single poll cycle */
+#define SNAP_DMA_MAX_SHARED_RX_CQ_COMPLETIONS	64
 
 /* align start of the receive buffer on 4k boundary */
 #define SNAP_DMA_RX_BUF_ALIGN    4096

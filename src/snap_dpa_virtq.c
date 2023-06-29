@@ -71,7 +71,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	if (!vq->rt)
 		goto free_vq;
 
-	vq->rt_thr = snap_dpa_rt_thread_get(vq->rt, &f);
+	vq->rt_thr = snap_dpa_rt_thread_get(vq->rt, &f, NULL);
 	if (!vq->rt_thr)
 		goto put_rt;
 

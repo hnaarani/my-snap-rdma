@@ -437,6 +437,77 @@ TEST_F(SnapDmaTest, dma_write_short) {
 	snap_dma_q_destroy(q);
 }
 
+TEST_F(SnapDmaTest, flush_qp) {
+	struct snap_dma_q *q;
+	char cqe[m_dma_q_attr.tx_elem_size];
+	int rc;
+	int n;
+	struct ibv_recv_wr rx_wr, *bad_wr;
+	struct ibv_sge rx_sge;
+
+	q = snap_dma_q_create(m_pd, &m_dma_q_attr);
+	ASSERT_TRUE(q);
+
+	/* post one recv to the fw qp so that send can complete */
+	rx_sge.addr = (uintptr_t)m_rbuf;
+	rx_sge.length = m_dma_q_attr.tx_elem_size;
+	rx_sge.lkey = m_rmr->lkey;
+	rx_wr.next = NULL;
+	rx_wr.sg_list = &rx_sge;
+	rx_wr.num_sge = 1;
+
+	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->fw_qp.qp), &rx_wr, &bad_wr);
+	ASSERT_EQ(0, rc);
+
+	/* modify QP to error state */
+	rc = snap_dma_q_modify_to_err_state(q);
+	ASSERT_EQ(0, rc);
+
+	/* Poll CQ as we expect 1 completion with flush error */
+	struct ibv_wc wc;
+	rc = ibv_poll_cq(snap_cq_to_verbs_cq(q->fw_qp.rx_cq), 1, &wc);
+
+	ASSERT_EQ(0, memcmp(cqe, m_rbuf, sizeof(cqe)));
+	ASSERT_EQ(1, rc);
+	ASSERT_EQ(IBV_WC_WR_FLUSH_ERR, wc.status);
+
+	snap_dma_q_destroy(q);
+}
+
+TEST_F(SnapDmaTest, flush_devx_qp) {
+	int rc;
+	struct snap_dma_q *q;
+	struct snap_dma_worker *wk;
+
+	snap_dma_worker_create_attr wk_attr;
+	wk_attr.mode = SNAP_DMA_WORKER_MODE_CQ_POOL;
+	wk_attr.exp_queue_num = 1;
+	wk_attr.exp_queue_rx_size = 32;
+
+	wk = snap_dma_worker_create(m_pd, &wk_attr);
+	ASSERT_TRUE(wk);
+
+	m_dma_q_attr.sw_use_devx = true;
+	m_dma_q_attr.wk = wk;
+	m_dma_q_attr.tx_qsize = 16;
+	m_dma_q_attr.rx_qsize = 16;
+	q = snap_dma_q_create(m_pd, &m_dma_q_attr);
+	ASSERT_TRUE(q);
+
+	rc = snap_dma_q_modify_to_err_state(q);
+	ASSERT_EQ(0, rc);
+
+	/* destroy_done will be marked true by progress function when the
+	 * q is completely flushed
+	 */
+	while(!q->destroy_done)
+	       snap_dma_worker_progress_rx(wk);
+
+	ASSERT_EQ(q->flush_count == m_dma_q_attr.rx_qsize*SNAP_DMA_Q_POST_RECV_BUF_FACTOR);
+
+	snap_dma_q_destroy(q);
+}
+
 TEST_F(SnapDmaTest, send_completion) {
 	struct snap_dma_q *q;
 	char cqe[m_dma_q_attr.tx_elem_size];
@@ -1746,7 +1817,7 @@ void SnapDmaTest::worker_poll_rx()
 	snap_dma_worker_create_attr wk_attr;
 	struct snap_dma_q *q[2];
 
-	wk_attr.mode = SNAP_DMA_WORKER_MODE_CQ_POOL;
+	wk_attr.mode = SNAP_DMA_WORKER_MODE_SHARED_CQ;
 	wk_attr.exp_queue_num = 2;
 	wk_attr.exp_queue_rx_size = 64;
 
@@ -1794,7 +1865,7 @@ void SnapDmaTest::worker_poll_tx()
 	struct snap_dma_q *q;
 	snap_dma_worker_create_attr wk_attr;
 
-	wk_attr.mode = SNAP_DMA_WORKER_MODE_CQ_POOL;
+	wk_attr.mode = SNAP_DMA_WORKER_MODE_SHARED_CQ;
 	wk_attr.exp_queue_num = 1;
 	wk_attr.exp_queue_rx_size = 64;
 

@@ -281,7 +281,7 @@ static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_crea
 	} else
 		qp->tx_cq = NULL;
 
-	if (qp_init_attr->rq_size) {
+	if (qp_init_attr->rq_size && !qp_init_attr->rq_cq) {
 		cq_attr.cqe_cnt = qp_init_attr->rq_size;
 		/* Use 128 bytes cqes in order to allow scatter to cqe on receive
 		 * This is relevant for NVMe sqe and for virtio queues when number of
@@ -291,6 +291,8 @@ static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_crea
 		qp->rx_cq = snap_cq_create(pd->context, &cq_attr);
 		if (!qp->rx_cq)
 			goto free_tx_cq;
+	} else if (qp_init_attr->rq_size && qp_init_attr->rq_cq) {
+		qp->rx_cq = qp_init_attr->rq_cq;
 	} else
 		qp->rx_cq = NULL;
 
@@ -527,7 +529,7 @@ int snap_dma_q_post_recv(struct snap_dma_q *q)
 	if (snap_qp_on_dpa(q->sw_qp.qp))
 		return 0;
 
-	for (i = 0; i < 2 * q->rx_qsize; i++) {
+	for (i = 0; i < SNAP_DMA_Q_POST_RECV_BUF_FACTOR * q->rx_qsize; i++) {
 		if (q->sw_qp.mode == SNAP_DMA_Q_MODE_VERBS) {
 			rx_sge.addr = (uint64_t)(q->sw_qp.rx_buf +
 					i * q->rx_elem_size);
@@ -552,6 +554,17 @@ int snap_dma_q_post_recv(struct snap_dma_q *q)
 	}
 
 	return 0;
+}
+
+static int snap_dma_worker_queue_idx_get(struct snap_dma_worker *wk, struct snap_dma_q *q)
+{
+	int i;
+
+	for (i = 0; i < wk->max_queues; i++)
+		if (wk->queues[i] == q)
+			return i;
+
+	return -1;
 }
 
 static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
@@ -644,81 +657,16 @@ static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 	qp_init_attr->rq_max_sge = 1;
 
 	if (attr->wk) {
-		const struct snap_dma_worker_queue *worker_q = container_of(q, struct snap_dma_worker_queue, q);
-
 		qp_init_attr->rq_cq = attr->wk->rx_cq;
 		qp_init_attr->sq_cq = attr->wk->tx_cq;
 		/* TODO add worker support for DV, VERBS */
 		qp_init_attr->qp_type = SNAP_OBJ_DEVX;
-		qp_init_attr->uidx = worker_q->index;
+		qp_init_attr->uidx = snap_dma_worker_queue_idx_get(attr->wk, q);
 		qp_init_attr->qp_on_dpa = false;
 		q->no_events = true;
 	}
 
 	return 0;
-}
-
-static int snap_create_worker_qp_helper(struct ibv_pd *pd,
-		struct snap_qp_attr *attr, struct snap_dma_ibv_qp *qp, int mode)
-{
-	int rc;
-
-	qp->mode = mode;
-
-	qp->qp = snap_qp_create(pd, attr);
-	if (!qp->qp)
-		return -EINVAL;
-
-	rc = snap_qp_to_hw_qp(qp->qp, &qp->dv_qp.hw_qp);
-	if (rc)
-		goto free_qp;
-
-	rc = posix_memalign((void **)&qp->dv_qp.comps, SNAP_DMA_BUF_ALIGN,
-						qp->dv_qp.hw_qp.sq.wqe_cnt *
-							sizeof(struct snap_dv_dma_completion));
-	if (rc)
-		goto free_qp;
-
-	memset(qp->dv_qp.comps, 0,
-			qp->dv_qp.hw_qp.sq.wqe_cnt * sizeof(struct snap_dv_dma_completion));
-
-	if (!qp->dv_qp.hw_qp.sq.tx_db_nc) {
-#if defined(__aarch64__)
-		snap_error("DB record must be in the non-cacheable memory on BF\n");
-		goto free_comps;
-#else
-		snap_warn("DB record is not in the non-cacheable memory. Performance may be reduced\n"
-				"Try setting MLX5_SHUT_UP_BF environment variable\n");
-#endif
-	}
-
-	/* TODO: gga on dpa */
-	rc = posix_memalign(
-		(void **)&qp->dv_qp.opaque_buf, sizeof(struct mlx5_dma_opaque),
-		sizeof(struct mlx5_dma_opaque));
-	if (rc)
-		goto free_comps;
-
-	qp->dv_qp.opaque_mr =
-		ibv_reg_mr(pd, qp->dv_qp.opaque_buf,
-					sizeof(struct mlx5_dma_opaque),
-					IBV_ACCESS_LOCAL_WRITE);
-	if (!qp->dv_qp.opaque_mr)
-		goto free_opaque;
-
-	qp->dv_qp.opaque_lkey = htobe32(qp->dv_qp.opaque_mr->lkey);
-	return 0;
-
-free_opaque:
-	free(qp->dv_qp.opaque_buf);
-free_comps:
-	if (!attr->qp_on_dpa)
-		free(qp->dv_qp.comps);
-	else
-		snap_dpa_mkey_free(qp->dpa.mkey);
-free_qp:
-	snap_qp_destroy(qp->qp);
-	return -EINVAL;
 }
 
 static int snap_sw_qp_rx_wqe_helper(struct snap_dma_q *q, struct ibv_pd *pd,
@@ -758,19 +706,13 @@ free_qp:
 static int snap_create_sw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 		const struct snap_dma_q_create_attr *attr)
 {
-	struct snap_qp_attr qp_init_attr = {};
+	struct snap_qp_attr qp_init_attr = {0};
 	int rc;
 
 	rc = snap_qp_attr_helper(q, pd, attr, &qp_init_attr);
 	if (rc)
 		return rc;
-
-	if (attr->wk)
-		rc = snap_create_worker_qp_helper(pd, &qp_init_attr, &q->sw_qp,
-				q->ops->mode);
-	else
-		rc = snap_create_qp_helper(pd, attr, &qp_init_attr, &q->sw_qp,
-				q->ops->mode, attr->sw_use_devx);
+	rc = snap_create_qp_helper(pd, attr, &qp_init_attr, &q->sw_qp, q->ops->mode, attr->sw_use_devx);
 	if (rc)
 		return rc;
 
@@ -1581,37 +1523,32 @@ int snap_dma_ep_connect_remote_qpn(struct snap_dma_q *q1, int remote_qpn)
 	return 0;
 }
 
-static void snap_dma_worker_init_queues(struct snap_dma_worker *wk, size_t exp_queue_num)
-{
-	int i;
-
-	wk->max_queues = exp_queue_num;
-	SLIST_INIT(&wk->free_queues);
-	for (i = exp_queue_num - 1; i >= 0; i--) {
-		wk->queues[i].index = i;
-		SLIST_INSERT_HEAD(&wk->free_queues, &wk->queues[i], entry);
-	}
-}
-
 static struct snap_dma_q *snap_dma_worker_queue_get(struct snap_dma_worker *wk)
 {
-	struct snap_dma_worker_queue *queue = SLIST_FIRST(&wk->free_queues);
+	int idx;
+	struct snap_dma_q *q;
 
-	if (!queue)
+	q = calloc(1, sizeof(*q));
+	if (!q)
 		return NULL;
+	for (idx = 0; idx < wk->max_queues; idx++)
+		if (!wk->queues[idx]) {
+			wk->queues[idx] = q;
+			return q;
+		}
 
-	SLIST_REMOVE_HEAD(&wk->free_queues, entry);
-	queue->in_use = true;
-	return &queue->q;
+	free(q);
+	return NULL;
 }
 
 static void snap_dma_worker_queue_put(struct snap_dma_q *q)
 {
-	struct snap_dma_worker_queue *queue = container_of(q, struct snap_dma_worker_queue, q);
+	int i;
 
-	queue->in_use = false;
-	SLIST_INSERT_HEAD(&q->worker->free_queues, queue, entry);
-	q->worker = NULL;
+	for (i = 0; i < q->worker->max_queues; i++)
+		if (q->worker->queues[i] == q)
+			q->worker->queues[i] = NULL;
+	free(q);
 }
 
 /**
@@ -1647,6 +1584,8 @@ struct snap_dma_q *snap_dma_ep_create(struct ibv_pd *pd,
 		return NULL;
 
 	q->worker = attr->wk;
+	pthread_mutex_init(&q->lock, NULL);
+
 	rc = snap_create_sw_qp(q, pd, attr);
 	if (rc)
 		goto free_q;
@@ -1726,6 +1665,22 @@ free_sw_qp:
 	return NULL;
 }
 
+int snap_dma_q_modify_to_err_state(struct snap_dma_q *q)
+{
+	int ret;
+	uint8_t in[DEVX_ST_SZ_BYTES(2err_qp_in)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(2err_qp_out)] = {0};
+
+	DEVX_SET(2err_qp_in, in, opcode, MLX5_CMD_OP_2ERR_QP);
+	DEVX_SET(2err_qp_in, in, qpn, snap_qp_get_qpnum(q->sw_qp.qp));
+
+	ret = snap_qp_modify(q->sw_qp.qp, in, sizeof(in), out, sizeof(out));
+	if (ret)
+		snap_error("failed to modify qp to err with errno = %d\n", ret);
+
+	return ret;
+}
+
 /**
  * snap_dma_ep_destroy() - Destroy DMA ep queue
  *
@@ -1735,6 +1690,7 @@ void snap_dma_ep_destroy(struct snap_dma_q *q)
 {
 	snap_destroy_io_ctx(q);
 	snap_destroy_sw_qp(q);
+	pthread_mutex_destroy(&q->lock);
 	if (q->worker)
 		snap_dma_worker_queue_put(q);
 	else
@@ -1795,8 +1751,7 @@ out:
 }
 
 static int snap_create_worker_cqs_helper(struct snap_dma_worker *wk,
-										struct ibv_pd *pd,
-										struct snap_cq_attr *cq_attr)
+		struct ibv_pd *pd, struct snap_cq_attr *cq_attr)
 {
 	int rc;
 
@@ -1804,27 +1759,31 @@ static int snap_create_worker_cqs_helper(struct snap_dma_worker *wk,
 	if (!wk->tx_cq)
 		return -EINVAL;
 
-	/* Use 128 bytes cqes in order to allow scatter to cqe on receive
-	 * This is relevant for NVMe sqe and for virtio queues when number of
-	 * tunneled descr is less then three.
-	 */
-	cq_attr->cqe_size = SNAP_DMA_Q_RX_CQE_SIZE;
-	wk->rx_cq = snap_cq_create(pd->context, cq_attr);
-	if (!wk->rx_cq)
-		goto free_tx_cq;
+	if (wk->mode == SNAP_DMA_WORKER_MODE_SHARED_CQ_RX_ONLY ||
+			wk->mode == SNAP_DMA_WORKER_MODE_SHARED_CQ) {
+		/* Use 128 bytes cqes in order to allow scatter to cqe on receive
+		 * This is relevant for NVMe sqe and for virtio queues when number of
+		 * tunneled descr is less then three.
+		 */
+		cq_attr->cqe_size = SNAP_DMA_Q_RX_CQE_SIZE;
+		wk->rx_cq = snap_cq_create(pd->context, cq_attr);
+		if (!wk->rx_cq)
+			goto free_tx_cq;
+
+		rc = snap_cq_to_hw_cq(wk->rx_cq, &wk->dv_rx_cq);
+		if (rc)
+			goto free_rx_cq;
+	}
 
 	rc = snap_cq_to_hw_cq(wk->tx_cq, &wk->dv_tx_cq);
-	if (rc)
-		goto free_rx_cq;
-
-	rc = snap_cq_to_hw_cq(wk->rx_cq, &wk->dv_rx_cq);
 	if (rc)
 		goto free_rx_cq;
 
 	return 0;
 
 free_rx_cq:
-	snap_cq_destroy(wk->rx_cq);
+	if (wk->rx_cq)
+		snap_cq_destroy(wk->rx_cq);
 free_tx_cq:
 	snap_cq_destroy(wk->tx_cq);
 	return -EINVAL;
@@ -1833,7 +1792,7 @@ free_tx_cq:
 struct snap_dma_worker *snap_dma_worker_create(struct ibv_pd *pd,
 	const struct snap_dma_worker_create_attr *attr)
 {
-	struct snap_dma_worker *wk = calloc(1, sizeof(*wk) + attr->exp_queue_num * sizeof(struct snap_dma_worker_queue));
+	struct snap_dma_worker *wk = calloc(1, sizeof(*wk) + attr->exp_queue_num * sizeof(struct snap_dma_q *));
 	struct snap_cq_attr cq_attr = {
 		.cq_context = NULL,
 		.comp_channel = NULL,
@@ -1846,9 +1805,12 @@ struct snap_dma_worker *snap_dma_worker_create(struct ibv_pd *pd,
 	if (!wk)
 		return NULL;
 
+	wk->max_queues = attr->exp_queue_num;
+	wk->mode = attr->mode;
+	SLIST_INIT(&wk->pending_dbs);
+
 	snap_create_worker_cqs_helper(wk, pd, &cq_attr);
 
-	snap_dma_worker_init_queues(wk, attr->exp_queue_num);
 	return wk;
 }
 
@@ -1857,7 +1819,9 @@ void snap_dma_worker_destroy(struct snap_dma_worker *wk)
 	if (!wk)
 		return;
 
-	snap_cq_destroy(wk->rx_cq);
+	if (wk->rx_cq)
+		snap_cq_destroy(wk->rx_cq);
+
 	snap_cq_destroy(wk->tx_cq);
 	free(wk);
 }

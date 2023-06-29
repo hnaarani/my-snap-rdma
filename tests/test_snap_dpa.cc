@@ -279,7 +279,7 @@ TEST_F(SnapDpaTest, create_rt_thread_single_polling)
 	f.mode = SNAP_DPA_RT_THR_POLLING;
 	f.queue_mux_mode = SNAP_DPA_RT_THR_SINGLE;
 	f.pd = NULL;
-	thr = snap_dpa_rt_thread_get(rt, &f);
+	thr = snap_dpa_rt_thread_get(rt, &f, NULL);
 	ASSERT_TRUE(thr);
 	sleep(1);
 	snap_dpa_log_print(thr->thread->dpa_log);
@@ -300,7 +300,7 @@ TEST_F(SnapDpaTest, create_rt_thread_single_event)
 	f.mode = SNAP_DPA_RT_THR_EVENT;
 	f.queue_mux_mode = SNAP_DPA_RT_THR_SINGLE;
 	f.pd = NULL;
-	thr = snap_dpa_rt_thread_get(rt, &f);
+	thr = snap_dpa_rt_thread_get(rt, &f, NULL);
 	ASSERT_TRUE(thr);
 	sleep(1);
 	snap_dpa_log_print(thr->thread->dpa_log);
@@ -326,7 +326,7 @@ TEST_F(SnapDpaTest, create_rt_thread_single_n_event)
 	f.pd = NULL;
 
 	for (i = 0; i < N; i++) {
-		thr[i] = snap_dpa_rt_thread_get(rt, &f);
+		thr[i] = snap_dpa_rt_thread_get(rt, &f, NULL);
 		if (!thr[i]) {
 			printf("Failed to create thread %d mem_used %ld bytes\n", i, rt->dpa_proc->stats.heap_memory);
 			ASSERT_TRUE(thr[i]);
