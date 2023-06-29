@@ -120,8 +120,8 @@ steps:
     module: ngci
     run: NGCIBlackDuckScan
     args:
-      projectName: "snap-rdma"
-      projectVersion: "1.0"
+      projectName: "mlnx-libsnap"
+      projectVersion: "1.5.4"
       projectSrcPath: "src"
       attachArtifact: true
       reportName: "BlackDuck report"
