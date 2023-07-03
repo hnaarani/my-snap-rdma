@@ -86,6 +86,10 @@ void snap_virtio_get_device_attr(struct snap_device *sdev,
 						driver_feature_select);
 	vattr->queue_select = DEVX_GET(virtio_device, device_configuration,
 				       queue_select);
+	vattr->admin_queue_num = DEVX_GET(virtio_device, device_configuration,
+					  admin_queue_num);
+	vattr->admin_queue_index = DEVX_GET(virtio_device, device_configuration,
+					    admin_queue_index);
 }
 
 int snap_virtio_query_device(struct snap_device *sdev,
@@ -681,6 +685,9 @@ int snap_virtio_modify_device(struct snap_device *sdev,
 			DEVX_SET(virtio_net_device_emulation, device_emulation_in,
 				 virtio_device.queue_select,
 				 attr->queue_select);
+			DEVX_SET(virtio_net_device_emulation, device_emulation_in,
+				 virtio_device.admin_queue_num,
+				 attr->admin_queue_num);
 		}
 
 		if (!sdev->sctx->virtio_net_caps.virtio_q_cfg_v2) {

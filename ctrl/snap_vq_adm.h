@@ -28,6 +28,7 @@ struct snap_vq_adm;
 struct snap_vq_adm_create_attr {
 	struct snap_vq_create_attr common;
 	snap_vq_process_fn_t adm_process_fn;
+	uint16_t adm_spec_version;
 };
 
 struct snap_vq *snap_vq_adm_create(struct snap_vq_adm_create_attr *attr);
@@ -44,6 +45,13 @@ void snap_vaq_cmd_complete(struct snap_vq_cmd *vcmd,
 				enum snap_virtio_adm_status status);
 void snap_vaq_cmd_complete_no_dnr(struct snap_vq_cmd *vcmd,
 				enum snap_virtio_adm_status status);
+void snap_vaq_cmd_complete_v1_3(struct snap_vq_cmd *vcmd,
+				enum snap_virtio_adm_status status,
+				enum snap_virtio_adm_status_qualifier status_qualifier);
+void
+snap_vaq_cmd_complete_no_dnr_v1_3(struct snap_vq_cmd *vcmd,
+				  enum snap_virtio_adm_status status,
+				  enum snap_virtio_adm_status_qualifier status_qualifier);
 void **snap_vaq_cmd_priv(struct snap_vq_cmd *cmd);
 
 int snap_vaq_cmd_layout_data_read(struct snap_vq_cmd *cmd, size_t total_len,

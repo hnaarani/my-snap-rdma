@@ -268,6 +268,7 @@ struct snap_virtio_ctrl {
 	bool pending_resume;
 	struct snap_dp_bmap *dp_map;
 	struct snap_cross_mkey *pf_xmkey;
+	uint16_t spec_version;
 };
 
 bool snap_virtio_ctrl_is_stopped(struct snap_virtio_ctrl *ctrl);

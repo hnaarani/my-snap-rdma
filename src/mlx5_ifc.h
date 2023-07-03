@@ -1556,7 +1556,9 @@ struct mlx5_ifc_virtio_emulation_cap_bits {
 
 	u8	 reserved_at_a0[0x20];
 
-	u8	 reserved_at_c0[0x1d];
+	u8	 reserved_at_c0[0x18];
+	u8	 max_num_pf_admin_vq[0x4];
+	u8	 reserved_at_c0_1[0x1];
 	u8	 emulated_dev_db_cq_map[0x1];
 	u8	 emulated_dev_eq[0x1];
 	u8	 virtio_q_cfg_v2[0x1];
@@ -3036,7 +3038,10 @@ struct mlx5_ifc_virtio_device_bits {
 	u8	   reserved_at_f2[0xe];
 	u8	   queue_select[0x10];
 
-	u8	   reserved_at_110[0x60];
+	u8	   admin_queue_num[0x10];
+	u8	   admin_queue_index[0x10];
+
+	u8	   reserved_at_110[0x40];
 };
 
 struct mlx5_ifc_virtio_q_layout_bits {

@@ -589,7 +589,7 @@ out:
 static struct snap_virtio_ctrl*
 snap_virtio_blk_ctrl_get_vf(struct snap_virtio_ctrl *vctrl, struct snap_vq_cmd *cmd)
 {
-	struct snap_virtio_adm_cmd_hdr *hdr = &snap_vaq_cmd_layout_get(cmd)->hdr;
+	struct snap_virtio_adm_cmd_hdr_v1_2 *hdr = &snap_vaq_cmd_layout_get(cmd)->hdr.hdr_v1_2;
 	struct snap_virtio_blk_ctrl *pf_ctrl = to_blk_ctrl(vctrl);
 	struct snap_virtio_blk_ctrl *vf_ctrl;
 	int vdev_id;
@@ -648,7 +648,7 @@ static void snap_virtio_blk_ctrl_lm_dp_start_track_cb(struct snap_vq_cmd *vcmd,
 
 	dp_start_cmd = &snap_vaq_cmd_layout_get(vcmd)->in.dp_track_start_data;
 	sge_len = snap_vaq_cmd_get_total_len(vcmd) -
-		(sizeof(struct snap_virtio_adm_cmd_hdr) + sizeof(*dp_start_cmd));
+		(sizeof(struct snap_virtio_adm_cmd_hdr_v1_2) + sizeof(*dp_start_cmd));
 
 	/* TODO: support multiple map updates */
 	vf_ctrl->dp_map = snap_dp_bmap_create((struct snap_vq_adm_sge *)pf_blk_ctrl->lm_buf,
@@ -703,7 +703,7 @@ static void snap_virtio_blk_ctrl_lm_dp_start_track(struct snap_virtio_ctrl *vctr
 		 * contain sge list
 		 */
 		sgl_len = snap_vaq_cmd_get_total_len(cmd);
-		offset = sizeof(struct snap_virtio_adm_cmd_hdr) + sizeof(*dp_cmd);
+		offset = sizeof(struct snap_virtio_adm_cmd_hdr_v1_2) + sizeof(*dp_cmd);
 		sgl_len -= offset;
 
 		blk_ctrl = to_blk_ctrl(vctrl);
@@ -963,7 +963,7 @@ static void snap_virtio_blk_ctrl_lm_state_restore(struct snap_virtio_ctrl *vctrl
 		return;
 	}
 
-	offset = sizeof(struct snap_virtio_adm_cmd_hdr) +
+	offset = sizeof(struct snap_virtio_adm_cmd_hdr_v1_2) +
 		sizeof(struct snap_vq_adm_restore_state_data);
 
 	ret = snap_vaq_cmd_layout_data_read(cmd, data.length, blk_ctrl->lm_buf,
@@ -1015,7 +1015,7 @@ static void snap_virtio_blk_ctrl_lm_dp_report_map(struct snap_virtio_ctrl *vctrl
 static void snap_virtio_blk_adm_cmd_process(struct snap_virtio_ctrl *vctrl,
 					struct snap_vq_cmd *cmd)
 {
-	struct snap_virtio_adm_cmd_hdr hdr = snap_vaq_cmd_layout_get(cmd)->hdr;
+	struct snap_virtio_adm_cmd_hdr_v1_2 hdr = snap_vaq_cmd_layout_get(cmd)->hdr.hdr_v1_2;
 
 	snap_debug("Proceessing adm cmd class %d cmd %d\n", hdr.cmd_class, hdr.command);
 	switch (hdr.cmd_class) {

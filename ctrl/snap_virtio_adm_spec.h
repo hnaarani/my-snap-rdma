@@ -15,6 +15,9 @@
 #include <stdint.h>
 #include "snap_macros.h"
 
+#define VIRTIO_SPEC_VER_1_2	0x12
+#define VIRTIO_SPEC_VER_1_3	0x13
+
 #ifndef VIRTIO_F_ADMIN_VQ
 #define VIRTIO_F_ADMIN_VQ 41
 #endif
@@ -74,6 +77,8 @@
 #define SNAP_VIRTIO_ADM_STATUS_RESERVED_START 96
 #define SNAP_VIRTIO_ADM_STATUS_RESERVED_END 127
 
+#define SNAP_VIRTIO_ADM_CMD_OPCODES_ARR_LEN	64
+
 enum snap_virtio_adm_status {
 	SNAP_VIRTIO_ADM_STATUS_OK = 0,
 	SNAP_VIRTIO_ADM_STATUS_ERR = 1,
@@ -81,15 +86,45 @@ enum snap_virtio_adm_status {
 	SNAP_VIRTIO_ADM_STATUS_INVALID_COMMAND = 3,
 	SNAP_VIRTIO_ADM_STATUS_DATA_TRANSFER_ERR = 4,
 	SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR = 5,
-	SNAP_VIRTIO_ADM_STATUS_DNR = (1<<7)
+	SNAP_VIRTIO_ADM_STATUS_DNR = (1<<7),
+	/*spec v1.3*/
+	SNAP_VIRTIO_ADMIN_STATUS_EAGAIN = 11,
+	SNAP_VIRTIO_ADMIN_STATUS_ENOMEM = 12,
+	SNAP_VIRTIO_ADMIN_STATUS_EINVAL = 22,
+	SNAP_VIRTIO_ADMIN_MAX
 };
 
-struct snap_virtio_adm_cmd_hdr {
+enum snap_virtio_adm_status_qualifier {
+	SNAP_VIRTIO_ADMIN_STATUS_Q_OK = 0x0,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_COMMAND = 0x1,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_OPCODE = 0x2,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_FIELD = 0x3,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_GROUP = 0x4,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_MEMBER = 0x5,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_NORESOURCE = 0x6,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN = 0x7,
+	SNAP_VIRTIO_ADMIN_STATUS_Q_MAX
+};
+
+enum snap_virtio_adm_opcode {
+	SNAP_VIRTIO_ADMIN_CMD_LIST_QUERY = 0X0,
+	SNAP_VIRTIO_ADMIN_CMD_LIST_USE = 0X1,
+	SNAP_VIRTIO_ADMIN_CMD_LREG_WRITE = 0x2,
+	SNAP_VIRTIO_ADMIN_CMD_LREG_READ = 0x3,
+	SNAP_VIRTIO_ADMIN_CMD_MAX
+};
+
+enum snap_virtio_adm_group_type {
+	SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV = 0X1,
+	SNAP_VIRTIO_ADMIN_GROUP_TYPE_MAX
+};
+
+struct snap_virtio_adm_cmd_hdr_v1_2 {
 	uint8_t cmd_class;
 	uint8_t command;
 } SNAP_PACKED;
 
-struct snap_virtio_adm_cmd_ftr {
+struct snap_virtio_adm_cmd_ftr_v1_2 {
 	/*
 	 * Bits (6:0) - Status Code (SC)
 	 * Indicate status information for the command
@@ -102,6 +137,36 @@ struct snap_virtio_adm_cmd_ftr {
 	 */
 	uint8_t status;
 } SNAP_PACKED;
+
+struct snap_virtio_adm_cmd_hdr_v1_3 {
+	/* Device-readable part */
+	__le16 opcode;
+	/*
+	 * 1 - SR-IOV
+	 * 2-65535 - reserved
+	 */
+	__le16 group_type;
+	/* unused, reserved for future extensions */
+	uint8_t reserved1[12];
+	__le64 group_member_id;
+} SNAP_PACKED;
+
+struct snap_virtio_adm_cmd_ftr_v1_3 {
+	__le16 status;
+	__le16 status_qualifier;
+	/* unused, reserved for future extensions */
+	uint8_t reserved2[4];
+} SNAP_PACKED;
+
+union snap_virtio_adm_cmd_hdr {
+	struct snap_virtio_adm_cmd_hdr_v1_2 hdr_v1_2;
+	struct snap_virtio_adm_cmd_hdr_v1_3 hdr_v1_3;
+};
+
+union snap_virtio_adm_cmd_ftr {
+	struct snap_virtio_adm_cmd_ftr_v1_2 ftr_v1_2;
+	struct snap_virtio_adm_cmd_ftr_v1_3 ftr_v1_3;
+};
 
 struct snap_vq_adm_get_pending_bytes_data {
 	__le16 vdev_id;
@@ -178,6 +243,21 @@ struct snap_vq_adm_dirty_page_track_stop {
 	__le64 vdev_host_range_addr;
 };
 
+
+struct snap_virtio_admin_cmd_list {
+	/* Indicates which of the below fields were returned */
+	__le64 opcodes[SNAP_VIRTIO_ADM_CMD_OPCODES_ARR_LEN];
+};
+
+struct snap_virtio_admin_cmd_data_lr_write {
+	uint8_t offset; /* Starting offset of the register(s) to write. */
+	uint8_t registers[];
+};
+
+struct snap_virtio_admin_cmd_data_lr_read {
+	uint8_t offset; /* Starting offset of the register(s) to read. */
+};
+
 union snap_virtio_adm_cmd_in {
 	struct snap_vq_adm_get_pending_bytes_data pending_bytes_data;
 	struct snap_vq_adm_modify_status_data modify_status_data;
@@ -186,21 +266,26 @@ union snap_virtio_adm_cmd_in {
 	struct snap_vq_adm_restore_state_data restore_state_data;
 	struct snap_vq_adm_dirty_page_track_start dp_track_start_data;
 	struct snap_vq_adm_dirty_page_track_stop dp_track_stop_data;
+	struct snap_virtio_admin_cmd_list admin_cmd_list;
+	struct snap_virtio_admin_cmd_data_lr_write lr_write_data;
+	struct snap_virtio_admin_cmd_data_lr_read lr_read_data;
 	__le16 vdev_id;
 };
 
 union snap_virtio_adm_cmd_out {
 	struct snap_vq_adm_get_pending_bytes_result pending_bytes_res;
 	struct snap_vq_adm_get_status_result get_status_res;
+	struct snap_virtio_admin_cmd_list admin_cmd_list;
+	uint8_t lr_read_out[16];
 };
 
 struct snap_virtio_adm_cmd_layout {
-	struct snap_virtio_adm_cmd_hdr hdr;
+	union snap_virtio_adm_cmd_hdr hdr;
 	union snap_virtio_adm_cmd_in in;
 	/* Additional data defined by variadic cmd_in structures */
 	union snap_virtio_adm_cmd_out out;
 	/* Additional data defined by variadic cmd_out structures */
-	struct snap_virtio_adm_cmd_ftr ftr;
+	union snap_virtio_adm_cmd_ftr ftr;
 };
 
 #endif

@@ -740,6 +740,8 @@ static void snap_fill_virtio_caps(struct snap_virtio_caps *virtio,
 		out, capability.virtio_emulation_cap.vnet_modify_ext);
 	virtio->virtio_q_cfg_v2 = DEVX_GET(query_hca_cap_out,
 		out, capability.virtio_emulation_cap.virtio_q_cfg_v2);
+	virtio->max_num_pf_admin_vq = DEVX_GET(query_hca_cap_out,
+		out, capability.virtio_emulation_cap.max_num_pf_admin_vq);
 
 	virtio->emulated_dev_db_cq_map = DEVX_GET(query_hca_cap_out, out,
 			capability.virtio_emulation_cap.emulated_dev_db_cq_map);

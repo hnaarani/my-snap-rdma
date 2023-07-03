@@ -343,6 +343,7 @@ struct snap_virtio_caps {
 	uint8_t		virtio_q_cfg_v2;
 	uint8_t		emulated_dev_eq;
 	uint8_t		emulated_dev_db_cq_map;
+	uint8_t		max_num_pf_admin_vq;
 };
 
 struct snap_context {

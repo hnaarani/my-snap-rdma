@@ -220,6 +220,8 @@ struct snap_virtio_device_attr {
 	uint16_t			queue_select;
 	uint8_t				pci_hotplug_state;
 	uint16_t			q_conf_list_size;
+	uint16_t			admin_queue_index;
+	uint16_t			admin_queue_num;
 };
 
 

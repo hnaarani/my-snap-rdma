@@ -838,7 +838,8 @@ static void snap_virtio_ctrl_quiesce_adm_done(struct snap_virtio_ctrl *ctrl)
 	ctrl->is_quiesce = false;
 
 	/* Complete modify internal state to quiesce command */
-	snap_vaq_cmd_complete(ctrl->quiesce_cmd, SNAP_VIRTIO_ADM_STATUS_OK);
+	snap_vaq_cmd_complete_v1_3(ctrl->quiesce_cmd, SNAP_VIRTIO_ADM_STATUS_OK,
+				   SNAP_VIRTIO_ADMIN_STATUS_Q_OK);
 	ctrl->quiesce_cmd = NULL;
 }
 
@@ -1996,6 +1997,7 @@ int snap_virtio_ctrl_query_queue(struct snap_virtio_ctrl *ctrl,
 int snap_virtio_ctrl_quiesce_adm(void *data)
 {
 	struct snap_virtio_ctrl *ctrl = data;
+	enum snap_virtio_adm_status status;
 	int ret = 0;
 
 	snap_virtio_ctrl_progress_lock(ctrl);
@@ -2027,11 +2029,18 @@ err:
 	snap_info("%p: quiesce: new state %s ret %d\n", ctrl,
 		  lm_state2str(ctrl->lm_state), ret);
 
+	if (ctrl->spec_version == VIRTIO_SPEC_VER_1_3)
+		status = SNAP_VIRTIO_ADMIN_STATUS_EAGAIN;
+	else
+		status = SNAP_VIRTIO_ADM_STATUS_ERR;
+
 	/* Complete modify internal state to quiesce command */
 	if (ret)
-		snap_vaq_cmd_complete(ctrl->quiesce_cmd, SNAP_VIRTIO_ADM_STATUS_ERR);
+		snap_vaq_cmd_complete_v1_3(ctrl->quiesce_cmd, status,
+					   SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
 	else
-		snap_vaq_cmd_complete(ctrl->quiesce_cmd, SNAP_VIRTIO_ADM_STATUS_OK);
+		snap_vaq_cmd_complete_v1_3(ctrl->quiesce_cmd, status,
+					   SNAP_VIRTIO_ADMIN_STATUS_Q_OK);
 	ctrl->quiesce_cmd = NULL;
 	return ret;
 }
