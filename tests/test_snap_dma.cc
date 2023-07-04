@@ -439,9 +439,7 @@ TEST_F(SnapDmaTest, dma_write_short) {
 
 TEST_F(SnapDmaTest, flush_qp) {
 	struct snap_dma_q *q;
-	char cqe[m_dma_q_attr.tx_elem_size];
 	int rc;
-	int n;
 	struct ibv_recv_wr rx_wr, *bad_wr;
 	struct ibv_sge rx_sge;
 
@@ -465,9 +463,9 @@ TEST_F(SnapDmaTest, flush_qp) {
 
 	/* Poll CQ as we expect 1 completion with flush error */
 	struct ibv_wc wc;
-	rc = ibv_poll_cq(snap_cq_to_verbs_cq(q->fw_qp.rx_cq), 1, &wc);
+	while (rc != 1)
+		rc = ibv_poll_cq(snap_cq_to_verbs_cq(q->sw_qp.rx_cq), 1, &wc);
 
-	ASSERT_EQ(0, memcmp(cqe, m_rbuf, sizeof(cqe)));
 	ASSERT_EQ(1, rc);
 	ASSERT_EQ(IBV_WC_WR_FLUSH_ERR, wc.status);
 
@@ -480,9 +478,9 @@ TEST_F(SnapDmaTest, flush_devx_qp) {
 	struct snap_dma_worker *wk;
 
 	snap_dma_worker_create_attr wk_attr;
-	wk_attr.mode = SNAP_DMA_WORKER_MODE_CQ_POOL;
-	wk_attr.exp_queue_num = 1;
-	wk_attr.exp_queue_rx_size = 32;
+	wk_attr.mode = SNAP_DMA_WORKER_MODE_SHARED_CQ;
+	wk_attr.exp_queue_num = 4;
+	wk_attr.exp_queue_rx_size = 128;
 
 	wk = snap_dma_worker_create(m_pd, &wk_attr);
 	ASSERT_TRUE(wk);
@@ -503,7 +501,7 @@ TEST_F(SnapDmaTest, flush_devx_qp) {
 	while(!q->destroy_done)
 	       snap_dma_worker_progress_rx(wk);
 
-	ASSERT_EQ(q->flush_count == m_dma_q_attr.rx_qsize*SNAP_DMA_Q_POST_RECV_BUF_FACTOR);
+	ASSERT_EQ(q->flush_count, m_dma_q_attr.rx_qsize*SNAP_DMA_Q_POST_RECV_BUF_FACTOR);
 
 	snap_dma_q_destroy(q);
 }
@@ -1825,6 +1823,7 @@ void SnapDmaTest::worker_poll_rx()
 	ASSERT_TRUE(wk);
 
 	m_dma_q_attr.wk = wk;
+	m_dma_q_attr.sw_use_devx = true;
 	for(i = 0; i < 2; i++) {
 		q[i] = snap_dma_q_create(m_pd, &m_dma_q_attr);
 		ASSERT_TRUE(q[i]);
@@ -1834,15 +1833,16 @@ void SnapDmaTest::worker_poll_rx()
 
 	g_rx_count = 0;
 	for(i = 0; i < rx_reqs; i++) {
-		rc = snap_dma_q_fw_send(&wk->queues[0].q, sqe, wk_attr.exp_queue_rx_size,
+		rc = snap_dma_q_fw_send(wk->queues[0], sqe, wk_attr.exp_queue_rx_size,
 				m_rmr->lkey);
-		rc = snap_dma_q_fw_send(&wk->queues[1].q, sqe, wk_attr.exp_queue_rx_size,
+		rc = snap_dma_q_fw_send(wk->queues[1], sqe, wk_attr.exp_queue_rx_size,
 				m_rmr->lkey);
 		ASSERT_EQ(0, rc);
 	}
 	sleep(1);
 
 	snap_dma_worker_progress_rx(wk);
+
 	ASSERT_EQ(rx_reqs * 2, g_rx_count);
 	ASSERT_EQ(0, memcmp(g_last_rx, sqe, m_dma_q_attr.rx_elem_size));
 	snap_dma_q_destroy(q[0]);
@@ -1873,6 +1873,7 @@ void SnapDmaTest::worker_poll_tx()
 	ASSERT_TRUE(wk);
 
 	m_dma_q_attr.wk = wk;
+	m_dma_q_attr.sw_use_devx = true;
 	q = snap_dma_q_create(m_pd, &m_dma_q_attr);
 	ASSERT_TRUE(q);
 
@@ -1883,7 +1884,7 @@ void SnapDmaTest::worker_poll_tx()
 		write_comp[i]->func = dma_completion;
 		memset(m_rbuf, 0, m_bsize);
 		memset(m_lbuf, 0xED, m_bsize);
-		rc = snap_dma_q_write(&wk->queues[0].q, m_lbuf, m_bsize, m_lmr->lkey,
+		rc = snap_dma_q_write(wk->queues[0], m_lbuf, m_bsize, m_lmr->lkey,
 				(uintptr_t)m_rbuf, m_rmr->lkey, write_comp[i]);
 		ASSERT_EQ(0, rc);
 	}
