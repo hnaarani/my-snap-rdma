@@ -1755,10 +1755,6 @@ static int snap_create_worker_cqs_helper(struct snap_dma_worker *wk,
 {
 	int rc;
 
-	wk->tx_cq = snap_cq_create(pd->context, cq_attr);
-	if (!wk->tx_cq)
-		return -EINVAL;
-
 	if (wk->mode == SNAP_DMA_WORKER_MODE_SHARED_CQ_RX_ONLY ||
 			wk->mode == SNAP_DMA_WORKER_MODE_SHARED_CQ) {
 		/* Use 128 bytes cqes in order to allow scatter to cqe on receive
@@ -1768,24 +1764,17 @@ static int snap_create_worker_cqs_helper(struct snap_dma_worker *wk,
 		cq_attr->cqe_size = SNAP_DMA_Q_RX_CQE_SIZE;
 		wk->rx_cq = snap_cq_create(pd->context, cq_attr);
 		if (!wk->rx_cq)
-			goto free_tx_cq;
+			return -EINVAL;
 
 		rc = snap_cq_to_hw_cq(wk->rx_cq, &wk->dv_rx_cq);
 		if (rc)
 			goto free_rx_cq;
 	}
 
-	rc = snap_cq_to_hw_cq(wk->tx_cq, &wk->dv_tx_cq);
-	if (rc)
-		goto free_rx_cq;
-
 	return 0;
 
 free_rx_cq:
-	if (wk->rx_cq)
-		snap_cq_destroy(wk->rx_cq);
-free_tx_cq:
-	snap_cq_destroy(wk->tx_cq);
+	snap_cq_destroy(wk->rx_cq);
 	return -EINVAL;
 }
 
