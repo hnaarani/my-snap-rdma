@@ -713,7 +713,7 @@ static void snap_vaq_cmd_compl_ftr(struct snap_vq_cmd *vcmd,
 
 /**
  * snap_vaq_cmd_complete_v1_3() - complete virtio admin command,
- *			compatible with virtio spec v1.2 and v1.3
+ *				  compatible with virtio spec v1.2 and v1.3
  * @cmd: Command to complete
  * @status: completion error code
  * @status_qualifier: completion error reason
@@ -736,7 +736,7 @@ void snap_vaq_cmd_complete_v1_3(struct snap_vq_cmd *vcmd,
 
 /**
  * snap_vaq_cmd_complete_no_dnr_v1_3() - complete virtio admin command
- *			compatible with virtio spec v1.2 and v1.3
+ *					 compatible with virtio spec v1.2 and v1.3
  * @cmd: Command to complete
  * @status: completion error code
  * @status_qualifier: completion error reason
