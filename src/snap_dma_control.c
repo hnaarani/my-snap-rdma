@@ -1811,7 +1811,6 @@ void snap_dma_worker_destroy(struct snap_dma_worker *wk)
 	if (wk->rx_cq)
 		snap_cq_destroy(wk->rx_cq);
 
-	snap_cq_destroy(wk->tx_cq);
 	free(wk);
 }
 
