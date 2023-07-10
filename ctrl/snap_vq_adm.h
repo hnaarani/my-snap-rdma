@@ -45,13 +45,11 @@ void snap_vaq_cmd_complete(struct snap_vq_cmd *vcmd,
 				enum snap_virtio_adm_status status);
 void snap_vaq_cmd_complete_no_dnr(struct snap_vq_cmd *vcmd,
 				enum snap_virtio_adm_status status);
-void snap_vaq_cmd_complete_v1_3(struct snap_vq_cmd *vcmd,
-				enum snap_virtio_adm_status status,
-				enum snap_virtio_adm_status_qualifier status_qualifier);
+void snap_adm_cmd_complete(struct snap_vq_cmd *vcmd,
+			   enum snap_virtio_adm_status_qualifier status_qualifier);
 void
-snap_vaq_cmd_complete_no_dnr_v1_3(struct snap_vq_cmd *vcmd,
-				  enum snap_virtio_adm_status status,
-				  enum snap_virtio_adm_status_qualifier status_qualifier);
+snap_adm_cmd_complete_no_dnr(struct snap_vq_cmd *vcmd,
+			     enum snap_virtio_adm_status_qualifier status_qualifier);
 void **snap_vaq_cmd_priv(struct snap_vq_cmd *cmd);
 
 int snap_vaq_cmd_layout_data_read(struct snap_vq_cmd *cmd, size_t total_len,

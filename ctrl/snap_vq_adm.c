@@ -27,11 +27,27 @@ struct snap_vaq_cmd {
 	struct snap_virtio_adm_cmd_layout *layout;
 };
 
+struct snap_vq_adm_cmd_ops {
+	void (*complete_ftr)(struct snap_vq_cmd *vcmd,
+			     enum snap_virtio_adm_status status,
+			     enum snap_virtio_adm_status_qualifier status_qualifier,
+			     bool dnr);
+	size_t (*cmd_in_get_len)(struct snap_vaq_cmd *cmd);
+	size_t (*cmd_out_get_len)(struct snap_vaq_cmd *cmd);
+	int (*wb_ftr)(struct snap_vaq_cmd *cmd);
+	size_t (*read_hdr_total_len)(struct snap_vaq_cmd *cmd);
+	size_t (*read_cmd_in_offset)(struct snap_vaq_cmd *cmd);
+	struct snap_vq_cmd_desc *(*wb_get_desc)(struct snap_vaq_cmd *cmd);
+	enum snap_virtio_adm_status (*get_status)(struct snap_vq_cmd *vcmd,
+						  enum snap_virtio_adm_status_qualifier status_qualifier);
+};
+
 struct snap_vq_adm {
 	struct snap_vaq_cmd *cmds;
 	struct snap_virtio_adm_cmd_layout *cmd_layouts;
 	struct snap_vq vq;
 	snap_vq_process_fn_t adm_process_fn;
+	struct snap_vq_adm_cmd_ops cmd_ops;
 	struct ibv_pd *pd;
 	uint16_t spec_version;
 };
@@ -46,161 +62,14 @@ static struct snap_vq_adm *to_snap_vq_adm(struct snap_vq *vq)
 	return container_of(vq, struct snap_vq_adm, vq);
 }
 
-
-static size_t snap_vaq_cmd_in_get_len_v1_2(struct snap_vaq_cmd *cmd)
-{
-	struct snap_virtio_adm_cmd_hdr_v1_2 hdr = cmd->layout->hdr.hdr_v1_2;
-	size_t ret = 0;
-
-	switch (hdr.cmd_class) {
-	case SNAP_VQ_ADM_MIG_CTRL:
-		switch (hdr.command) {
-		case SNAP_VQ_ADM_MIG_GET_STATUS:
-			ret = sizeof(struct snap_vq_adm_get_status_data);
-			break;
-		case SNAP_VQ_ADM_MIG_MODIFY_STATUS:
-			ret = sizeof(struct snap_vq_adm_modify_status_data);
-			break;
-		case SNAP_VQ_ADM_MIG_GET_STATE_PENDING_BYTES:
-			ret = sizeof(struct snap_vq_adm_get_pending_bytes_data);
-			break;
-		case SNAP_VQ_ADM_MIG_SAVE_STATE:
-			ret = sizeof(struct snap_vq_adm_save_state_data);
-			break;
-		case SNAP_VQ_ADM_MIG_RESTORE_STATE:
-			ret = sizeof(struct snap_vq_adm_restore_state_data);
-			break;
-		default:
-			break;
-		}
-		break;
-	case SNAP_VQ_ADM_DP_TRACK_CTRL:
-		switch (hdr.command) {
-		case SNAP_VQ_ADM_DP_START_TRACK:
-			ret = sizeof(struct snap_vq_adm_dirty_page_track_start);
-			break;
-		case SNAP_VQ_ADM_DP_STOP_TRACK:
-			ret = sizeof(struct snap_vq_adm_dirty_page_track_stop);
-			break;
-		case SNAP_VQ_ADM_DP_GET_MAP_PENDING_BYTES:
-		case SNAP_VQ_ADM_DP_REPORT_MAP:
-		default:
-			break;
-		}
-		break;
-	default:
-		break;
-	}
-
-	return ret;
-}
-
-static size_t snap_vaq_cmd_in_get_len_v1_3(struct snap_vaq_cmd *cmd)
-{
-	struct snap_virtio_adm_cmd_hdr_v1_3 hdr = cmd->layout->hdr.hdr_v1_3;
-	size_t ret = 0;
-
-	switch (hdr.opcode) {
-	case SNAP_VIRTIO_ADMIN_CMD_LIST_QUERY:
-		switch (hdr.group_type) {
-		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
-		default:
-			break;
-		}
-		break;
-	case SNAP_VIRTIO_ADMIN_CMD_LIST_USE:
-		switch (hdr.group_type) {
-		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
-			ret = sizeof(struct snap_virtio_admin_cmd_list);
-			break;
-		default:
-			break;
-		}
-		break;
-	default:
-		break;
-	}
-
-	return ret;
-}
-
 static size_t snap_vaq_cmd_in_get_len(struct snap_vaq_cmd *cmd)
 {
-	if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-		return snap_vaq_cmd_in_get_len_v1_3(cmd);
-	else /* default VIRTIO_SPEC_VER_12 */
-		return snap_vaq_cmd_in_get_len_v1_2(cmd);
-}
-
-static size_t snap_vaq_cmd_out_get_len_v1_2(struct snap_vaq_cmd *cmd)
-{
-	struct snap_virtio_adm_cmd_hdr_v1_2 hdr = cmd->layout->hdr.hdr_v1_2;
-	size_t ret = 0;
-
-	switch (hdr.cmd_class) {
-	case SNAP_VQ_ADM_MIG_CTRL:
-		switch (hdr.command) {
-		case SNAP_VQ_ADM_MIG_GET_STATUS:
-			ret = sizeof(struct snap_vq_adm_get_status_result);
-			break;
-		case SNAP_VQ_ADM_MIG_GET_STATE_PENDING_BYTES:
-			ret = sizeof(struct snap_vq_adm_get_pending_bytes_result);
-			break;
-		default:
-			break;
-		}
-		break;
-	case SNAP_VQ_ADM_DP_TRACK_CTRL:
-		switch (hdr.command) {
-		case SNAP_VQ_ADM_DP_START_TRACK:
-		case SNAP_VQ_ADM_DP_STOP_TRACK:
-		case SNAP_VQ_ADM_DP_GET_MAP_PENDING_BYTES:
-		case SNAP_VQ_ADM_DP_REPORT_MAP:
-		default:
-			break;
-		}
-		break;
-	default:
-		break;
-	}
-	return ret;
-}
-
-static size_t snap_vaq_cmd_out_get_len_v1_3(struct snap_vaq_cmd *cmd)
-{
-	struct snap_virtio_adm_cmd_hdr_v1_3 hdr = cmd->layout->hdr.hdr_v1_3;
-	size_t ret = 0;
-
-	switch (hdr.opcode) {
-	case SNAP_VIRTIO_ADMIN_CMD_LIST_QUERY:
-		switch (hdr.group_type) {
-		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
-			ret = sizeof(struct snap_virtio_admin_cmd_list);
-			break;
-		default:
-			break;
-		}
-		break;
-	case SNAP_VIRTIO_ADMIN_CMD_LIST_USE:
-		switch (hdr.group_type) {
-		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
-		default:
-			break;
-		}
-		break;
-	default:
-		break;
-	}
-
-	return ret;
+	return cmd->q->cmd_ops.cmd_in_get_len(cmd);
 }
 
 static size_t snap_vaq_cmd_out_get_len(struct snap_vaq_cmd *cmd)
 {
-	if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-		return snap_vaq_cmd_out_get_len_v1_3(cmd);
-	else
-		return snap_vaq_cmd_out_get_len_v1_2(cmd);
+	return cmd->q->cmd_ops.cmd_out_get_len(cmd);
 }
 
 size_t snap_vaq_cmd_get_total_len(struct snap_vq_cmd *cmd)
@@ -287,27 +156,18 @@ int snap_vaq_cmd_layout_data_write(struct snap_vq_cmd *cmd, size_t total_len,
 				 done_fn, true);
 }
 
-
 static inline
 int snap_vaq_cmd_wb_cmd_out(struct snap_vaq_cmd *cmd)
 {
-	int out_len, ret, len;
 	struct snap_vq_cmd_desc *desc;
+	int out_len, ret, len;
 	char *laddr;
 
 	out_len = snap_vaq_cmd_out_get_len(cmd);
 	if (!out_len)
 		return 0;
 
-	/* Use first desc with write flag */
-	TAILQ_FOREACH(desc, &cmd->common.descs, entry) {
-		if ((desc->desc.flags & VRING_DESC_F_WRITE))
-			break;
-	}
-
-	if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-		desc = TAILQ_NEXT(desc, entry);
-
+	desc = cmd->q->cmd_ops.wb_get_desc(cmd);
 	laddr = (char *)&cmd->layout->out;
 	while (out_len > 0 && desc) {
 		len = snap_min(out_len, desc->desc.len);
@@ -324,6 +184,327 @@ int snap_vaq_cmd_wb_cmd_out(struct snap_vaq_cmd *cmd)
 	}
 
 	return out_len;
+}
+
+static int snap_vaq_cmd_wb_ftr(struct snap_vaq_cmd *cmd)
+{
+	return cmd->q->cmd_ops.wb_ftr(cmd);
+}
+
+static int snap_vaq_cmd_read_hdr(struct snap_vaq_cmd *cmd,
+				snap_vq_cmd_done_cb_t done_fn)
+{
+	struct snap_vq_cmd_desc *desc;
+	size_t total_len;
+
+	desc = TAILQ_FIRST(&cmd->common.descs);
+	total_len = cmd->q->cmd_ops.read_hdr_total_len(cmd);
+
+	return snap_vq_cmd_descs_rw(&cmd->common, desc, 0, &cmd->layout->hdr,
+				    total_len,
+				    snap_buf_get_mkey(cmd->q->cmd_layouts),
+				    done_fn, false);
+}
+
+static int snap_vaq_cmd_read_cmd_in(struct snap_vaq_cmd *cmd,
+					snap_vq_cmd_done_cb_t done_fn)
+{
+	size_t offset = 0, in_len;
+
+	offset = cmd->q->cmd_ops.read_cmd_in_offset(cmd);
+	in_len = snap_vaq_cmd_in_get_len(cmd);
+	if (!in_len) {
+		done_fn(&cmd->common, IBV_WC_SUCCESS);
+		return 0;
+	}
+
+	return snap_vaq_cmd_layout_data_read(&cmd->common, in_len, &cmd->layout->in,
+				  snap_buf_get_mkey(cmd->q->cmd_layouts),
+				   done_fn, offset);
+}
+
+static void snap_vaq_cmd_create(struct snap_vq_adm *q,
+				struct snap_vaq_cmd *cmd,
+				struct snap_virtio_adm_cmd_layout *layout)
+{
+	cmd->q = q;
+	cmd->layout = layout;
+	snap_vq_cmd_create(&q->vq, &cmd->common);
+}
+
+static void snap_vaq_cmd_destroy(struct snap_vaq_cmd *cmd)
+{
+	snap_vq_cmd_destroy(&cmd->common);
+}
+
+static struct snap_vq_cmd *snap_vq_adm_create_cmd(struct snap_vq *vq, int index)
+{
+	struct snap_vq_adm *q = to_snap_vq_adm(vq);
+
+	snap_vaq_cmd_create(q, &q->cmds[index], &q->cmd_layouts[index]);
+	return &q->cmds[index].common;
+}
+
+static void snap_vq_adm_read_cmd_in_done(struct snap_vq_cmd *vcmd,
+					enum ibv_wc_status status)
+{
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+
+	if (snap_unlikely(status != IBV_WC_SUCCESS))
+		return snap_adm_cmd_complete(vcmd, SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
+
+	/*
+	 * Admin commands further processing should be done by the caller
+	 * (AKA virtio controller).
+	 */
+	cmd->q->adm_process_fn(vcmd->vq->vctrl, vcmd);
+}
+
+static void snap_vq_adm_read_hdr_done(struct snap_vq_cmd *vcmd,
+					enum ibv_wc_status status)
+{
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+	int ret;
+
+	if (snap_unlikely(status != IBV_WC_SUCCESS))
+		return snap_adm_cmd_complete(vcmd, SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
+
+	ret = snap_vaq_cmd_read_cmd_in(cmd, snap_vq_adm_read_cmd_in_done);
+	if (ret)
+		return snap_adm_cmd_complete(vcmd, SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
+}
+
+static void snap_vq_adm_handle_cmd(struct snap_vq_cmd *vcmd)
+{
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+	int ret;
+
+	ret = snap_vaq_cmd_read_hdr(cmd, snap_vq_adm_read_hdr_done);
+	if (ret)
+		return snap_adm_cmd_complete(vcmd, SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
+}
+
+static void snap_vq_adm_delete_cmd(struct snap_vq_cmd *vcmd)
+{
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+
+	snap_vaq_cmd_destroy(cmd);
+}
+
+static struct snap_vq_cmd_ops snap_vq_adm_cmd_ops = {
+	.create = snap_vq_adm_create_cmd,
+	.handle = snap_vq_adm_handle_cmd,
+	.delete = snap_vq_adm_delete_cmd,
+	.prefetch = NULL,
+};
+
+static size_t snap_vq_adm_get_hdr_size(struct snap_vq_adm* q)
+{
+	if (q->spec_version == VIRTIO_SPEC_VER_1_3)
+		return sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
+	else
+		return sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
+}
+
+static size_t snap_vq_adm_get_ftr_size(struct snap_vq_adm* q)
+{
+	if (q->spec_version == VIRTIO_SPEC_VER_1_3)
+		return snap_max(sizeof(union snap_virtio_adm_cmd_out),
+				sizeof(struct snap_virtio_adm_cmd_ftr_v1_3));
+	else
+		return snap_max(sizeof(union snap_virtio_adm_cmd_out),
+				sizeof(struct snap_virtio_adm_cmd_ftr_v1_2));
+}
+
+static void snap_vaq_cmd_complete_ftr_v1_2(struct snap_vq_cmd *vcmd,
+					   enum snap_virtio_adm_status status,
+					   enum snap_virtio_adm_status_qualifier status_qualifier,
+					   bool dnr)
+{
+	int ret;
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+
+	if (status == SNAP_VIRTIO_ADM_STATUS_OK) {
+		ret = snap_vaq_cmd_wb_cmd_out(cmd);
+		if (snap_unlikely(ret))
+			status = SNAP_VIRTIO_ADM_STATUS_ERR | SNAP_VIRTIO_ADM_STATUS_DNR;
+	} else if (dnr) {
+		status |= SNAP_VIRTIO_ADM_STATUS_DNR;
+	}
+
+	cmd->layout->ftr.ftr_v1_2.status = status;
+	ret = snap_vaq_cmd_wb_ftr(cmd);
+	if (snap_unlikely(ret)) {
+		snap_vq_cmd_fatal(vcmd);
+		return;
+	}
+	snap_vq_cmd_complete(vcmd);
+}
+
+static void snap_vaq_cmd_complete_ftr_v1_3(struct snap_vq_cmd *vcmd,
+					   enum snap_virtio_adm_status status,
+					   enum snap_virtio_adm_status_qualifier status_qualifier,
+					   bool dnr)
+{
+	int ret;
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+
+	cmd->layout->ftr.ftr_v1_3.status = status;
+	cmd->layout->ftr.ftr_v1_3.status_qualifier = status_qualifier;
+	ret = snap_vaq_cmd_wb_ftr(cmd);
+	if (snap_unlikely(ret)) {
+		snap_vq_cmd_fatal(vcmd);
+		return;
+	}
+
+	if (status == SNAP_VIRTIO_ADM_STATUS_OK) {
+		ret = snap_vaq_cmd_wb_cmd_out(cmd);
+		if (snap_unlikely(ret))
+			status = SNAP_VIRTIO_ADM_STATUS_ERR | SNAP_VIRTIO_ADM_STATUS_DNR;
+	} else if (dnr)
+		status |= SNAP_VIRTIO_ADM_STATUS_DNR;
+
+	snap_vq_cmd_complete(vcmd);
+}
+
+static size_t snap_vaq_cmd_in_get_len_v1_2(struct snap_vaq_cmd *cmd)
+{
+	struct snap_virtio_adm_cmd_hdr_v1_2 hdr = cmd->layout->hdr.hdr_v1_2;
+	size_t ret = 0;
+
+	switch (hdr.cmd_class) {
+	case SNAP_VQ_ADM_MIG_CTRL:
+		switch (hdr.command) {
+		case SNAP_VQ_ADM_MIG_GET_STATUS:
+			ret = sizeof(struct snap_vq_adm_get_status_data);
+			break;
+		case SNAP_VQ_ADM_MIG_MODIFY_STATUS:
+			ret = sizeof(struct snap_vq_adm_modify_status_data);
+			break;
+		case SNAP_VQ_ADM_MIG_GET_STATE_PENDING_BYTES:
+			ret = sizeof(struct snap_vq_adm_get_pending_bytes_data);
+			break;
+		case SNAP_VQ_ADM_MIG_SAVE_STATE:
+			ret = sizeof(struct snap_vq_adm_save_state_data);
+			break;
+		case SNAP_VQ_ADM_MIG_RESTORE_STATE:
+			ret = sizeof(struct snap_vq_adm_restore_state_data);
+			break;
+		default:
+			break;
+		}
+		break;
+	case SNAP_VQ_ADM_DP_TRACK_CTRL:
+		switch (hdr.command) {
+		case SNAP_VQ_ADM_DP_START_TRACK:
+			ret = sizeof(struct snap_vq_adm_dirty_page_track_start);
+			break;
+		case SNAP_VQ_ADM_DP_STOP_TRACK:
+			ret = sizeof(struct snap_vq_adm_dirty_page_track_stop);
+			break;
+		case SNAP_VQ_ADM_DP_GET_MAP_PENDING_BYTES:
+		case SNAP_VQ_ADM_DP_REPORT_MAP:
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static size_t snap_vaq_cmd_in_get_len_v1_3(struct snap_vaq_cmd *cmd)
+{
+	struct snap_virtio_adm_cmd_hdr_v1_3 hdr = cmd->layout->hdr.hdr_v1_3;
+	size_t ret = 0;
+
+	switch (hdr.opcode) {
+	case SNAP_VIRTIO_ADMIN_CMD_LIST_QUERY:
+		switch (hdr.group_type) {
+		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
+		default:
+			break;
+		}
+		break;
+	case SNAP_VIRTIO_ADMIN_CMD_LIST_USE:
+		switch (hdr.group_type) {
+		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
+			ret = sizeof(struct snap_virtio_admin_cmd_list);
+			break;
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static size_t snap_vaq_cmd_out_get_len_v1_2(struct snap_vaq_cmd *cmd)
+{
+	struct snap_virtio_adm_cmd_hdr_v1_2 hdr = cmd->layout->hdr.hdr_v1_2;
+	size_t ret = 0;
+
+	switch (hdr.cmd_class) {
+	case SNAP_VQ_ADM_MIG_CTRL:
+		switch (hdr.command) {
+		case SNAP_VQ_ADM_MIG_GET_STATUS:
+			ret = sizeof(struct snap_vq_adm_get_status_result);
+			break;
+		case SNAP_VQ_ADM_MIG_GET_STATE_PENDING_BYTES:
+			ret = sizeof(struct snap_vq_adm_get_pending_bytes_result);
+			break;
+		default:
+			break;
+		}
+		break;
+	case SNAP_VQ_ADM_DP_TRACK_CTRL:
+		switch (hdr.command) {
+		case SNAP_VQ_ADM_DP_START_TRACK:
+		case SNAP_VQ_ADM_DP_STOP_TRACK:
+		case SNAP_VQ_ADM_DP_GET_MAP_PENDING_BYTES:
+		case SNAP_VQ_ADM_DP_REPORT_MAP:
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+	return ret;
+}
+
+static size_t snap_vaq_cmd_out_get_len_v1_3(struct snap_vaq_cmd *cmd)
+{
+	struct snap_virtio_adm_cmd_hdr_v1_3 hdr = cmd->layout->hdr.hdr_v1_3;
+	size_t ret = 0;
+
+	switch (hdr.opcode) {
+	case SNAP_VIRTIO_ADMIN_CMD_LIST_QUERY:
+		switch (hdr.group_type) {
+		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
+			ret = sizeof(struct snap_virtio_admin_cmd_list);
+			break;
+		default:
+			break;
+		}
+		break;
+	case SNAP_VIRTIO_ADMIN_CMD_LIST_USE:
+		switch (hdr.group_type) {
+		case SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV:
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return ret;
 }
 
 static int snap_vaq_cmd_wb_ftr_v1_2(struct snap_vaq_cmd *cmd)
@@ -372,156 +553,119 @@ static int snap_vaq_cmd_wb_ftr_v1_3(struct snap_vaq_cmd *cmd)
 	return 0;
 }
 
-static int snap_vaq_cmd_wb_ftr(struct snap_vaq_cmd *cmd)
+static size_t snap_vaq_cmd_read_hdr_total_len_v1_2(struct snap_vaq_cmd *cmd)
 {
-	if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-		return snap_vaq_cmd_wb_ftr_v1_3(cmd);
-	else
-		return snap_vaq_cmd_wb_ftr_v1_2(cmd);
+	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
 }
 
-static int snap_vaq_cmd_read_hdr(struct snap_vaq_cmd *cmd,
-				snap_vq_cmd_done_cb_t done_fn)
+static size_t snap_vaq_cmd_read_hdr_total_len_v1_3(struct snap_vaq_cmd *cmd)
+{
+	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
+}
+
+static size_t snap_vaq_cmd_read_cmd_in_offset_v1_2(struct snap_vaq_cmd *cmd)
+{
+	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
+}
+
+static size_t snap_vaq_cmd_read_cmd_in_offset_v1_3(struct snap_vaq_cmd *cmd)
+{
+	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
+}
+
+static inline struct snap_vq_cmd_desc *
+snap_vaq_cmd_wb_get_desc_v1_2(struct snap_vaq_cmd *cmd)
 {
 	struct snap_vq_cmd_desc *desc;
-	size_t total_len;
 
-	desc = TAILQ_FIRST(&cmd->common.descs);
-
-	if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-		total_len = sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
-	else
-		total_len = sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
-
-	return snap_vq_cmd_descs_rw(&cmd->common, desc, 0, &cmd->layout->hdr,
-				    total_len,
-				    snap_buf_get_mkey(cmd->q->cmd_layouts),
-				    done_fn, false);
-}
-
-static int snap_vaq_cmd_read_cmd_in(struct snap_vaq_cmd *cmd,
-					snap_vq_cmd_done_cb_t done_fn)
-{
-	size_t offset = 0, in_len;
-
-	if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-		offset = sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
-	else
-		offset = sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
-
-	in_len = snap_vaq_cmd_in_get_len(cmd);
-	if (!in_len) {
-		done_fn(&cmd->common, IBV_WC_SUCCESS);
-		return 0;
+	TAILQ_FOREACH(desc, &cmd->common.descs, entry) {
+		if ((desc->desc.flags & VRING_DESC_F_WRITE))
+			break;
 	}
 
-	return snap_vaq_cmd_layout_data_read(&cmd->common, in_len, &cmd->layout->in,
-				  snap_buf_get_mkey(cmd->q->cmd_layouts),
-				   done_fn, offset);
+	return desc;
 }
 
-static void snap_vaq_cmd_create(struct snap_vq_adm *q,
-				struct snap_vaq_cmd *cmd,
-				struct snap_virtio_adm_cmd_layout *layout)
+static inline struct snap_vq_cmd_desc *
+snap_vaq_cmd_wb_get_desc_v1_3(struct snap_vaq_cmd *cmd)
 {
-	cmd->q = q;
-	cmd->layout = layout;
-	snap_vq_cmd_create(&q->vq, &cmd->common);
-}
+	struct snap_vq_cmd_desc *desc;
 
-static void snap_vaq_cmd_destroy(struct snap_vaq_cmd *cmd)
-{
-	snap_vq_cmd_destroy(&cmd->common);
-}
-
-static struct snap_vq_cmd *snap_vq_adm_create_cmd(struct snap_vq *vq, int index)
-{
-	struct snap_vq_adm *q = to_snap_vq_adm(vq);
-
-	snap_vaq_cmd_create(q, &q->cmds[index], &q->cmd_layouts[index]);
-	return &q->cmds[index].common;
-}
-
-static void snap_vq_adm_read_cmd_in_done(struct snap_vq_cmd *vcmd,
-					enum ibv_wc_status status)
-{
-	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
-	enum snap_virtio_adm_status adm_status;
-
-	if (snap_unlikely(status != IBV_WC_SUCCESS)) {
-		if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-			adm_status = SNAP_VIRTIO_ADMIN_STATUS_EAGAIN;
-		else
-			adm_status = SNAP_VIRTIO_ADM_STATUS_ERR;
-
-		return snap_vaq_cmd_complete_v1_3(vcmd, adm_status,
-						  SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
-	}
-	/*
-	 * Admin commands further processing should be done by the caller
-	 * (AKA virtio controller).
-	 */
-	cmd->q->adm_process_fn(vcmd->vq->vctrl, vcmd);
-}
-
-static void snap_vq_adm_read_hdr_done(struct snap_vq_cmd *vcmd,
-					enum ibv_wc_status status)
-{
-	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
-	enum snap_virtio_adm_status adm_status;
-	int ret;
-
-	if (snap_unlikely(status != IBV_WC_SUCCESS)) {
-		if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-			adm_status = SNAP_VIRTIO_ADMIN_STATUS_EAGAIN;
-		else
-			adm_status = SNAP_VIRTIO_ADM_STATUS_ERR;
-		return snap_vaq_cmd_complete_v1_3(vcmd, adm_status,
-						  SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
+	TAILQ_FOREACH(desc, &cmd->common.descs, entry) {
+		if ((desc->desc.flags & VRING_DESC_F_WRITE))
+			break;
 	}
 
-	ret = snap_vaq_cmd_read_cmd_in(cmd, snap_vq_adm_read_cmd_in_done);
-	if (ret) {
-		if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-			adm_status = SNAP_VIRTIO_ADMIN_STATUS_EAGAIN;
-		else
-			adm_status = SNAP_VIRTIO_ADM_STATUS_ERR;
-		return snap_vaq_cmd_complete_v1_3(vcmd, adm_status,
-						  SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
-	}
+	desc = TAILQ_NEXT(desc, entry);
+
+	return desc;
 }
 
-static void snap_vq_adm_handle_cmd(struct snap_vq_cmd *vcmd)
+enum snap_virtio_adm_status
+snap_vaq_cmd_get_status_v1_2(struct snap_vq_cmd *vcmd,
+			     enum snap_virtio_adm_status_qualifier status_qualifier)
 {
-	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
-	enum snap_virtio_adm_status adm_status;
-	int ret;
+	enum snap_virtio_adm_status status;
 
-	ret = snap_vaq_cmd_read_hdr(cmd, snap_vq_adm_read_hdr_done);
-	if (ret) {
-		if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3)
-			adm_status = SNAP_VIRTIO_ADMIN_STATUS_EAGAIN;
-		else
-			adm_status = SNAP_VIRTIO_ADM_STATUS_ERR;
-
-		return snap_vaq_cmd_complete_v1_3(vcmd, adm_status,
-						  SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN);
+	switch (status_qualifier) {
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_OK:
+		status = SNAP_VIRTIO_ADM_STATUS_OK;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN:
+		status = SNAP_VIRTIO_ADM_STATUS_ERR;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_NORESOURCE:
+		status = SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_COMMAND:
+		status = SNAP_VIRTIO_ADM_STATUS_INVALID_COMMAND;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_OPCODE:
+		status = SNAP_VIRTIO_ADM_STATUS_INVALID_COMMAND;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_FIELD:
+		status = SNAP_VIRTIO_ADM_STATUS_INVALID_CLASS;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_GROUP:
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_MEMBER:
+		status = SNAP_VIRTIO_ADM_STATUS_INVALID_CLASS;
+		break;
+	default:
+		status = SNAP_VIRTIO_ADM_STATUS_ERR;
+		break;
 	}
+
+	return status;
 }
 
-static void snap_vq_adm_delete_cmd(struct snap_vq_cmd *vcmd)
+enum snap_virtio_adm_status
+snap_vaq_cmd_get_status_v1_3(struct snap_vq_cmd *vcmd,
+			     enum snap_virtio_adm_status_qualifier status_qualifier)
 {
-	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+	enum snap_virtio_adm_status status;
 
-	snap_vaq_cmd_destroy(cmd);
+	switch (status_qualifier) {
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_OK:
+		status = SNAP_VIRTIO_ADM_STATUS_OK;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_TRYAGAIN:
+		status = SNAP_VIRTIO_ADMIN_STATUS_EAGAIN;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_NORESOURCE:
+		status = SNAP_VIRTIO_ADMIN_STATUS_ENOMEM;
+		break;
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_COMMAND:
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_OPCODE:
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_FIELD:
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_GROUP:
+	case SNAP_VIRTIO_ADMIN_STATUS_Q_INVALID_MEMBER:
+	default:
+		status = SNAP_VIRTIO_ADMIN_STATUS_EINVAL;
+		break;
+	}
+
+	return status;
 }
-
-static struct snap_vq_cmd_ops snap_vq_adm_cmd_ops = {
-	.create = snap_vq_adm_create_cmd,
-	.handle = snap_vq_adm_handle_cmd,
-	.delete = snap_vq_adm_delete_cmd,
-	.prefetch = NULL,
-};
 
 /**
  * snap_vq_adm_create() - Create new virtio admin queue instance
@@ -554,19 +698,8 @@ struct snap_vq *snap_vq_adm_create(struct snap_vq_adm_create_attr *attr)
 	if (!q->cmd_layouts)
 		goto free_cmds;
 
-	if (q->spec_version == VIRTIO_SPEC_VER_1_3) {
-		snap_vq_adm_cmd_ops.hdr_size =
-			sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
-		snap_vq_adm_cmd_ops.ftr_size =
-			snap_max(sizeof(union snap_virtio_adm_cmd_out),
-				 sizeof(struct snap_virtio_adm_cmd_ftr_v1_3));
-	} else {
-		snap_vq_adm_cmd_ops.hdr_size =
-			sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
-		snap_vq_adm_cmd_ops.ftr_size =
-			snap_max(sizeof(union snap_virtio_adm_cmd_out),
-				 sizeof(struct snap_virtio_adm_cmd_ftr_v1_2));
-	}
+	snap_vq_adm_cmd_ops.hdr_size = snap_vq_adm_get_hdr_size(q);
+	snap_vq_adm_cmd_ops.ftr_size = snap_vq_adm_get_ftr_size(q);
 
 	if (snap_vq_create(&q->vq, &attr->common,
 					&snap_vq_adm_cmd_ops))
@@ -574,6 +707,26 @@ struct snap_vq *snap_vq_adm_create(struct snap_vq_adm_create_attr *attr)
 
 	q->pd = attr->common.pd;
 	q->adm_process_fn = attr->adm_process_fn;
+	if (q->spec_version == VIRTIO_SPEC_VER_1_3) {
+		q->cmd_ops.complete_ftr = snap_vaq_cmd_complete_ftr_v1_3;
+		q->cmd_ops.cmd_in_get_len = snap_vaq_cmd_in_get_len_v1_3;
+		q->cmd_ops.cmd_out_get_len = snap_vaq_cmd_out_get_len_v1_3;
+		q->cmd_ops.wb_ftr = snap_vaq_cmd_wb_ftr_v1_3;
+		q->cmd_ops.read_hdr_total_len = snap_vaq_cmd_read_hdr_total_len_v1_3;
+		q->cmd_ops.read_cmd_in_offset = snap_vaq_cmd_read_cmd_in_offset_v1_3;
+		q->cmd_ops.wb_get_desc = snap_vaq_cmd_wb_get_desc_v1_3;
+		q->cmd_ops.get_status = snap_vaq_cmd_get_status_v1_3;
+	} else {
+		q->cmd_ops.complete_ftr = snap_vaq_cmd_complete_ftr_v1_2;
+		q->cmd_ops.cmd_in_get_len = snap_vaq_cmd_in_get_len_v1_2;
+		q->cmd_ops.cmd_out_get_len = snap_vaq_cmd_out_get_len_v1_2;
+		q->cmd_ops.wb_ftr = snap_vaq_cmd_wb_ftr_v1_2;
+		q->cmd_ops.read_hdr_total_len = snap_vaq_cmd_read_hdr_total_len_v1_2;
+		q->cmd_ops.read_cmd_in_offset = snap_vaq_cmd_read_cmd_in_offset_v1_2;
+		q->cmd_ops.wb_get_desc = snap_vaq_cmd_wb_get_desc_v1_2;
+		q->cmd_ops.get_status = snap_vaq_cmd_get_status_v1_2;
+	}
+
 	return &q->vq;
 
 free_layouts:
@@ -666,56 +819,10 @@ void snap_vaq_cmd_complete_no_dnr(struct snap_vq_cmd *vcmd,
 	snap_vaq_cmd_complete_int(vcmd, status, false);
 }
 
-static void snap_vaq_cmd_compl_ftr(struct snap_vq_cmd *vcmd,
-			enum snap_virtio_adm_status status,
-			enum snap_virtio_adm_status_qualifier status_qualifier,
-			bool dnr)
-{
-	int ret;
-	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
-
-	if (cmd->q->spec_version == VIRTIO_SPEC_VER_1_3) {
-		cmd->layout->ftr.ftr_v1_3.status = status;
-		cmd->layout->ftr.ftr_v1_3.status_qualifier = status_qualifier;
-		ret = snap_vaq_cmd_wb_ftr(cmd);
-		if (snap_unlikely(ret)) {
-			snap_vq_cmd_fatal(vcmd);
-			return;
-		}
-
-		if (status == SNAP_VIRTIO_ADM_STATUS_OK) {
-			ret = snap_vaq_cmd_wb_cmd_out(cmd);
-			if (snap_unlikely(ret))
-				status = SNAP_VIRTIO_ADM_STATUS_ERR | SNAP_VIRTIO_ADM_STATUS_DNR;
-		} else if (dnr)
-			status |= SNAP_VIRTIO_ADM_STATUS_DNR;
-
-		snap_vq_cmd_complete(vcmd);
-
-	} else {
-		if (status == SNAP_VIRTIO_ADM_STATUS_OK) {
-			ret = snap_vaq_cmd_wb_cmd_out(cmd);
-			if (snap_unlikely(ret))
-				status = SNAP_VIRTIO_ADM_STATUS_ERR | SNAP_VIRTIO_ADM_STATUS_DNR;
-		} else if (dnr) {
-			status |= SNAP_VIRTIO_ADM_STATUS_DNR;
-		}
-
-		cmd->layout->ftr.ftr_v1_2.status = status;
-		ret = snap_vaq_cmd_wb_ftr(cmd);
-		if (snap_unlikely(ret)) {
-			snap_vq_cmd_fatal(vcmd);
-			return;
-		}
-		snap_vq_cmd_complete(vcmd);
-	}
-}
-
 /**
- * snap_vaq_cmd_complete_v1_3() - complete virtio admin command,
+ * snap_adm_cmd_complete() - complete virtio admin command,
  *				  compatible with virtio spec v1.2 and v1.3
  * @cmd: Command to complete
- * @status: completion error code
  * @status_qualifier: completion error reason
  *
  * Complete virtio admin command. The function writes back to host memory
@@ -727,15 +834,18 @@ static void snap_vaq_cmd_compl_ftr(struct snap_vq_cmd *vcmd,
  * Context: After calling this function, command cannot be further processed,
  *          as command's struct may already be reused.
  */
-void snap_vaq_cmd_complete_v1_3(struct snap_vq_cmd *vcmd,
-				enum snap_virtio_adm_status status,
-				enum snap_virtio_adm_status_qualifier status_qualifier)
+void snap_adm_cmd_complete(struct snap_vq_cmd *vcmd,
+			   enum snap_virtio_adm_status_qualifier status_qualifier)
 {
-	snap_vaq_cmd_compl_ftr(vcmd, status, status_qualifier, true);
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+	enum snap_virtio_adm_status status;
+
+	status = cmd->q->cmd_ops.get_status(vcmd, status_qualifier);
+	cmd->q->cmd_ops.complete_ftr(vcmd, status, status_qualifier, true);
 }
 
 /**
- * snap_vaq_cmd_complete_no_dnr_v1_3() - complete virtio admin command
+ * snap_adm_cmd_complete_no_dnr() - complete virtio admin command
  *					 compatible with virtio spec v1.2 and v1.3
  * @cmd: Command to complete
  * @status: completion error code
@@ -750,11 +860,14 @@ void snap_vaq_cmd_complete_v1_3(struct snap_vq_cmd *vcmd,
  * Context: After calling this function, command cannot be further processed,
  *          as command's struct may already be reused.
  */
-void snap_vaq_cmd_complete_no_dnr_v1_3(struct snap_vq_cmd *vcmd,
-				       enum snap_virtio_adm_status status,
-				       enum snap_virtio_adm_status_qualifier status_qualifier)
+void snap_adm_cmd_complete_no_dnr(struct snap_vq_cmd *vcmd,
+				  enum snap_virtio_adm_status_qualifier status_qualifier)
 {
-	snap_vaq_cmd_compl_ftr(vcmd, status, status_qualifier, false);
+	struct snap_vaq_cmd *cmd = to_snap_vaq_cmd(vcmd);
+	enum snap_virtio_adm_status status;
+
+	status = cmd->q->cmd_ops.get_status(vcmd, status_qualifier);
+	cmd->q->cmd_ops.complete_ftr(vcmd, status, status_qualifier, false);
 }
 
 void **snap_vaq_cmd_priv(struct snap_vq_cmd *cmd)
