@@ -326,11 +326,6 @@ struct snap_dma_q {
 	struct snap_dma_q_ops  *custom_ops;
 	struct snap_dma_worker *worker;
 
-	pthread_mutex_t	lock;
-	bool destroy_done;
-	int flush_count;
-	free_dma_q_resources free_dma_q_resources_cb;
-
 	/* public: */
 	/** @uctx:  user supplied context */
 	void                  *uctx;
@@ -342,6 +337,10 @@ struct snap_dma_q {
 #if !defined(__DPA)
 	struct ibv_qp fw_verbs_qp;
 	bool fw_use_devx;
+	pthread_mutex_t lock;
+	bool destroy_done;
+	int flush_count;
+	free_dma_q_resources free_dma_q_resources_cb;
 #endif
 };
 

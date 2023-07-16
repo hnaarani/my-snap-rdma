@@ -1032,6 +1032,7 @@ const struct snap_dma_q_ops gga_ops = {
 
 int dv_worker_progress_rx(struct snap_dma_worker *wk)
 {
+#if !defined(__DPA)
 	int n, i;
 	int op, dma_cqe_id;
 	struct snap_dma_q *q;
@@ -1116,7 +1117,10 @@ process_comps:
 	snap_memory_bus_store_fence();
 
 	return n;
-
+#else
+	snap_error("worker poll is not implemented on DPA\n");
+	return 0;
+#endif
 }
 
 static inline void dv_worker_ring_all_doorbells(struct snap_dma_worker *wk)
