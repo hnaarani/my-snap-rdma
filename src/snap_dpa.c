@@ -390,7 +390,7 @@ static uint64_t snap_dpa_get_mem_size(struct ibv_context *ctx)
 	block_size = DEVX_GET(query_hca_cap_out, out, capability.dpa_cap.dpa_mem_block_size);
 	log_mem_blocks = DEVX_GET(query_hca_cap_out, out, capability.dpa_cap.log_max_num_dpa_mem_blocks);
 	snap_debug("block size %u log %u\n", block_size, log_mem_blocks);
-	return block_size * (1 << log_mem_blocks);
+	return block_size * (1ULL << log_mem_blocks);
 }
 
 /**
