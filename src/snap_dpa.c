@@ -322,6 +322,7 @@ static int load_file(const char *file_name, void **buf, size_t *size)
 
 	*buf = fbuf;
 	*size = fbuf_size;
+	fclose(fp);
 	return 0;
 
 free_buf:
@@ -364,6 +365,7 @@ static int snap_dpa_load_app_sig(struct snap_dpa_ctx *dpa_ctx, const char *app_n
 
 	if (stat(file_name, &st)) {
 		snap_debug("App has no signature\n");
+		free(file_name);
 		return 0;
 	}
 
@@ -372,10 +374,12 @@ static int snap_dpa_load_app_sig(struct snap_dpa_ctx *dpa_ctx, const char *app_n
 	if (ret)
 		goto free_file;
 
+	/* once set it will be freed internally by the flexio */
 	app->sig_exist = 1;
 	app->sig_buffer = sig_buf;
 	app->sig_size = sig_buf_size;
 
+	free(file_name);
 	return 0;
 
 free_file:
