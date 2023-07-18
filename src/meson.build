@@ -27,6 +27,7 @@ libsnap_core_sources = [
 
 if meson.get_compiler('c').get_id() == 'clang'
 	common_cflags += '-Wno-microsoft-anon-tag'
+	common_cflags += '-Wno-gnu-variable-sized-type-not-at-end'
 endif
 
 #TODO remove once DOCA moves to work over dev_emu_dma_* API
