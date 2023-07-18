@@ -87,6 +87,18 @@ TEST_F(SnapDpaTest, app_load_unload) {
 	snap_dpa_process_destroy(dpa_ctx);
 }
 
+/* this test case can be used to validate signature of any app */
+TEST_F(SnapDpaTest, app_load_unload_any) {
+	struct snap_dpa_ctx *dpa_ctx;
+	char *app = getenv("DPA_APP_NAME");
+
+	if (!app) return;
+
+	dpa_ctx = snap_dpa_process_create(get_ib_ctx(), app);
+	ASSERT_TRUE(dpa_ctx);
+	snap_dpa_process_destroy(dpa_ctx);
+}
+
 TEST_F(SnapDpaTest, create_thread) {
 	struct snap_dpa_ctx *dpa_ctx;
 	struct snap_dpa_thread *dpa_thr;

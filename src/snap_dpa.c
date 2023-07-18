@@ -309,8 +309,8 @@ static int load_file(const char *file_name, void **buf, size_t *size)
 	}
 
 	fbuf_size = file_st.st_size;
-	fbuf = malloc(fbuf_size);
-	if (!fbuf) {
+	ret = posix_memalign(&fbuf, 64, fbuf_size);
+	if (ret) {
 		snap_error("Failed to alloc memory for %s\n", file_name);
 		goto close_file;
 	}
@@ -369,7 +369,7 @@ static int snap_dpa_load_app_sig(struct snap_dpa_ctx *dpa_ctx, const char *app_n
 		return 0;
 	}
 
-	snap_info("%s has signature\n", app_name);
+	snap_info("%s is signed DPA application\n", app_name);
 	ret = load_file(file_name, &sig_buf, &sig_buf_size);
 	if (ret)
 		goto free_file;
