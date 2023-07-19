@@ -20,3 +20,5 @@ option('enable-simx', type : 'boolean', value : false, description : 'enable SIM
 option('dpa-signed-apps', type : 'boolean', value : false, description : 'sign DPA applications')
 option('dpa-cert', type : 'string', description : 'certificate used to sign DPA applications')
 option('dpa-private-key', type : 'string', description : 'private key used to sign DPA applications')
+
+option('enable-fiu', type : 'boolean', value : false, description : 'enable fiu')

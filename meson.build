@@ -83,6 +83,13 @@ else
 	flexio = disabler()
 endif
 
+if get_option('enable-fiu')
+	libfiu_proj = subproject('libfiu', default_options: 'enable-fiu=true')
+else
+	libfiu_proj = subproject('libfiu')
+endif
+libsnap_core_depends += libfiu_proj.get_variable('libfiu_dep')
+
 dpa_app_dir = '"' + get_option('prefix') + '/dpa_app' + '"'
 conf_data.set('DPA_DEFAULT_APP_DIR' , dpa_app_dir, description : 'DPA applications default directory')
 
