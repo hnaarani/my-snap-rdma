@@ -261,7 +261,6 @@ static void snap_virtio_ctrl_desched_q_nolock(struct snap_virtio_ctrl_queue *vq)
 		return;
 
 	TAILQ_REMOVE(&pg->q_list, &vq->pg_q, entry);
-	snap_pg_usage_decrease(vq->pg->id);
 	vq->pg = NULL;
 }
 
@@ -273,6 +272,7 @@ static void snap_virtio_ctrl_desched_q(struct snap_virtio_ctrl_queue *vq)
 		return;
 
 	pthread_spin_lock(&pg->lock);
+	snap_pg_usage_decrease(vq->pg->id);
 	snap_virtio_ctrl_desched_q_nolock(vq);
 	pthread_spin_unlock(&pg->lock);
 }
