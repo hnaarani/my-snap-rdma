@@ -252,8 +252,8 @@ alloc_blk_virtq_cmd_arr(uint32_t size_max, uint32_t seg_max,
 		data_size += req_size;
 	vq_priv->data = to_blk_bdev_ops(&vq_priv->virtq_dev)->dma_malloc(data_size * num);
 	if (!vq_priv->data) {
-		snap_error("failed to allocate memory for virtq %d\n",
-			vq_priv->vq_ctx->idx);
+		snap_error("failed to allocate %ld bytes of memory for virtq %d\n",
+			data_size * num, vq_priv->vq_ctx->idx);
 			goto free_cmd_arr;
 	}
 
@@ -263,8 +263,8 @@ alloc_blk_virtq_cmd_arr(uint32_t size_max, uint32_t seg_max,
 						IBV_ACCESS_LOCAL_WRITE |
 						IBV_ACCESS_RELAXED_ORDERING);
 	if (!vq_priv->data_mr) {
-		snap_error("failed to register mr for virtq %d\n",
-			   vq_priv->vq_ctx->idx);
+		snap_error("failed to register mr of %ld bytes for virtq %d\n",
+			   data_size * num, vq_priv->vq_ctx->idx);
 		goto free_data;
 	}
 

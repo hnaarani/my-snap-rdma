@@ -1349,8 +1349,12 @@ static int snap_virtio_blk_ctrl_queue_get_state(struct snap_virtio_ctrl_queue *v
 {
 	struct snap_virtio_blk_ctrl_queue *vbq = to_blk_ctrl_q(vq);
 
-	if (!vbq->is_adm_vq)
-		return blk_virtq_get_state(vbq->q_impl, state);
+	if (!vbq->is_adm_vq) {
+		if (vbq->q_impl)
+			return blk_virtq_get_state(vbq->q_impl, state);
+		else
+			return -EINVAL;
+	}
 	return 0;
 }
 
