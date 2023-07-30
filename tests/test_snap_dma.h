@@ -2,8 +2,6 @@
 #define TEST_SNAP_DMA_H
 
 class SnapDmaTest : public ::testing::Test {
-	virtual void SetUp();
-	virtual void TearDown();
 
 	private:
 	void alloc_bufs();
@@ -29,6 +27,9 @@ class SnapDmaTest : public ::testing::Test {
 	void empty(int mode);
 	void flush_async(int mode);
 	struct snap_dma_q *create_queue();
+
+	virtual void SetUp();
+	virtual void TearDown();
 	public:
 	/* Send data to sw qp */
 	static int snap_dma_q_fw_send(struct snap_dma_q *q, void *src_buf,

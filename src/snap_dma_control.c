@@ -1230,14 +1230,20 @@ static void snap_free_iov_ctx(struct snap_dma_q *q)
 	q->iov_ctx = NULL;
 }
 
-static int snap_alloc_crypto_ctx(struct snap_dma_q *q, struct ibv_pd *pd)
+static int snap_alloc_crypto_ctx(struct snap_dma_q *q, struct ibv_pd *pd, const struct snap_dma_q_crypto_attr *attr)
 {
 	int i, ret, io_ctx_cnt;
 	struct snap_dma_q_crypto_ctx *crypto_ctx;
 	struct mlx5_devx_mkey_attr mkey_attr = {};
 	struct snap_relaxed_ordering_caps caps = {};
 
-	io_ctx_cnt = q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
+	if (attr->crypto_place != SNAP_DMA_Q_CRYPTO_ON_DEST &&
+	    attr->crypto_place != SNAP_DMA_Q_CRYPTO_ON_SRC)
+		return -EINVAL;
+
+	io_ctx_cnt = attr->crypto_ctx_max;
+	if (io_ctx_cnt == 0)
+		io_ctx_cnt = SNAP_DMA_Q_CRYPTO_CTX_MAX;
 
 	ret = posix_memalign((void **)&crypto_ctx, SNAP_DMA_BUF_ALIGN,
 			io_ctx_cnt * sizeof(struct snap_dma_q_crypto_ctx));
@@ -1263,16 +1269,29 @@ static int snap_alloc_crypto_ctx(struct snap_dma_q *q, struct ibv_pd *pd)
 	mkey_attr.relaxed_ordering_read = caps.relaxed_ordering_read;
 	mkey_attr.klm_num = 0;
 	mkey_attr.klm_array = NULL;
-	mkey_attr.crypto_en = true;
-	mkey_attr.bsf_en = true;
 
 	for (i = 0; i < io_ctx_cnt; i++) {
+		if (attr->crypto_place == SNAP_DMA_Q_CRYPTO_ON_DEST) {
+			mkey_attr.crypto_en = true;
+			mkey_attr.bsf_en = true;
+		} else {
+			mkey_attr.crypto_en = false;
+			mkey_attr.bsf_en = false;
+		}
 		crypto_ctx[i].r_klm_mkey = snap_create_indirect_mkey(pd, &mkey_attr);
 		if (!crypto_ctx[i].r_klm_mkey) {
 			snap_error("create remote klm mkey for crypto_ctx[%d] failed\n", i);
 			goto destroy_mkeys;
 		}
 
+		/* local key is used to linearize */
+		if (attr->crypto_place == SNAP_DMA_Q_CRYPTO_ON_DEST) {
+			mkey_attr.crypto_en = false;
+			mkey_attr.bsf_en = false;
+		} else {
+			mkey_attr.crypto_en = true;
+			mkey_attr.bsf_en = true;
+		}
 		crypto_ctx[i].l_klm_mkey = snap_create_indirect_mkey(pd, &mkey_attr);
 		if (!crypto_ctx[i].l_klm_mkey) {
 			snap_error("create local klm mkey for crypto_ctx[%d] failed\n", i);
@@ -1287,6 +1306,8 @@ static int snap_alloc_crypto_ctx(struct snap_dma_q *q, struct ibv_pd *pd)
 	}
 
 	q->crypto_ctx = crypto_ctx;
+	q->n_crypto_ctx = io_ctx_cnt;
+	q->crypto_place = attr->crypto_place;
 
 	return 0;
 
@@ -1307,7 +1328,7 @@ static void snap_free_crypto_ctx(struct snap_dma_q *q)
 	int i, io_ctx_cnt;
 	struct snap_dma_q_crypto_ctx *crypto_ctx = q->crypto_ctx;
 
-	io_ctx_cnt = q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
+	io_ctx_cnt = q->n_crypto_ctx;
 
 	for (i = 0; i < io_ctx_cnt; i++) {
 		TAILQ_REMOVE(&q->free_crypto_ctx, &crypto_ctx[i], entry);
@@ -1317,6 +1338,7 @@ static void snap_free_crypto_ctx(struct snap_dma_q *q)
 
 	free(crypto_ctx);
 	q->crypto_ctx = NULL;
+	q->n_crypto_ctx = 0;
 }
 
 static int snap_alloc_ir_ctx(struct snap_dma_q *q, struct ibv_pd *pd)
@@ -1411,8 +1433,14 @@ static int snap_create_io_ctx(struct snap_dma_q *q, struct ibv_pd *pd,
 		q->iov_support = true;
 	}
 
-	if (attr->crypto_enable && q->sw_qp.mode == SNAP_DMA_Q_MODE_DV) {
-		ret = snap_alloc_crypto_ctx(q, pd);
+	if (attr->crypto_enable) {
+
+		if (q->sw_qp.mode != SNAP_DMA_Q_MODE_DV) {
+			snap_error("failed to enable crypto: dma q must be in DV mode\n");
+			goto out;
+		}
+
+		ret = snap_alloc_crypto_ctx(q, pd, &attr->crypto_attr);
 		if (ret) {
 			snap_error("Allocate crypto_ctx failed\n");
 			goto free_iov_ctx;

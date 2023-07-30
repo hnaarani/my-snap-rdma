@@ -14,6 +14,7 @@
 
 #include "config.h"
 #include "snap_dma_internal.h"
+#include "snap_umr.h"
 
 /**
  * snap_dma_q_progress() - Progress dma queue
@@ -276,7 +277,7 @@ int snap_dma_q_writev2v(struct snap_dma_q *q,
 
 /**
  * snap_dma_q_writec() - DMA write to the host memory, and
- *                          do inline date decryption
+ *                          do inline data enctyption
  * @q:            dma queue
  * @src_buf:      where to get data
  * @lkey:         local memory key
@@ -284,6 +285,7 @@ int snap_dma_q_writev2v(struct snap_dma_q *q,
  * @iov_cnt:      The number of elements in @iov
  * @rmkey:        host memory key that describes remote memory
  * @dek_obj_id:   DEK Object ID
+ * @tweak:        initial aes-xts tweak. Auto incremented every block
  * @comp:         dma completion structure
  *
  * The function starts non blocking memory transfer to the host memory. Once
@@ -301,7 +303,7 @@ int snap_dma_q_writev2v(struct snap_dma_q *q,
  */
 int snap_dma_q_writec(struct snap_dma_q *q, void *src_buf, uint32_t lkey,
 			struct iovec *iov, int iov_cnt, uint32_t rmkey,
-			uint32_t dek_obj_id, struct snap_dma_completion *comp)
+			uint32_t dek_obj_id, uint64_t tweak, struct snap_dma_completion *comp)
 {
 	int i, rc, n_bb = 0;
 	uint32_t rkey[iov_cnt];
@@ -325,6 +327,9 @@ int snap_dma_q_writec(struct snap_dma_q *q, void *src_buf, uint32_t lkey,
 	io_attr.riov = iov;
 	io_attr.riov_cnt = iov_cnt;
 	io_attr.dek_obj_id = dek_obj_id;
+	//io_attr.enc_order = SNAP_CRYPTO_BSF_ENCRYPTION_ORDER_ENCRYPTED_MEMORY_SIGNATURE;
+	io_attr.enc_order = SNAP_CRYPTO_BSF_ENCRYPTION_ORDER_ENCRYPTED_RAW_WIRE;
+	io_attr.xts_initial_tweak = tweak;
 
 	rc = q->ops->writec(q, &io_attr, comp, &n_bb);
 	if (snap_unlikely(rc))
@@ -332,6 +337,69 @@ int snap_dma_q_writec(struct snap_dma_q *q, void *src_buf, uint32_t lkey,
 
 	q->tx_available -= n_bb;
 
+	return 0;
+}
+
+/**
+ * snap_dma_q_writev2vc() - DMA write to the host memory, and
+ *                          do inline data decryption
+ * @q:            dma queue
+ * @lmkey:        local memory key, one per each src iov element
+ * @src_iov:      A scatter gather list of buffers to write from
+ * @src_iov_cnt:  The number of elements in @iov
+ * @rmkey:        host memory key that describes remote memory
+ * @dst_iov:      A scatter gather list of buffers to write into
+ * @dst_iov_cnt:  The number of elements in @iov
+ * @dek_obj_id:   DEK Object ID
+ * @tweak:        initial aes-xts tweak. Auto incremented every block
+ * @comp:         dma completion structure
+ *
+ * The function starts non blocking memory transfer to the host memory. Once
+ * data transfer is completed the user defined callback may be called.
+ * Operations on the same dma queue are done in order.
+ *
+ * Return:
+ * 0
+ *	operation has been successfully submitted to the queue
+ *	and is now in progress
+ * \-EAGAIN
+ *	queue does not have enough resources, must be retried later
+ * < 0
+ *	some other error has occurred. Return value is -errno
+ */
+int snap_dma_q_writev2vc(struct snap_dma_q *q,
+		uint32_t *lmkey, struct iovec *src_iov, int src_iov_cnt,
+		uint32_t rmkey, struct iovec *dst_iov, int dst_iov_cnt,
+		uint32_t dek_obj_id, uint64_t tweak, struct snap_dma_completion *comp)
+{
+	struct snap_dma_q_io_attr io_attr = {0};
+	int i, rc, n_bb = 0;
+	uint32_t rkey[dst_iov_cnt];
+	uint32_t lkey[src_iov_cnt];
+
+	for (i = 0; i < dst_iov_cnt; i++)
+		rkey[i] = rmkey;
+
+	for (i = 0; i < src_iov_cnt; i++)
+		lkey[i] = lmkey[i];
+
+	io_attr.io_type = SNAP_DMA_Q_IO_TYPE_IOV | SNAP_DMA_Q_IO_TYPE_ENCRYPTO;
+	io_attr.lkey = lkey;
+	io_attr.liov = src_iov;
+	io_attr.liov_cnt = src_iov_cnt;
+	io_attr.rkey = rkey;
+	io_attr.riov = dst_iov;
+	io_attr.riov_cnt = dst_iov_cnt;
+	io_attr.dek_obj_id = dek_obj_id;
+	// we want v2c to decrypt data
+	io_attr.enc_order = SNAP_CRYPTO_BSF_ENCRYPTION_ORDER_ENCRYPTED_RAW_MEMORY;
+	io_attr.xts_initial_tweak = tweak;
+
+	rc = q->ops->writec(q, &io_attr, comp, &n_bb);
+	if (snap_unlikely(rc))
+		return rc;
+
+	q->tx_available -= n_bb;
 	return 0;
 }
 
@@ -461,7 +529,7 @@ int snap_dma_q_readv2v(struct snap_dma_q *q,
 
 /**
  * snap_dma_q_readc() - DMA read from the host memory, and
- *                         do inline data encryption
+ *                         do inline data decryption
  * @q:            dma queue
  * @dst_buf:      where to put data
  * @lkey:         local memory key
@@ -469,6 +537,7 @@ int snap_dma_q_readv2v(struct snap_dma_q *q,
  * @iov_cnt:      The number of elements in @iov
  * @rmkey:        host memory key that describes remote memory
  * @dek_obj_id:   DEK Object ID
+ * @tweak:        aes-xts initial tweak
  * @comp:         dma completion structure
  *
  * The function starts non blocking memory transfer from the host memory. Once
@@ -486,7 +555,7 @@ int snap_dma_q_readv2v(struct snap_dma_q *q,
  */
 int snap_dma_q_readc(struct snap_dma_q *q, void *dst_buf, uint32_t lkey,
 			struct iovec *iov, int iov_cnt, uint32_t rmkey,
-		    uint32_t dek_obj_id, struct snap_dma_completion *comp)
+		    uint32_t dek_obj_id, uint64_t tweak, struct snap_dma_completion *comp)
 {
 	int i, rc, n_bb = 0;
 	uint32_t rkey[iov_cnt];
@@ -510,6 +579,9 @@ int snap_dma_q_readc(struct snap_dma_q *q, void *dst_buf, uint32_t lkey,
 	io_attr.riov = iov;
 	io_attr.riov_cnt = iov_cnt;
 	io_attr.dek_obj_id = dek_obj_id;
+	//io_attr.enc_order = SNAP_CRYPTO_BSF_ENCRYPTION_ORDER_ENCRYPTED_MEMORY_SIGNATURE;
+	io_attr.enc_order = SNAP_CRYPTO_BSF_ENCRYPTION_ORDER_ENCRYPTED_RAW_WIRE;
+	io_attr.xts_initial_tweak = tweak;
 
 	rc = q->ops->readc(q, &io_attr, comp, &n_bb);
 	if (snap_unlikely(rc))

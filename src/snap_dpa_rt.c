@@ -257,6 +257,8 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 		q_attr.wk = q_init_attr->wk;
 		q_attr.uctx = q_init_attr->cq;
 		q_attr.rx_cb = q_init_attr->rx_cb;
+		q_attr.crypto_enable = q_init_attr->crypto_enable;
+		q_attr.crypto_attr = q_init_attr->crypto_attr;
 	}
 	rt_thr->dpu_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
 	if (!rt_thr->dpu_cmd_chan.dma_q)

@@ -79,8 +79,8 @@ static inline void set_umr_crypto_bsf_seg(struct snap_crypto_bsf_seg *bsf,
 	bsf->raw_data_size = htobe32(attr->raw_data_size);
 	bsf->crypto_block_size_pointer = attr->crypto_block_size_pointer;
 	bsf->dek_pointer = htobe32(attr->dek_pointer & 0x00FFFFFF);
-	memcpy(bsf->xts_initial_tweak, attr->xts_initial_tweak,
-		SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE);
+	bsf->xts_initial_tweak[0] = htobe64(attr->xts_initial_tweak);
+	bsf->xts_initial_tweak[1] = 0;
 	memcpy(bsf->keytag, attr->keytag, SNAP_CRYPTO_KEYTAG_SIZE);
 }
 

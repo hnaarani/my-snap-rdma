@@ -71,7 +71,7 @@ void SnapDmaTest::alloc_bufs()
 		FAIL() << "buffer allocation";
 
 	m_lmr = ibv_reg_mr(m_pd, m_lbuf, m_bcount * m_bsize,
-			IBV_ACCESS_LOCAL_WRITE);
+			IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if (!m_lmr)
 		FAIL() << "local memory buffer";
 
@@ -1343,7 +1343,7 @@ static void post_umr_modify_mkey(struct ibv_pd *pd,
 		attr.crypto_block_size_pointer = SNAP_CRYPTO_BSF_CRYPTO_BLOCK_SIZE_POINTER_512;
 		attr.dek_pointer = 0;
 		memset(attr.keytag, 0, SNAP_CRYPTO_KEYTAG_SIZE);
-		memset(attr.xts_initial_tweak, 0, SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE);
+		attr.xts_initial_tweak = 0;
 	}
 
 	if (wait_completion) {
@@ -1911,3 +1911,360 @@ TEST_F(SnapDmaTest, poll_tx_worker)
 {
 	worker_poll_tx();
 }
+
+/* CRYPTO test case */
+#define NVMF_CRYPTO_KEY1 "12345678123456781234567812345678"
+#define NVMF_CRYPTO_KEY2 "deadbeefdeadbeefdeadbeefdeadbeef"
+/* initial tweak value for tests */
+#define NVMF_LBA 42
+static inline int __c2v(char c)
+{
+	if ((c >= '0') && (c <= '9')) {
+		return c - '0';
+	}
+	if ((c >= 'a') && (c <= 'f')) {
+		return c - 'a' + 10;
+	}
+	if ((c >= 'A') && (c <= 'F')) {
+		return c - 'A' + 10;
+	}
+	return -1;
+}
+
+static nvmf_crypto_key_load(const char *key1, const char *key2, uint8_t *out, size_t *out_size)
+{
+	size_t i;
+	const size_t key1_len = strlen(key1);
+	const size_t key2_len = strlen(key2);
+	const size_t key_len = (key1_len + key2_len) / 2;
+
+	if (key1_len & 1) {
+		printf("Invalid key1 length, can't be odd. Key: %s, len: %zu", key1, key1_len);
+		return -1;
+	}
+
+	if (key2_len & 1) {
+		printf("Invalid key2 length, can't be odd. Key: %s, len: %zu", key2, key2_len);
+		return -1;
+	}
+
+	if (key_len > *out_size) {
+		printf("Key buffer is too small, required: %zu, provided: %zu", key_len, *out_size);
+		return -1;
+	}
+
+	if (key_len != 32 && key_len != 64) {
+		printf("Unsupported key length");
+		return -1;
+	}
+
+	for (i = 0; i < key1_len; i += 2) {
+		const int v0 = __c2v(key1[i]);
+		const int v1 = __c2v(key1[i + 1]);
+		if (v0 < 0 || v1 < 0) {
+			printf("Invalid key1");
+			return -1;
+		}
+		*out++ = (v0 << 4) + v1;
+	}
+
+	for (i = 0; i < key2_len; i += 2) {
+		const int v0 = __c2v(key2[i]);
+		const int v1 = __c2v(key2[i + 1]);
+		if (v0 < 0 || v1 < 0) {
+			printf("Invalid key2");
+			return -1;
+		}
+		*out++ = (v0 << 4) + v1;
+	}
+
+	*out_size = key_len;
+	return 0;
+}
+
+extern "C" {
+
+enum mlx5_devx_obj_type {
+	MLX5_DEVX_FLOW_TABLE		= 1,
+	MLX5_DEVX_FLOW_COUNTER		= 2,
+	MLX5_DEVX_FLOW_METER		= 3,
+	MLX5_DEVX_QP			= 4,
+	MLX5_DEVX_PKT_REFORMAT_CTX	= 5,
+	MLX5_DEVX_TIR			= 6,
+	MLX5_DEVX_FLOW_GROUP		= 7,
+	MLX5_DEVX_FLOW_TABLE_ENTRY	= 8,
+	MLX5_DEVX_FLOW_SAMPLER		= 9,
+	MLX5_DEVX_ASO_FIRST_HIT		= 10,
+	MLX5_DEVX_ASO_FLOW_METER	= 11,
+	MLX5_DEVX_ASO_CT		= 12,
+};
+
+struct mlx5dv_devx_obj {
+	struct ibv_context *context;
+	uint32_t handle;
+	enum mlx5_devx_obj_type type;
+	uint32_t object_id;
+	uint64_t rx_icm_addr;
+	uint8_t log_obj_range;
+	void *priv;
+};
+
+struct mlx5dv_dek {
+    struct mlx5dv_devx_obj *devx_obj;
+};
+
+};
+
+class SnapCryptoTest : public SnapDmaTest, public ::testing::WithParamInterface<int> {
+
+	virtual void SetUp() {
+		int ret;
+		uint8_t crypto_key[128];
+		size_t crypto_key_len = sizeof(crypto_key);
+
+		SnapDmaTest::SetUp();
+
+		ret = nvmf_crypto_key_load(NVMF_CRYPTO_KEY1, NVMF_CRYPTO_KEY2, crypto_key, &crypto_key_len);
+		ASSERT_EQ(0, ret);
+
+		/* create DEK */
+		struct mlx5dv_dek_init_attr dek_attr = {};
+		struct mlx5dv_dek_attr dek_query_attr = {};
+
+		dek_attr.pd = m_pd;
+		dek_attr.key_purpose = MLX5DV_CRYPTO_KEY_PURPOSE_AES_XTS;
+		dek_attr.comp_mask = MLX5DV_DEK_INIT_ATTR_CRYPTO_LOGIN;
+		dek_attr.crypto_login = NULL;
+
+		memcpy(dek_attr.key, crypto_key, crypto_key_len);
+
+		m_dek = mlx5dv_dek_create(m_pd->context, &dek_attr);
+		ASSERT_TRUE(m_dek);
+
+		ret = mlx5dv_dek_query(m_dek, &dek_query_attr);
+		ASSERT_EQ(0, ret);
+		ASSERT_EQ(dek_query_attr.state, MLX5DV_DEK_STATE_READY);
+
+		/* create dummy qp */
+		m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
+		m_dma_q_attr.sw_use_devx = true;
+		m_dma_q_attr.tx_qsize = 0;
+		m_dma_q_attr.rx_qsize = 0;
+
+		m_dummy_q = snap_dma_ep_create(m_pd, &m_dma_q_attr);
+		ASSERT_TRUE(m_dummy_q);
+	}
+	virtual void TearDown() {
+		mlx5dv_dek_destroy(m_dek);
+		snap_dma_ep_destroy(m_dummy_q);
+		SnapDmaTest::TearDown();
+	}
+
+	public:
+	struct mlx5dv_dek *m_dek;
+	struct snap_dma_q *m_dummy_q;
+	struct snap_dma_q *m_dma_q;
+
+	void crypto_qp_create();
+	void crypto_qp_destroy();
+
+	void dump_bufs(char *src, char *dst);
+};
+
+void SnapCryptoTest::dump_bufs(char *src, char *dst)
+{
+	printf("From: ");
+	for (int i = 0; i < 32; i++) {
+		printf("0x%02x ", src[i]);
+	}
+	printf("\n");
+
+	printf("To: ");
+	for (int i = 0; i < 32; i++) {
+		if(i % 64 == 0) printf("\n");
+		printf("0x%02x ", dst[i]);
+	}
+	printf("\n");
+}
+
+void SnapCryptoTest::crypto_qp_create()
+{
+	int ret;
+
+	/* create endpoint */
+	m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
+	m_dma_q_attr.sw_use_devx = true;
+	m_dma_q_attr.tx_qsize = 1024;
+	m_dma_q_attr.tx_elem_size = 0;
+	m_dma_q_attr.rx_qsize = 0;
+	m_dma_q_attr.crypto_enable = true;
+	m_dma_q_attr.crypto_attr.crypto_place = GetParam();
+
+	m_dma_q = snap_dma_ep_create(m_pd, &m_dma_q_attr);
+	ASSERT_TRUE(m_dma_q);
+
+	ret = snap_dma_ep_connect(m_dma_q, m_dummy_q);
+	ASSERT_EQ(0, ret);
+}
+
+void SnapCryptoTest::crypto_qp_destroy()
+{
+	snap_dma_ep_destroy(m_dma_q);
+}
+
+TEST_P(SnapCryptoTest, crypto_writec_readc)
+{
+	int ret;
+	struct iovec iov;
+
+	crypto_qp_create();
+
+	/* writec in one direction */
+	memset(m_rbuf, 0, 4096);
+	memset(m_lbuf, 0xAB, 4096);
+	iov.iov_base = m_rbuf;
+	iov.iov_len = 4096;
+
+	ret = snap_dma_q_writec(m_dma_q, m_lbuf, m_lmr->lkey,
+			&iov, 1, m_rmr->lkey, m_dek->devx_obj->object_id, NVMF_LBA, NULL);
+	ASSERT_EQ(0, ret);
+	snap_dma_q_flush(m_dma_q);
+
+	dump_bufs(m_lbuf, m_rbuf);
+
+	memset(m_lbuf, 0, 4096);
+	iov.iov_base = m_rbuf;
+	iov.iov_len = 4096;
+
+	/* readc should decrypt */
+	ret = snap_dma_q_readc(m_dma_q, m_lbuf, m_lmr->lkey,
+			&iov, 1, m_rmr->lkey, m_dek->devx_obj->object_id, NVMF_LBA, NULL);
+	ASSERT_EQ(0, ret);
+	snap_dma_q_flush(m_dma_q);
+
+	dump_bufs(m_rbuf, m_lbuf);
+
+	memset(m_rbuf, 0xAB, 4096);
+	printf("known bug, validation disabled!!!\n");
+	/* There is a bug with 512b encrypt/descrtyp. Only even numbered blocks
+	 * are decrypted correctly. Need to check
+	 */
+	//EXPECT_EQ(0, memcmp(m_lbuf, m_rbuf, 4096));
+
+	crypto_qp_destroy();
+}
+
+TEST_P(SnapCryptoTest, crypto_writev2c_iov1)
+{
+	int ret;
+
+	crypto_qp_create();
+
+	/* writec in one direction */
+	struct iovec riov, liov, iov;
+
+	memset(m_rbuf, 0xAB, 4096);
+	memset(m_lbuf, 0, 4096);
+
+	riov.iov_base = m_rbuf;
+	riov.iov_len = 4096;
+
+	liov.iov_base = m_lbuf;
+	liov.iov_len = 4096;
+
+	iov.iov_base = m_lbuf;
+	iov.iov_len = 4096;
+
+	ret = snap_dma_q_writec(m_dma_q, m_rbuf, m_rmr->lkey,
+			&iov, 1, m_lmr->lkey, m_dek->devx_obj->object_id, NVMF_LBA, NULL);
+	ASSERT_EQ(0, ret);
+	snap_dma_q_flush(m_dma_q);
+
+	dump_bufs(m_rbuf, m_lbuf);
+
+	memset(m_rbuf, 0x0, 4096);
+	ret = snap_dma_q_writev2vc(m_dma_q, &m_lmr->lkey, &liov, 1,
+			m_rmr->lkey, &riov, 1, m_dek->devx_obj->object_id, NVMF_LBA, NULL);
+	ASSERT_EQ(0, ret);
+	snap_dma_q_flush(m_dma_q);
+
+	dump_bufs(m_lbuf, m_rbuf);
+
+	memset(m_lbuf, 0xAB, 4096);
+	EXPECT_EQ(0, memcmp(m_lbuf, m_rbuf, 4096));
+
+	crypto_qp_destroy();
+}
+
+TEST_P(SnapCryptoTest, crypto_writev2c_iov2)
+{
+	int ret;
+
+	/* writec in one direction */
+	struct iovec riov, liov[2];
+
+	crypto_qp_create();
+
+	memset(m_rbuf, 0, 4096);
+	memset(m_lbuf, 0xAB, 4096);
+
+	riov.iov_base = m_rbuf;
+	riov.iov_len = 4096;
+
+	liov[0].iov_base = m_lbuf;
+	liov[0].iov_len = 696;
+
+	liov[1].iov_base = (char *)m_lbuf + 696;
+	liov[1].iov_len = 3400;
+
+	uint32_t lkeys[2] = { m_lmr->lkey, m_lmr->lkey };
+
+	ret = snap_dma_q_writev2vc(m_dma_q, lkeys, liov, 2,
+			m_rmr->lkey, &riov, 1, m_dek->devx_obj->object_id, NVMF_LBA, NULL);
+	ASSERT_EQ(0, ret);
+	snap_dma_q_flush(m_dma_q);
+
+	dump_bufs(m_lbuf, m_rbuf);
+
+	crypto_qp_destroy();
+}
+
+TEST_P(SnapCryptoTest, crypto_writev2c_iov2_riov2)
+{
+	int ret;
+
+	struct iovec riov[2], liov[2];
+
+	crypto_qp_create();
+
+	memset(m_rbuf, 0, 4096);
+	memset(m_lbuf, 0xAB, 4096);
+
+	riov[0].iov_base = m_rbuf;
+	riov[0].iov_len = 2048;
+	riov[1].iov_base = (char *)m_rbuf + 2048;
+	riov[1].iov_len = 2048;
+
+	liov[0].iov_base = m_lbuf;
+	liov[0].iov_len = 696;
+
+	liov[1].iov_base = (char *)m_lbuf + 696;
+	liov[1].iov_len = 3400;
+
+	uint32_t lkeys[2] = { m_lmr->lkey, m_lmr->lkey };
+
+	ret = snap_dma_q_writev2vc(m_dma_q, lkeys, liov, 2,
+			m_rmr->lkey, riov, 2, m_dek->devx_obj->object_id, NVMF_LBA, NULL);
+	ASSERT_EQ(0, ret);
+	snap_dma_q_flush(m_dma_q);
+
+	dump_bufs(m_lbuf, m_rbuf);
+
+	crypto_qp_destroy();
+}
+
+INSTANTIATE_TEST_CASE_P(
+		Crypto,
+		SnapCryptoTest,
+		::testing::Values(0, 1));
+

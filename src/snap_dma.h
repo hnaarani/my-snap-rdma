@@ -38,7 +38,6 @@
 #define SNAP_DMA_Q_POST_RECV_BUF_FACTOR	2
 
 #define SNAP_CRYPTO_KEYTAG_SIZE              8
-#define SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE   16
 
 struct snap_dma_q;
 struct snap_dma_completion;
@@ -190,7 +189,8 @@ struct snap_dma_q_io_attr {
 
 	/* for ENCRYPTO IO */
 	uint32_t dek_obj_id;
-	uint8_t  xts_initial_tweak[SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE];
+	uint32_t enc_order;
+	uint64_t xts_initial_tweak;
 };
 
 enum snap_dma_q_mode {
@@ -256,7 +256,6 @@ struct snap_dma_q_crypto_ctx {
 
 	struct snap_indirect_mkey *l_klm_mkey;
 	struct snap_indirect_mkey *r_klm_mkey;
-	struct mlx5_klm klm_mtt[SNAP_DMA_Q_MAX_IOV_CNT];
 
 	struct snap_dma_completion comp;
 	void *uctx;
@@ -343,6 +342,8 @@ struct snap_dma_q {
 	int flush_count;
 	free_dma_q_resources free_dma_q_resources_cb;
 #endif
+	int n_crypto_ctx;
+	int crypto_place;
 };
 
 enum {
@@ -351,6 +352,34 @@ enum {
 	SNAP_DMA_Q_DPA_MODE_EVENT,
 	SNAP_DMA_Q_DPA_MODE_TRIGGER,
 	SNAP_DMA_Q_DPA_MODE_MSIX_TRIGGER
+};
+
+enum {
+	SNAP_DMA_Q_CRYPTO_ON_DEST,
+	SNAP_DMA_Q_CRYPTO_ON_SRC
+};
+
+enum {
+	/* wait for umr completion befor using crypto key */
+	SNAP_DMA_Q_CRYPTO_UMR_WAIT,
+	/* immediately use crypto key, add small fence to the wqe */
+	SNAP_DMA_Q_CRYPTO_UMR_FENCE,
+	/* use separete qp to post umr, wait for umr completion. The qp
+	 * can be shared with several data qps
+	 */
+	SNAP_DMA_Q_CRYPTO_UMR_QP
+};
+
+/* this is a reasonable default value. It takes a significant time to setup
+ * a crypto context, which adds up when we have many dma queues with crypto
+ */
+#define SNAP_DMA_Q_CRYPTO_CTX_MAX 64
+struct snap_dma_q_crypto_attr {
+	int crypto_ctx_max;  // max number of crypto contexts per qp
+	int crypto_place;
+	int crypto_umr_engine; // how to post crypto umr
+	int crypto_block_size;
+	struct snap_dma_q *umr_q;
 };
 
 /**
@@ -375,6 +404,7 @@ enum {
  * @rx_cb:        receive callback. See &typedef snap_dma_rx_cb_t
  * @iov_enable:   enable/disable this dma queue to use readv/writev API
  * @crypto_enable:enable/disable this dma queue to use crypto rw API
+ * @crypto_attr:  parameters that configure crypto engine
  * @comp_channel: receive and DMA completion channel. See
  *                man ibv_create_comp_channel
  * @comp_vector:  completion vector
@@ -442,6 +472,8 @@ struct snap_dma_q_create_attr {
 
 	bool use_emu_dev_eqn;
 	uint32_t emu_dev_eqn;
+
+	struct snap_dma_q_crypto_attr crypto_attr;
 };
 
 /* TODO add support for worker mode single and SRQ*/
@@ -505,7 +537,11 @@ int snap_dma_q_writev2v(struct snap_dma_q *q,
 		struct snap_dma_completion *comp);
 int snap_dma_q_writec(struct snap_dma_q *q, void *src_buf, uint32_t lkey,
 		struct iovec *iov, int iov_cnt, uint32_t rmkey,
-		uint32_t dek_obj_id, struct snap_dma_completion *comp);
+		uint32_t dek_obj_id, uint64_t tweak, struct snap_dma_completion *comp);
+int snap_dma_q_writev2vc(struct snap_dma_q *q,
+		uint32_t *lkey, struct iovec *src_iov, int src_iov_cnt,
+		uint32_t rmkey, struct iovec *dst_iov, int dst_iov_cnt,
+		uint32_t dek_obj_id, uint64_t tweak, struct snap_dma_completion *comp);
 int snap_dma_q_write_short(struct snap_dma_q *q, void *src_buf, size_t len,
 		uint64_t dstaddr, uint32_t rmkey);
 int snap_dma_q_read(struct snap_dma_q *q, void *dst_buf, size_t len,
@@ -518,7 +554,7 @@ int snap_dma_q_readv2v(struct snap_dma_q *q,
 		struct snap_dma_completion *comp);
 int snap_dma_q_readc(struct snap_dma_q *q, void *dst_buf, uint32_t lkey,
 		struct iovec *iov, int iov_cnt, uint32_t rmkey,
-	    uint32_t dek_obj_id, struct snap_dma_completion *comp);
+	    uint32_t dek_obj_id, uint64_t tweak, struct snap_dma_completion *comp);
 int snap_dma_q_read_short(struct snap_dma_q *q, void *dst_buf,
 		    size_t len, uint64_t srcaddr, uint32_t rmkey,
 		    struct snap_dma_completion *comp);

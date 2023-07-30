@@ -63,7 +63,7 @@ struct snap_crypto_bsf_seg {
 	__be32		raw_data_size;
 	uint8_t		crypto_block_size_pointer;
 	uint8_t		rsvd1[7];
-	uint8_t		xts_initial_tweak[SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE];
+	uint64_t	xts_initial_tweak[2];
 	__be32		dek_pointer;
 	uint8_t		rsvd2[4];
 	uint8_t		keytag[SNAP_CRYPTO_KEYTAG_SIZE];
@@ -84,7 +84,7 @@ struct snap_post_umr_attr {
 	uint8_t encryption_standard;
 	uint32_t raw_data_size;
 	uint8_t crypto_block_size_pointer;
-	uint8_t xts_initial_tweak[SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE];
+	uint64_t xts_initial_tweak;
 	uint32_t dek_pointer;
 	uint8_t keytag[SNAP_CRYPTO_KEYTAG_SIZE];
 };

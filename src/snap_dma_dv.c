@@ -101,19 +101,36 @@ static int dv_dma_q_read(struct snap_dma_q *q, void *dst_buf, size_t len,
 }
 
 /* UMRs are not supported on the DPA yet */
+__attribute__((unused))
+static inline struct snap_dma_q_crypto_ctx *snap_dma_q_crypto_ctx_alloc(struct snap_dma_q *q)
+{
+	struct snap_dma_q_crypto_ctx *crypto_ctx;
+
+	crypto_ctx = TAILQ_FIRST(&q->free_crypto_ctx);
+	if (snap_unlikely(!crypto_ctx))
+		return NULL;
+
+	TAILQ_REMOVE(&q->free_crypto_ctx, crypto_ctx, entry);
+	return crypto_ctx;
+}
+
+__attribute__((unused))
+static inline void snap_dma_q_crypto_ctx_free(struct snap_dma_q_crypto_ctx *ctx)
+{
+	TAILQ_INSERT_HEAD(&ctx->q->free_crypto_ctx, ctx, entry);
+}
+
 __attribute__((unused)) static void
 snap_use_klm_mkey_done(struct snap_dma_completion *comp, int status)
 {
 	struct snap_dma_q_crypto_ctx *crypto_ctx;
-	struct snap_dma_q *q;
 	struct snap_dma_completion *orig_comp;
 
 	crypto_ctx = container_of(comp, struct snap_dma_q_crypto_ctx, comp);
 
-	q = crypto_ctx->q;
 	orig_comp = (struct snap_dma_completion *)crypto_ctx->uctx;
 
-	TAILQ_INSERT_HEAD(&q->free_crypto_ctx, crypto_ctx, entry);
+	snap_dma_q_crypto_ctx_free(crypto_ctx);
 
 	if (orig_comp && --orig_comp->count == 0)
 		orig_comp->func(orig_comp, status);
@@ -125,7 +142,7 @@ __attribute__((unused)) static inline int snap_iov_to_klm_mtt(struct iovec *iov,
 	int i;
 
 	/*TODO: dynamically expand klm_mtt array */
-	if (iov_cnt > SNAP_DMA_Q_MAX_IOV_CNT) {
+	if (snap_unlikely(iov_cnt > SNAP_DMA_Q_MAX_IOV_CNT)) {
 		snap_error("iov_cnt:%d is larger than max supported(%d)\n",
 			iov_cnt, SNAP_DMA_Q_MAX_IOV_CNT);
 		return -EINVAL;
@@ -143,134 +160,172 @@ __attribute__((unused)) static inline int snap_iov_to_klm_mtt(struct iovec *iov,
 	return 0;
 }
 
+__attribute__((unused))
+static inline int snap_dma_q_iov2umr(struct snap_dma_q *q,
+		struct iovec *iov, uint32_t *iov_mkeys, int iov_cnt,
+		struct snap_indirect_mkey *klm_mkey, bool crypto,
+		struct snap_dma_q_io_attr *io_attr,
+		int *n_bb, size_t *len)
+{
+	struct snap_post_umr_attr umr_attr;
+	struct mlx5_klm klm_mtt[iov_cnt];
+	int ret;
+
+	/* post UMR WQE for local IOV memory */
+	ret = snap_iov_to_klm_mtt(iov, iov_cnt, iov_mkeys, klm_mtt, len);
+	if (snap_unlikely(ret))
+		return ret;
+
+	umr_attr.purpose = SNAP_UMR_MKEY_MODIFY_ATTACH_MTT;
+	umr_attr.klm_mkey = klm_mkey;
+	umr_attr.klm_mtt = klm_mtt;
+	umr_attr.klm_entries = iov_cnt;
+
+	if (crypto) {
+		umr_attr.purpose |= SNAP_UMR_MKEY_MODIFY_ATTACH_CRYPTO_BSF;
+		umr_attr.encryption_order = io_attr->enc_order;
+		umr_attr.encryption_standard =
+			SNAP_CRYPTO_BSF_ENCRYPTION_STANDARD_AES_XTS;
+		umr_attr.raw_data_size = *len;
+		umr_attr.crypto_block_size_pointer =
+			SNAP_CRYPTO_BSF_CRYPTO_BLOCK_SIZE_POINTER_512;
+		umr_attr.dek_pointer = io_attr->dek_obj_id;
+		umr_attr.xts_initial_tweak = io_attr->xts_initial_tweak;
+	}
+
+	ret = snap_umr_post_wqe(q, &umr_attr, NULL, n_bb);
+	if (snap_unlikely(ret))
+		snap_error("dma_q:%p post umr wqe for local mkey failed, ret:%d\n", q, ret);
+
+	return ret;
+}
+
 /* return NULL if prepare crypto_ctx failed in any reason,
  * and use 'errno' to pass the actually failure reason.
+ * TODO:
+ * - crypto attr setup to sep function
  */
-static struct snap_dma_q_crypto_ctx*
-snap_prepare_crypto_ctx(struct snap_dma_q *q,
+static inline int
+snap_prepare_crypto_ctx(struct snap_dma_q_crypto_ctx *crypto_ctx,
+				int crypto_place,
 				struct snap_dma_q_io_attr *io_attr,
 				struct snap_dma_completion *comp, int *n_bb)
 {
 #if !defined(__DPA)
 	int ret;
-	size_t llen, rlen;
-	struct snap_dma_q_crypto_ctx *crypto_ctx;
-	struct snap_post_umr_attr umr_attr = {0};
-
-	crypto_ctx = TAILQ_FIRST(&q->free_crypto_ctx);
-	if (!crypto_ctx) {
-		errno = -ENOMEM;
-		snap_error("dma_q:%p Out of crypto_ctx from pool\n", q);
-		return NULL;
-	}
-
-	TAILQ_REMOVE(&q->free_crypto_ctx, crypto_ctx, entry);
-
+	size_t len;
 	*n_bb = 0;
+	struct snap_dma_q *q = crypto_ctx->q;
 
 	crypto_ctx->uctx = comp;
 	crypto_ctx->comp.func = snap_use_klm_mkey_done;
 	crypto_ctx->comp.count = 1;
 
-	if (io_attr->liov_cnt > 1) {
-		/* post UMR WQE for local IOV memory */
-		ret = snap_iov_to_klm_mtt(io_attr->liov, io_attr->liov_cnt,
-					io_attr->lkey, crypto_ctx->klm_mtt, &llen);
-		if (ret)
-			goto insert_back;
+	if (crypto_place == SNAP_DMA_Q_CRYPTO_ON_DEST) {
+		if (io_attr->liov_cnt > 1) {
+			/* post UMR WQE for local IOV memory */
+			ret = snap_dma_q_iov2umr(q, io_attr->liov, io_attr->lkey, io_attr->liov_cnt,
+					crypto_ctx->l_klm_mkey, false, NULL, n_bb, &len);
+			if (snap_unlikely(ret)) {
+				snap_error("dma_q:%p post umr wqe for local mkey failed, ret:%d\n", q, ret);
+				return ret;
+			}
+		}
 
-		umr_attr.purpose |= SNAP_UMR_MKEY_MODIFY_ATTACH_MTT;
-		umr_attr.klm_mkey = crypto_ctx->l_klm_mkey;
-		umr_attr.klm_mtt = crypto_ctx->klm_mtt;
-		umr_attr.klm_entries = io_attr->liov_cnt;
+		ret = snap_dma_q_iov2umr(q, io_attr->riov, io_attr->rkey, io_attr->riov_cnt,
+				crypto_ctx->r_klm_mkey, true, io_attr, n_bb, &io_attr->len);
+		if (snap_unlikely(ret)) {
+			snap_error("dma_q:%p post umr wqe for remote mkey failed, ret:%d\n", q, ret);
+			return ret;
+		}
 
-		ret = snap_umr_post_wqe(q, &umr_attr, NULL, n_bb);
+	} else {
+		ret = snap_dma_q_iov2umr(q, io_attr->liov, io_attr->lkey, io_attr->liov_cnt,
+				crypto_ctx->l_klm_mkey, true, io_attr, n_bb, &io_attr->len);
 		if (ret) {
 			snap_error("dma_q:%p post umr wqe for local mkey failed, ret:%d\n", q, ret);
-			goto insert_back;
+			return ret;
 		}
-	} else {
-		llen = io_attr->liov[0].iov_len;
-	}
 
-	/* post UMR WQE for remote klm mkey */
-	if (io_attr->io_type & SNAP_DMA_Q_IO_TYPE_IOV) {
-		ret = snap_iov_to_klm_mtt(io_attr->riov, io_attr->riov_cnt,
-					io_attr->rkey, crypto_ctx->klm_mtt, &rlen);
-		if (ret)
-			goto insert_back;
-
-		io_attr->len = rlen;
-		if (rlen > llen)
-			snap_error("lIOV(total len:%lu) cannot fit rIOV(total len:%lu)\n", llen, rlen);
-
-		umr_attr.purpose |= SNAP_UMR_MKEY_MODIFY_ATTACH_MTT;
-		umr_attr.klm_mkey = crypto_ctx->r_klm_mkey;
-		umr_attr.klm_mtt = crypto_ctx->klm_mtt;
-		umr_attr.klm_entries = io_attr->riov_cnt;
-	}
-
-	if (io_attr->io_type & SNAP_DMA_Q_IO_TYPE_ENCRYPTO) {
-		umr_attr.purpose |= SNAP_UMR_MKEY_MODIFY_ATTACH_CRYPTO_BSF;
-		umr_attr.encryption_order =
-			SNAP_CRYPTO_BSF_ENCRYPTION_ORDER_ENCRYPTED_MEMORY_SIGNATURE;
-		umr_attr.encryption_standard =
-				SNAP_CRYPTO_BSF_ENCRYPTION_STANDARD_AES_XTS;
-		umr_attr.raw_data_size = io_attr->len;
-		umr_attr.crypto_block_size_pointer =
-				SNAP_CRYPTO_BSF_CRYPTO_BLOCK_SIZE_POINTER_512;
-		umr_attr.dek_pointer = io_attr->dek_obj_id;
-		memcpy(umr_attr.xts_initial_tweak, io_attr->xts_initial_tweak,
-				SNAP_CRYPTO_XTS_INITIAL_TWEAK_SIZE);
-	}
-
-	ret = snap_umr_post_wqe(q, &umr_attr, NULL, n_bb);
-	if (ret) {
-		snap_error("dma_q:%p post umr wqe for remote mkey failed, ret:%d\n", q, ret);
-		goto insert_back;
+		if (io_attr->riov_cnt > 1) {
+			ret = snap_dma_q_iov2umr(q, io_attr->riov, io_attr->rkey, io_attr->riov_cnt,
+					crypto_ctx->r_klm_mkey, false, io_attr, n_bb, &len);
+			if (ret) {
+				snap_error("dma_q:%p post umr wqe for remote mkey failed, ret:%d\n", q, ret);
+				return ret;
+			}
+		}
 	}
 
 	*n_bb += 1; /* +1 for DMA WQE */
 
-	return crypto_ctx;
-
-insert_back:
-	TAILQ_INSERT_TAIL(&q->free_crypto_ctx, crypto_ctx, entry);
-
-	errno = ret;
+	return 0;
+#else
+	return -1;
 #endif
-	return NULL;
 }
 
-int snap_prepare_dma_xfer_ctx(struct snap_dma_q *q,
+static int snap_prepare_dma_crypto_xfer_ctx(struct snap_dma_q *q,
 				struct snap_dma_q_io_attr *io_attr,
 				struct snap_dma_completion *comp,
 				int *n_bb, struct snap_dma_xfer_ctx *dx_ctx)
 {
 	struct snap_dma_q_crypto_ctx *crypto_ctx;
+	int ret;
 
-	crypto_ctx = snap_prepare_crypto_ctx(q, io_attr, comp, n_bb);
-	if (!crypto_ctx)
-		return errno;
-
-	if (io_attr->liov_cnt == 1) {
-		dx_ctx->lbuf = io_attr->liov[0].iov_base;
-		dx_ctx->lkey = io_attr->lkey[0];
-	} else {
-		dx_ctx->lbuf = (void *)crypto_ctx->l_klm_mkey->addr;
-		dx_ctx->lkey = crypto_ctx->l_klm_mkey->mkey;
+	if (snap_unlikely(!(io_attr->io_type & SNAP_DMA_Q_IO_TYPE_ENCRYPTO) &&
+			  !(io_attr->io_type & SNAP_DMA_Q_IO_TYPE_IOV))) {
+		snap_error("expected iov+crypto combination\n");
+		return -EINVAL;
 	}
 
-	if (io_attr->io_type & SNAP_DMA_Q_IO_TYPE_ENCRYPTO)
+	crypto_ctx = snap_dma_q_crypto_ctx_alloc(q);
+	if (snap_unlikely(!crypto_ctx)) {
+		snap_debug("dma_q:%p Out of crypto_ctx from pool\n", q);
+		return -EAGAIN;
+	}
+
+	if (q->crypto_place == SNAP_DMA_Q_CRYPTO_ON_DEST) {
+		ret = snap_prepare_crypto_ctx(crypto_ctx, SNAP_DMA_Q_CRYPTO_ON_DEST, io_attr, comp, n_bb);
+		if (snap_unlikely(ret))
+			goto free_ctx;
+
+		if (io_attr->liov_cnt == 1) {
+			dx_ctx->lbuf = io_attr->liov[0].iov_base;
+			dx_ctx->lkey = io_attr->lkey[0];
+		} else {
+			dx_ctx->lbuf = (void *)crypto_ctx->l_klm_mkey->addr;
+			dx_ctx->lkey = crypto_ctx->l_klm_mkey->mkey;
+		}
+
 		dx_ctx->raddr = 0; /* use zero based rdma if use bsf enabled mkey */
-	else
-		dx_ctx->raddr = crypto_ctx->r_klm_mkey->addr;
-	dx_ctx->rkey = crypto_ctx->r_klm_mkey->mkey;
+		dx_ctx->rkey = crypto_ctx->r_klm_mkey->mkey;
+	} else {
+		ret = snap_prepare_crypto_ctx(crypto_ctx, SNAP_DMA_Q_CRYPTO_ON_SRC, io_attr, comp, n_bb);
+		if (snap_unlikely(ret))
+			goto free_ctx;
+
+		dx_ctx->lbuf = 0;
+		dx_ctx->lkey = crypto_ctx->l_klm_mkey->mkey;
+
+		if (io_attr->riov_cnt == 1) {
+			dx_ctx->raddr = (uint64_t)io_attr->riov[0].iov_base;
+			dx_ctx->rkey = io_attr->rkey[0];
+		} else {
+			dx_ctx->raddr = (uint64_t)crypto_ctx->r_klm_mkey->addr;
+			dx_ctx->rkey = crypto_ctx->r_klm_mkey->mkey;
+		}
+	}
+
 	dx_ctx->len = io_attr->len;
 	dx_ctx->comp = &crypto_ctx->comp;
 	dx_ctx->use_fence = true;
 
 	return 0;
+
+free_ctx:
+	snap_dma_q_crypto_ctx_free(crypto_ctx);
+	return ret;
 }
 
 static int dv_dma_q_writec(struct snap_dma_q *q,
@@ -280,7 +335,7 @@ static int dv_dma_q_writec(struct snap_dma_q *q,
 	int ret;
 	struct snap_dma_xfer_ctx dx_ctx = {0};
 
-	ret = snap_prepare_dma_xfer_ctx(q, io_attr, comp, n_bb, &dx_ctx);
+	ret = snap_prepare_dma_crypto_xfer_ctx(q, io_attr, comp, n_bb, &dx_ctx);
 	if (ret)
 		return ret;
 
@@ -296,7 +351,7 @@ static int dv_dma_q_readc(struct snap_dma_q *q,
 	int ret;
 	struct snap_dma_xfer_ctx dx_ctx = {0};
 
-	ret = snap_prepare_dma_xfer_ctx(q, io_attr, comp, n_bb, &dx_ctx);
+	ret = snap_prepare_dma_crypto_xfer_ctx(q, io_attr, comp, n_bb, &dx_ctx);
 	if (ret)
 		return ret;
 
