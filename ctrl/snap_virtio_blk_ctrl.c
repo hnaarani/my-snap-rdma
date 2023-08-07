@@ -1229,12 +1229,13 @@ static void snap_virtio_blk_ctrl_queue_suspend(struct snap_virtio_ctrl_queue *vq
 {
 	struct snap_virtio_blk_ctrl_queue *vbq = to_blk_ctrl_q(vq);
 
+	if (snap_unlikely(!vbq->q_impl))
+		return;
+
 	if (!vbq->is_adm_vq) {
 		virtq_suspend(&to_blk_ctx(vbq->q_impl)->common_ctx);
 		return;
 	}
-	if (snap_unlikely(!vbq->q_impl))
-		return;
 
 	snap_vq_suspend(vbq->q_impl);
 	snap_info("ctrl %p qid %d is FLUSHING\n", vq->ctrl, vq->index);
@@ -1245,6 +1246,9 @@ static bool snap_virtio_blk_ctrl_queue_is_suspended(struct snap_virtio_ctrl_queu
 	struct snap_virtio_blk_ctrl_queue *vbq = to_blk_ctrl_q(vq);
 	bool suspended;
 
+	if (snap_unlikely(!vbq->q_impl))
+		return true;
+
 	if (!vbq->is_adm_vq) {
 		if (!virtq_is_suspended(&to_blk_ctx(vbq->q_impl)->common_ctx))
 			return false;
@@ -1253,8 +1257,6 @@ static bool snap_virtio_blk_ctrl_queue_is_suspended(struct snap_virtio_ctrl_queu
 		return true;
 	}
 
-	if (snap_unlikely(!vbq->q_impl))
-		return true;
 	suspended = snap_vq_is_suspended(vbq->q_impl);
 	if (suspended)
 		snap_info("ctrl %p qid %d is SUSPENDED\n", vq->ctrl, vq->index);
@@ -1363,8 +1365,12 @@ snap_virtio_blk_ctrl_queue_get_io_stats(struct snap_virtio_ctrl_queue *vq)
 {
 	struct snap_virtio_blk_ctrl_queue *vbq = to_blk_ctrl_q(vq);
 
-	if (!vbq->is_adm_vq)
-		return blk_virtq_get_io_stats(vbq->q_impl);
+	if (!vbq->is_adm_vq) {
+		if (vbq->q_impl)
+			return blk_virtq_get_io_stats(vbq->q_impl);
+		else
+			return NULL;
+	}
 	return NULL;
 }
 
