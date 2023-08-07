@@ -40,6 +40,8 @@ struct snap_vq_adm_cmd_ops {
 	struct snap_vq_cmd_desc *(*wb_get_desc)(struct snap_vaq_cmd *cmd);
 	enum snap_virtio_adm_status (*get_status)(struct snap_vq_cmd *vcmd,
 						  enum snap_virtio_adm_status_qualifier status_qualifier);
+	size_t (*get_hdr_size)();
+	size_t (*get_ftr_size)();
 };
 
 struct snap_vq_adm {
@@ -298,22 +300,26 @@ static struct snap_vq_cmd_ops snap_vq_adm_cmd_ops = {
 	.prefetch = NULL,
 };
 
-static size_t snap_vq_adm_get_hdr_size(struct snap_vq_adm *q)
+static size_t snap_vq_adm_get_hdr_size_v1_2()
 {
-	if (q->spec_version == VIRTIO_SPEC_VER_1_3)
-		return sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
-	else
-		return sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
+	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
 }
 
-static size_t snap_vq_adm_get_ftr_size(struct snap_vq_adm *q)
+static size_t snap_vq_adm_get_hdr_size_v1_3()
 {
-	if (q->spec_version == VIRTIO_SPEC_VER_1_3)
-		return snap_max(sizeof(union snap_virtio_adm_cmd_out),
-				sizeof(struct snap_virtio_adm_cmd_ftr_v1_3));
-	else
-		return snap_max(sizeof(union snap_virtio_adm_cmd_out),
-				sizeof(struct snap_virtio_adm_cmd_ftr_v1_2));
+	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
+}
+
+static size_t snap_vq_adm_get_ftr_size_v1_2()
+{
+	return snap_max(sizeof(union snap_virtio_adm_cmd_out),
+			sizeof(struct snap_virtio_adm_cmd_ftr_v1_2));
+}
+
+static size_t snap_vq_adm_get_ftr_size_v1_3()
+{
+	return snap_max(sizeof(union snap_virtio_adm_cmd_out),
+			sizeof(struct snap_virtio_adm_cmd_ftr_v1_3));
 }
 
 static void snap_vaq_cmd_complete_ftr_v1_2(struct snap_vq_cmd *vcmd,
@@ -698,9 +704,6 @@ struct snap_vq *snap_vq_adm_create(struct snap_vq_adm_create_attr *attr)
 	if (!q->cmd_layouts)
 		goto free_cmds;
 
-	snap_vq_adm_cmd_ops.hdr_size = snap_vq_adm_get_hdr_size(q);
-	snap_vq_adm_cmd_ops.ftr_size = snap_vq_adm_get_ftr_size(q);
-
 	if (snap_vq_create(&q->vq, &attr->common,
 					&snap_vq_adm_cmd_ops))
 		goto free_layouts;
@@ -716,6 +719,8 @@ struct snap_vq *snap_vq_adm_create(struct snap_vq_adm_create_attr *attr)
 		q->cmd_ops.read_cmd_in_offset = snap_vaq_cmd_read_cmd_in_offset_v1_3;
 		q->cmd_ops.wb_get_desc = snap_vaq_cmd_wb_get_desc_v1_3;
 		q->cmd_ops.get_status = snap_vaq_cmd_get_status_v1_3;
+		q->cmd_ops.get_hdr_size = snap_vq_adm_get_hdr_size_v1_3;
+		q->cmd_ops.get_ftr_size = snap_vq_adm_get_ftr_size_v1_3;
 	} else {
 		q->cmd_ops.complete_ftr = snap_vaq_cmd_complete_ftr_v1_2;
 		q->cmd_ops.cmd_in_get_len = snap_vaq_cmd_in_get_len_v1_2;
@@ -725,7 +730,12 @@ struct snap_vq *snap_vq_adm_create(struct snap_vq_adm_create_attr *attr)
 		q->cmd_ops.read_cmd_in_offset = snap_vaq_cmd_read_cmd_in_offset_v1_2;
 		q->cmd_ops.wb_get_desc = snap_vaq_cmd_wb_get_desc_v1_2;
 		q->cmd_ops.get_status = snap_vaq_cmd_get_status_v1_2;
+		q->cmd_ops.get_hdr_size = snap_vq_adm_get_hdr_size_v1_2;
+		q->cmd_ops.get_ftr_size = snap_vq_adm_get_ftr_size_v1_2;
 	}
+
+	snap_vq_adm_cmd_ops.hdr_size = q->cmd_ops.get_hdr_size();
+	snap_vq_adm_cmd_ops.ftr_size = q->cmd_ops.get_ftr_size();
 
 	return &q->vq;
 
