@@ -894,7 +894,9 @@ static void snap_virtio_blk_ctrl_lm_state_restore_cb(struct snap_vq_cmd *vcmd,
 	}
 
 	data = snap_vaq_cmd_layout_get(vcmd)->in.restore_state_data;
+	snap_virtio_ctrl_progress_lock(vf_ctrl);
 	ret = snap_virtio_ctrl_state_restore(vf_ctrl, blk_ctrl->lm_buf, data.length);
+	snap_virtio_ctrl_progress_unlock(vf_ctrl);
 	if (ret >= 0)
 		snap_vaq_cmd_complete(vcmd, SNAP_VIRTIO_ADM_STATUS_OK);
 	else
@@ -926,7 +928,9 @@ static void snap_virtio_blk_ctrl_lm_state_save(struct snap_virtio_ctrl *vctrl,
 		snap_error("Failed allocating data buf for save internal state.\n");
 		snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
 	}
+	snap_virtio_ctrl_progress_lock(vf_vctrl);
 	ret = snap_virtio_ctrl_state_save(vf_vctrl, blk_ctrl->lm_buf, data.length);
+	snap_virtio_ctrl_progress_unlock(vf_vctrl);
 	if (ret < 0) {
 		snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
 		goto free_lm_buf;
