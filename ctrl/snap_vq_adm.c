@@ -298,7 +298,7 @@ static struct snap_vq_cmd_ops snap_vq_adm_cmd_ops = {
 	.prefetch = NULL,
 };
 
-static size_t snap_vq_adm_get_hdr_size(struct snap_vq_adm* q)
+static size_t snap_vq_adm_get_hdr_size(struct snap_vq_adm *q)
 {
 	if (q->spec_version == VIRTIO_SPEC_VER_1_3)
 		return sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
@@ -306,7 +306,7 @@ static size_t snap_vq_adm_get_hdr_size(struct snap_vq_adm* q)
 		return sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
 }
 
-static size_t snap_vq_adm_get_ftr_size(struct snap_vq_adm* q)
+static size_t snap_vq_adm_get_ftr_size(struct snap_vq_adm *q)
 {
 	if (q->spec_version == VIRTIO_SPEC_VER_1_3)
 		return snap_max(sizeof(union snap_virtio_adm_cmd_out),
