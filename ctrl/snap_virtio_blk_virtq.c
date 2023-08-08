@@ -591,7 +591,8 @@ static bool blk_virtq_sm_read_header(struct virtq_cmd *cmd,
 		&cmd->dma_comp);
 
 	if (ret) {
-		ERR_ON_CMD(cmd, "failed to read header, ret %d\n", ret);
+		/* print qp number */
+		ERR_ON_CMD(cmd, "failed to read header, ret %d qpn 0x%x\n", ret, snap_qp_get_qpnum(priv->dma_q->sw_qp.qp));
 		cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 		return true;
 	}
