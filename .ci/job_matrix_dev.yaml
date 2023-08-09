@@ -13,9 +13,6 @@ failFast: false
 kubernetes:
   cloud: swx-k8s-spray
   namespace: snap-ci
-  arch_table:
-    aarch64:
-      nodeSelector: 'bluefield=true'
 
 volumes:
   - {mountPath: /hpc/local, hostPath: /hpc/local}
