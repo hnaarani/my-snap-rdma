@@ -196,6 +196,10 @@ static int dummy_progress(struct snap_dma_q *q)
 {
 	return 0;
 }
+static int dummy_progress_tx(struct snap_dma_q *q, int max_tx_comp)
+{
+	return 0;
+}
 
 /* NOTE: we cannot take mode from the dma_q_attr because it can be 'autoselect'
  * and then it is replaced by the real mode in dma_q->ops
@@ -612,7 +616,7 @@ static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 	if (attr->tx_qsize == 0) {
 		if (clone_ops(q))
 			return -EINVAL;
-		q->custom_ops->progress_tx = dummy_progress;
+		q->custom_ops->progress_tx = dummy_progress_tx;
 	}
 
 	snap_debug("Opening dma_q of type %d dpa_mode %d\n", attr->mode, attr->dpa_mode);

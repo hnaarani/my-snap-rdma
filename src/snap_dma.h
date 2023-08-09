@@ -227,7 +227,8 @@ struct snap_dma_q_ops {
 	int (*send)(struct snap_dma_q *q, void *in_buf, size_t in_len,
 		    uint64_t addr, int len, uint32_t key,
 		    int *n_bb, uint32_t *imm);
-	int (*progress_tx)(struct snap_dma_q *q);
+	int (*progress_tx)(struct snap_dma_q *q, int max_tx_comp);
+	void (*complete_tx)(struct snap_dma_q *q);
 	int (*progress_rx)(struct snap_dma_q *q);
 	int (*flush)(struct snap_dma_q *q);
 	int (*flush_nowait)(struct snap_dma_q *q, struct snap_dma_completion *comp, int *n_bb);

@@ -340,17 +340,18 @@ static inline int verbs_dma_q_progress_rx(struct snap_dma_q *q)
 	return n;
 }
 
-static inline int verbs_dma_q_progress_tx(struct snap_dma_q *q)
+static inline int verbs_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 {
+	uint16_t max_tx_comp_value = max_tx_comp == -1 ? SNAP_DMA_MAX_TX_COMPLETIONS : max_tx_comp;
 #ifdef __COVERITY__
 	struct ibv_wc wcs[SNAP_DMA_MAX_TX_COMPLETIONS] = {};
 #else
-	struct ibv_wc wcs[SNAP_DMA_MAX_TX_COMPLETIONS];
+	struct ibv_wc wcs[max_tx_comp_value];
 #endif
 	struct snap_dma_completion *comp;
 	int i, n;
 
-	n = ibv_poll_cq(snap_cq_to_verbs_cq(q->sw_qp.tx_cq), SNAP_DMA_MAX_TX_COMPLETIONS, wcs);
+	n = ibv_poll_cq(snap_cq_to_verbs_cq(q->sw_qp.tx_cq), max_tx_comp_value, wcs);
 	if (n == 0)
 		return 0;
 
@@ -378,6 +379,10 @@ static inline int verbs_dma_q_progress_tx(struct snap_dma_q *q)
 	}
 
 	return n;
+}
+
+static inline void verbs_dma_q_complete_tx(struct snap_dma_q *q)
+{
 }
 
 static inline int verbs_dma_q_poll_rx(struct snap_dma_q *q,
@@ -491,7 +496,7 @@ static int verbs_dma_q_flush(struct snap_dma_q *q)
 
 	n = 0;
 	while (q->tx_available < q->tx_qsize)
-		n += verbs_dma_q_progress_tx(q);
+		n += verbs_dma_q_progress_tx(q, -1);
 
 	return n;
 }
@@ -546,6 +551,7 @@ const struct snap_dma_q_ops verb_ops = {
 	.send_completion = verbs_dma_q_send_completion,
 	.send            = verbs_dma_q_send,
 	.progress_tx     = verbs_dma_q_progress_tx,
+	.complete_tx     = verbs_dma_q_complete_tx,
 	.progress_rx     = verbs_dma_q_progress_rx,
 	.poll_rx     = verbs_dma_q_poll_rx,
 	.poll_tx     = verbs_dma_q_poll_tx,

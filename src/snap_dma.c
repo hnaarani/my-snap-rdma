@@ -38,7 +38,7 @@ int snap_dma_q_progress(struct snap_dma_q *q)
 {
 	int n;
 
-	n = q->ops->progress_tx(q);
+	n = q->ops->progress_tx(q, -1);
 	n += q->ops->progress_rx(q);
 	return n;
 }

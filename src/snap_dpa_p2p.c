@@ -83,18 +83,9 @@ int snap_dpa_p2p_recv_msg(struct snap_dpa_p2p_q *q, struct snap_dpa_p2p_msg **ms
 	return comps;
 }
 
-int snap_dpa_p2p_recv_msg_nvme(struct snap_dpa_p2p_q *q, struct snap_dpa_p2p_msg **msgs, int *imm)
+int snap_dpa_p2p_recv_msg_nvme(struct snap_dpa_p2p_q *q, struct snap_rx_completion *msgs, size_t max_msgs)
 {
-	int comp;
-	struct snap_rx_completion rx_comp;
-
-	comp = snap_dma_q_poll_rx(q->dma_q, &rx_comp, 1);
-	if (comp) {
-		msgs[0] = rx_comp.data;
-		*imm = rx_comp.imm_data;
-	}
-
-	return comp;
+	return snap_dma_q_poll_rx(q->dma_q, msgs, max_msgs);
 }
 
 static inline int send_vq_update(struct snap_dpa_p2p_q *q, int cr_delta, int type,

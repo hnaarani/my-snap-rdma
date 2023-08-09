@@ -538,7 +538,7 @@ int virtq_blk_dpa_send_completions(struct snap_virtio_queue *vq)
 	}
 
 	/* kick off completions */
-	dpa_q->rt_thr->dpu_cmd_chan.dma_q->ops->progress_tx(dpa_q->rt_thr->dpu_cmd_chan.dma_q);
+	dpa_q->rt_thr->dpu_cmd_chan.dma_q->ops->progress_tx(dpa_q->rt_thr->dpu_cmd_chan.dma_q, -1);
 	return ret;
 }
 

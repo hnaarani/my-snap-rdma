@@ -682,7 +682,7 @@ int snap_vq_progress(struct snap_vq *q)
 {
 	int n;
 
-	n = q->dma_q->ops->progress_tx(q->dma_q);
+	n = q->dma_q->ops->progress_tx(q->dma_q, -1);
 	if (snap_likely(q->state == SNAP_VQ_STATE_RUNNING))
 		n += q->dma_q->ops->progress_rx(q->dma_q);
 

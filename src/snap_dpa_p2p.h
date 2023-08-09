@@ -80,6 +80,8 @@ enum {
 #define SNAP_DPA_P2P_CREDIT_COUNT 64
 #define SNAP_DPA_P2P_MSG_LEN    64
 
+struct snap_rx_completion;
+
 /* TODO: consider bitfields and imm data in order to save size */
 struct snap_dpa_p2p_msg_base {
 	uint8_t type;
@@ -148,7 +150,7 @@ int snap_dpa_p2p_send_msg(struct snap_dpa_p2p_q *q,
 int snap_dpa_p2p_recv_msg(struct snap_dpa_p2p_q *q,
 		struct snap_dpa_p2p_msg **msgs, int n);
 
-int snap_dpa_p2p_recv_msg_nvme(struct snap_dpa_p2p_q *q, struct snap_dpa_p2p_msg **msgs, int *imm);
+int snap_dpa_p2p_recv_msg_nvme(struct snap_dpa_p2p_q *q, struct snap_rx_completion *msgs, size_t max_msgs);
 
 int snap_dpa_p2p_send_cr_update(struct snap_dpa_p2p_q *q, int credit);
 

@@ -680,10 +680,11 @@ static inline struct snap_dma_completion *dv_dma_q_get_comp(struct snap_dma_q *q
 	return dv_qp->comps[comp_idx].comp;
 }
 
-static inline int dv_dma_q_progress_tx(struct snap_dma_q *q)
+static inline int dv_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 {
-	struct mlx5_cqe64 *cqe[SNAP_DMA_MAX_TX_COMPLETIONS];
-	struct snap_dma_completion *comp[SNAP_DMA_MAX_TX_COMPLETIONS];
+	uint16_t max_tx_comp_value = max_tx_comp == -1 ? SNAP_DMA_MAX_TX_COMPLETIONS : max_tx_comp;
+	struct mlx5_cqe64 *cqe[max_tx_comp_value];
+	struct snap_dma_completion *comp[max_tx_comp_value];
 	struct snap_dv_qp *dv_qp = &q->sw_qp.dv_qp;
 	int n, i;
 	uint8_t opcode;
@@ -699,7 +700,7 @@ static inline int dv_dma_q_progress_tx(struct snap_dma_q *q)
 
 		comp[n] = dv_dma_q_get_comp(q, cqe[n]);
 		n++;
-	} while (n < SNAP_DMA_MAX_TX_COMPLETIONS);
+	} while (n < max_tx_comp_value);
 
 	for (i = 0; i < n; i++) {
 		opcode = mlx5dv_get_cqe_opcode(cqe[i]);
@@ -719,6 +720,13 @@ static inline int dv_dma_q_progress_tx(struct snap_dma_q *q)
 	snap_dv_tx_complete(dv_qp);
 	dv_qp->stat.tx.total_completed += n;
 	return n;
+}
+
+static inline void dv_dma_q_complete_tx(struct snap_dma_q *q)
+{
+	struct snap_dv_qp *dv_qp = &q->sw_qp.dv_qp;
+
+	snap_dv_tx_complete(dv_qp);
 }
 
 static inline void dv_dma_q_get_rx_comp(struct snap_dma_q *q, struct mlx5_cqe64 *cqe, struct snap_rx_completion *rx_comp)
@@ -869,7 +877,7 @@ static int dv_dma_q_flush(struct snap_dma_q *q)
 	 * available to be able to send a flush command
 	 */
 	while (!qp_can_tx(q, 1))
-		n += dv_dma_q_progress_tx(q);
+		n += dv_dma_q_progress_tx(q, -1);
 
 	/* flush all outstanding ops by issuing a zero length inline rdma write */
 	n_out = q->sw_qp.dv_qp.n_outstanding;
@@ -882,7 +890,7 @@ static int dv_dma_q_flush(struct snap_dma_q *q)
 
 	tx_available = snap_dma_q_dv_get_tx_avail_max(q);
 	while (q->tx_available < tx_available)
-		n += dv_dma_q_progress_tx(q);
+		n += dv_dma_q_progress_tx(q, -1);
 
 	return n_out + n;
 }
@@ -914,6 +922,7 @@ const struct snap_dma_q_ops dv_ops = {
 	.send_completion = dv_dma_q_send_completion,
 	.send            = dv_dma_q_send,
 	.progress_tx     = dv_dma_q_progress_tx,
+	.complete_tx     = dv_dma_q_complete_tx,
 	.progress_rx     = dv_dma_q_progress_rx,
 	.poll_rx         = dv_dma_q_poll_rx,
 	.poll_tx         = dv_dma_q_poll_tx,
@@ -1020,6 +1029,7 @@ const struct snap_dma_q_ops gga_ops = {
 	.send_completion = dv_dma_q_send_completion,
 	.send            = dv_dma_q_send,
 	.progress_tx     = dv_dma_q_progress_tx,
+	.complete_tx     = dv_dma_q_complete_tx,
 	.progress_rx     = dv_dma_q_progress_rx,
 	.poll_rx         = dv_dma_q_poll_rx,
 	.poll_tx         = dv_dma_q_poll_tx,

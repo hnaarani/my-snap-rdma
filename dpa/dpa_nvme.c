@@ -260,7 +260,7 @@ static inline void nvme_progress()
 			sq->host_sq_tail = (uint32_t) sq_tail;
 		}
 		/* kick off sq tail message fast */
-		rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q);
+		rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q, -1);
 	}
 	dpa_duar_arm(cq->cq_head_duar_id, rt_ctx->db_cq.cq_num);
 	cq_head = dpa_ctx_read(cq->cq_head_duar_id);
@@ -270,7 +270,7 @@ static inline void nvme_progress()
 	}
 
 	/* kick off cq head message */
-	rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q);
+	rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q, -1);
 }
 
 int dpa_init()

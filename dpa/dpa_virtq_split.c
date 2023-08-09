@@ -637,7 +637,7 @@ again:
 	vq->hw_available_index = host_avail_idx;
 
 	/* kick off doorbells, pickup completions */
-	rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q);
+	rt_ctx->dpa_cmd_chan.dma_q->ops->progress_tx(rt_ctx->dpa_cmd_chan.dma_q, -1);
 	return;
 
 fatal_err:
