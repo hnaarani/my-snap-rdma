@@ -113,12 +113,19 @@ enum snap_virtio_adm_opcode {
 	SNAP_VIRTIO_ADMIN_CMD_LEGACY_COMMON_CFG_READ = 0x3,
 	SNAP_VIRTIO_ADMIN_CMD_LEGACY_DEV_CFG_WRITE = 0x4,
 	SNAP_VIRTIO_ADMIN_CMD_LEGACY_DEV_CFG_READ = 0x5,
+	SNAP_VIRTIO_ADMIN_CMD_LEGACY_NOTIFY_INFO = 0x6,
 	SNAP_VIRTIO_ADMIN_CMD_MAX
 };
 
 enum snap_virtio_adm_group_type {
 	SNAP_VIRTIO_ADMIN_GROUP_TYPE_SRIOV = 0X1,
 	SNAP_VIRTIO_ADMIN_GROUP_TYPE_MAX
+};
+
+enum snap_virtio_adm_notify_flags {
+	SNAP_VIRTIO_ADMIN_NOTIFY_END_OF_LIST = 0, /* End of list */
+	SNAP_VIRTIO_ADMIN_NOTIFY_OWNER_DEV = 1, /* owner device */
+	SNAP_VIRTIO_ADMIN_NOTIFY_MEMBER_DEV = 2, /* member device */
 };
 
 struct snap_virtio_adm_cmd_hdr_v1_2 {
@@ -261,6 +268,17 @@ struct snap_virtio_admin_cmd_data_lr_read {
 	uint8_t offset; /* Starting offset of the register(s) to read. */
 };
 
+struct snap_virtio_pci_lr_notify_info {
+	uint8_t flags; /* 0 = end of list, 1 = owner device, 2 = member device */
+	uint8_t bar; /* BAR of the member or the owner device */
+	uint8_t reserved[6];
+	__le64 offset; /* Offset within bar */
+};
+
+struct snap_virtio_admin_cmd_lr_notify_info {
+	struct snap_virtio_pci_lr_notify_info entries[4];
+};
+
 union snap_virtio_adm_cmd_in {
 	struct snap_vq_adm_get_pending_bytes_data pending_bytes_data;
 	struct snap_vq_adm_modify_status_data modify_status_data;
@@ -279,6 +297,7 @@ union snap_virtio_adm_cmd_out {
 	struct snap_vq_adm_get_pending_bytes_result pending_bytes_res;
 	struct snap_vq_adm_get_status_result get_status_res;
 	struct snap_virtio_admin_cmd_list admin_cmd_list;
+	struct snap_virtio_admin_cmd_lr_notify_info lr_notify_info;
 	uint8_t lr_read_out[16];
 };
 
