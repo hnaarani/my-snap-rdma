@@ -326,6 +326,9 @@ struct snap_virtio_caps {
 	bool		virtio_net_q_addr_modify;
 	bool		vnet_modify_ext;
 	bool		dirty_byte_map;
+	bool		doorbell_bar_info;
+	uint8_t		doorbell_bar_num;
+	uint64_t	doorbell_bar_offset;
 
 	/*
 	 * According to PRM for each created virtq, one must provide 3 UMEMs:

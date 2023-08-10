@@ -747,6 +747,14 @@ static void snap_fill_virtio_caps(struct snap_virtio_caps *virtio,
 			capability.virtio_emulation_cap.emulated_dev_db_cq_map);
 	virtio->emulated_dev_eq = DEVX_GET(query_hca_cap_out, out,
 			capability.virtio_emulation_cap.emulated_dev_eq);
+	virtio->doorbell_bar_info = DEVX_GET(query_hca_cap_out, out,
+			capability.virtio_emulation_cap.doorbell_bar_info);
+	if (virtio->doorbell_bar_info) {
+		virtio->doorbell_bar_num = DEVX_GET(query_hca_cap_out, out,
+			capability.virtio_emulation_cap.doorbell_bar_num);
+		virtio->doorbell_bar_offset = DEVX_GET64(query_hca_cap_out, out,
+			capability.virtio_emulation_cap.doorbell_bar_offset);
+	}
 
 	if (DEVX_GET(query_hca_cap_out, out,
 		     capability.virtio_emulation_cap.virtio_queue_type) &

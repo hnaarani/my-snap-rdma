@@ -1556,9 +1556,10 @@ struct mlx5_ifc_virtio_emulation_cap_bits {
 
 	u8	 reserved_at_a0[0x20];
 
-	u8	 reserved_at_c0[0x18];
+	u8	 reserved_at_c0[0x15];
+	u8	 doorbell_bar_num[0x3];
 	u8	 max_num_pf_admin_vq[0x4];
-	u8	 reserved_at_c0_1[0x1];
+	u8	 doorbell_bar_info[0x1];
 	u8	 emulated_dev_db_cq_map[0x1];
 	u8	 emulated_dev_eq[0x1];
 	u8	 virtio_q_cfg_v2[0x1];
