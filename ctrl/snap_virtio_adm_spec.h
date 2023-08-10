@@ -109,8 +109,10 @@ enum snap_virtio_adm_status_qualifier {
 enum snap_virtio_adm_opcode {
 	SNAP_VIRTIO_ADMIN_CMD_LIST_QUERY = 0X0,
 	SNAP_VIRTIO_ADMIN_CMD_LIST_USE = 0X1,
-	SNAP_VIRTIO_ADMIN_CMD_LREG_WRITE = 0x2,
-	SNAP_VIRTIO_ADMIN_CMD_LREG_READ = 0x3,
+	SNAP_VIRTIO_ADMIN_CMD_LEGACY_COMMON_CFG_WRITE = 0x2,
+	SNAP_VIRTIO_ADMIN_CMD_LEGACY_COMMON_CFG_READ = 0x3,
+	SNAP_VIRTIO_ADMIN_CMD_LEGACY_DEV_CFG_WRITE = 0x4,
+	SNAP_VIRTIO_ADMIN_CMD_LEGACY_DEV_CFG_READ = 0x5,
 	SNAP_VIRTIO_ADMIN_CMD_MAX
 };
 
@@ -251,7 +253,8 @@ struct snap_virtio_admin_cmd_list {
 
 struct snap_virtio_admin_cmd_data_lr_write {
 	uint8_t offset; /* Starting offset of the register(s) to write. */
-	uint8_t registers[];
+	uint8_t reserved[7];
+	uint8_t data[];
 };
 
 struct snap_virtio_admin_cmd_data_lr_read {
