@@ -141,6 +141,10 @@ struct snap_dpa_duar {
 	uint32_t obj_id;
 };
 
+enum snap_dpa_duar_modify {
+	SNAP_DPA_DUAR_MAP_STATE = 1 << 0,
+};
+
 /*
  * @dev_emu_id:   emuation object id
  * @queue_id:  queue number (virtio/nvme)
@@ -150,6 +154,7 @@ struct snap_dpa_duar {
  * @map_state: Mapping state of the db
  * @keep_db_value: get db value from host (1) or set new value (0)
  * @db_value: if keep_db_value is 0, set new db value
+ * @modifiable_fields: mask of snap_dpa_duar_modify
  */
 struct snap_dpa_duar_attr {
 	uint32_t dev_emu_id;
@@ -160,10 +165,11 @@ struct snap_dpa_duar_attr {
 	uint8_t map_state;
 	uint8_t keep_db_value;
 	uint64_t db_value;
-
+	uint64_t modifiable_fields;
 };
 
 struct snap_dpa_duar *snap_dpa_duar_create(struct ibv_context *ctx, struct snap_dpa_duar_attr *attr);
+int snap_dpa_duar_modify(struct snap_dpa_duar *duar, uint64_t mask, struct snap_dpa_duar_attr *attr);
 void snap_dpa_duar_destroy(struct snap_dpa_duar *duar);
 uint32_t snap_dpa_duar_id(struct snap_dpa_duar *duar);
 

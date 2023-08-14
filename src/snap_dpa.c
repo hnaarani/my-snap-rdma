@@ -1479,6 +1479,37 @@ free_duar:
 	return NULL;
 }
 
+int snap_dpa_duar_modify(struct snap_dpa_duar *duar, uint64_t mask,
+			 struct snap_dpa_duar_attr *attr)
+{
+	uint8_t in[DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr) +
+		   DEVX_ST_SZ_BYTES(emulated_dev_db_cq_map)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(general_obj_out_cmd_hdr)] = {0};
+	uint8_t *cq_db_map_in;
+	uint64_t modify_mask;
+
+	DEVX_SET(general_obj_in_cmd_hdr, in, opcode,
+		 MLX5_CMD_OP_MODIFY_GENERAL_OBJECT);
+	DEVX_SET(general_obj_in_cmd_hdr, in, obj_type,
+		 MLX5_OBJ_TYPE_DPA_DB_CQ_MAPPING);
+	DEVX_SET(general_obj_in_cmd_hdr, in, obj_id, duar->obj_id);
+
+	cq_db_map_in = in + DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr);
+
+	modify_mask = 0;
+	if (mask & SNAP_DPA_DUAR_MAP_STATE) {
+		modify_mask |= MLX5_DEV_DB_BIT_MASK_MAP_STATE;
+		DEVX_SET(emulated_dev_db_cq_map, cq_db_map_in, map_state,
+			 attr->map_state);
+	}
+	if (modify_mask)
+		DEVX_SET64(emulated_dev_db_cq_map, cq_db_map_in,
+			   modify_field_select, modify_mask);
+
+	return mlx5dv_devx_obj_modify(duar->obj, in, sizeof(in), out,
+				      sizeof(out));
+}
+
 /**
  * snap_dpa_duar_destroy() - destroy emulation doorbell mapping
  *

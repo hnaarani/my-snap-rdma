@@ -4770,6 +4770,11 @@ enum {
 	MLX5_DEV_DB_UNMAPPED = 0x1
 };
 
+enum {
+	MLX5_DEV_DB_BIT_MASK_MAP_STATE = 1 << 0x0,
+	MLX5_DEV_DB_BIT_MASK_DB_VALUE = 1 << 0x1,
+};
+
 struct mlx5_ifc_emulated_dev_db_cq_map_bits {
 	u8 modify_field_select[0x40];
 	u8 keep_db_value_on_create[0x1];
