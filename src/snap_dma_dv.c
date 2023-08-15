@@ -400,7 +400,7 @@ static int dv_dma_q_writev2v(struct snap_dma_q *q,
 
 static inline int do_dv_xfer_inline(struct snap_dma_q *q, void *src_buf, size_t len,
 				    int op, uint64_t raddr, uint32_t rkey,
-				    struct snap_dma_completion *flush_comp, int *n_bb)
+				    struct snap_dma_completion *flush_comp, int *n_bb, int is_flush)
 {
 	struct snap_dv_qp *dv_qp = &q->sw_qp.dv_qp;
 	uint8_t fm_ce_se = 0;
@@ -415,18 +415,21 @@ static inline int do_dv_xfer_inline(struct snap_dma_q *q, void *src_buf, size_t 
 	if (op == MLX5_OPCODE_RDMA_WRITE)
 		wqe_size += sizeof(*rseg);
 
-	/* if flush_comp is set it means that we are dealing with the zero
-	 * length rdma_write op. Check flush_comp instead of length to allow
-	 * optimization in the fast path where the flush_comp is always NULL.
+	/* if is_flush is set it means that we are dealing with the zero
+	 * length rdma_write op. Check is_flush instead of length to allow
+	 * optimization in the fast path where the is_flush is always zero.
 	 */
-	if (flush_comp)
+	if (is_flush)
 		wqe_size -= sizeof(*dseg);
 
 	*n_bb = round_up(wqe_size, MLX5_SEND_WQE_BB);
 	if (snap_unlikely(!qp_can_tx(q, *n_bb)))
 		return -EAGAIN;
 
-	fm_ce_se |= snap_dv_get_cq_update(dv_qp, flush_comp);
+	if (is_flush)
+		fm_ce_se |= MLX5_WQE_CTRL_CQ_UPDATE;
+	else
+		fm_ce_se |= snap_dv_get_cq_update(dv_qp, flush_comp);
 
 	ctrl = (struct mlx5_wqe_ctrl_seg *)snap_dv_get_wqe_bb(dv_qp);
 	snap_set_ctrl_seg(ctrl, dv_qp->hw_qp.sq.pi, op, 0,
@@ -452,15 +455,15 @@ static inline int do_dv_xfer_inline(struct snap_dma_q *q, void *src_buf, size_t 
 		to_end -= sizeof(*rseg);
 
 	/*
-	 * flush_comp can be tested in compilation time, while src_buf isn't,
+	 * is_flush can be tested in compilation time, while src_buf isn't,
 	 * so we better use it in fastpath. We rely on the fact that we always
-	 * use this function either with src_buf or with flush_comp, but never
+	 * use this function either with src_buf or with is_flush, but never
 	 * with both.
 	 */
 #ifdef __COVERITY__
 	if (src_buf) {
 #else
-	if (!flush_comp) {
+	if (!is_flush) {
 #endif
 		if (snap_unlikely(len > to_end)) {
 			memcpy(pdata, src_buf, to_end);
@@ -481,7 +484,7 @@ static inline int do_dv_xfer_inline(struct snap_dma_q *q, void *src_buf, size_t 
 static int dv_dma_q_send_completion(struct snap_dma_q *q, void *src_buf,
 				    size_t len, int *n_bb)
 {
-	return do_dv_xfer_inline(q, src_buf, len, MLX5_OPCODE_SEND, 0, 0, NULL, n_bb);
+	return do_dv_xfer_inline(q, src_buf, len, MLX5_OPCODE_SEND, 0, 0, NULL, n_bb, 0);
 }
 
 static inline int do_dv_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
@@ -559,7 +562,7 @@ static int dv_dma_q_write_short(struct snap_dma_q *q, void *src_buf, size_t len,
 				uint64_t dstaddr, uint32_t rmkey, int *n_bb)
 {
 	return do_dv_xfer_inline(q, src_buf, len, MLX5_OPCODE_RDMA_WRITE,
-			dstaddr, rmkey, NULL, n_bb);
+			dstaddr, rmkey, NULL, n_bb, 0);
 }
 
 static const char *snap_dv_cqe_err_opcode(struct mlx5_err_cqe *ecqe)
@@ -870,7 +873,6 @@ static int dv_dma_q_flush(struct snap_dma_q *q)
 {
 	int n, n_out, n_bb;
 	int tx_available;
-	struct snap_dma_completion comp;
 
 	n = 0;
 	/* in case we have tx moderation we need at least one
@@ -882,8 +884,7 @@ static int dv_dma_q_flush(struct snap_dma_q *q)
 	/* flush all outstanding ops by issuing a zero length inline rdma write */
 	n_out = q->sw_qp.dv_qp.n_outstanding;
 	if (n_out) {
-		comp.count = 2;
-		do_dv_xfer_inline(q, NULL, 0, MLX5_OPCODE_RDMA_WRITE, 0, 0, &comp, &n_bb);
+		do_dv_xfer_inline(q, NULL, 0, MLX5_OPCODE_RDMA_WRITE, 0, 0, NULL, &n_bb, 1);
 		q->tx_available -= n_bb;
 		n--;
 	}
@@ -897,7 +898,7 @@ static int dv_dma_q_flush(struct snap_dma_q *q)
 
 static int dv_dma_q_flush_nowait(struct snap_dma_q *q, struct snap_dma_completion *comp, int *n_bb)
 {
-	return do_dv_xfer_inline(q, NULL, 0, MLX5_OPCODE_RDMA_WRITE, 0, 0, comp, n_bb);
+	return do_dv_xfer_inline(q, NULL, 0, MLX5_OPCODE_RDMA_WRITE, 0, 0, comp, n_bb, 1);
 }
 
 static bool dv_dma_q_empty(struct snap_dma_q *q)
@@ -1198,14 +1199,12 @@ int dv_worker_progress_tx(struct snap_dma_worker *wk)
 
 static int worker_flush_helper(struct snap_dma_q *q)
 {
-	struct snap_dma_completion comp;
 	int n_bb, n_out;
 
 	/* flush all outstanding ops by issuing a zero length inline rdma write */
 	n_out = q->sw_qp.dv_qp.n_outstanding;
 	if (n_out) {
-		comp.count = 2;
-		do_dv_xfer_inline(q, NULL, 0, MLX5_OPCODE_RDMA_WRITE, 0, 0, &comp, &n_bb);
+		do_dv_xfer_inline(q, NULL, 0, MLX5_OPCODE_RDMA_WRITE, 0, 0, NULL, &n_bb, 1);
 		q->tx_available -= n_bb;
 		n_out--;
 	}

@@ -188,6 +188,7 @@ static inline void snap_dv_set_comp(struct snap_dv_qp *dv_qp, uint16_t pi,
 	dv_qp->comps[pi].comp = comp;
 	if ((fm_ce_se & MLX5_WQE_CTRL_CQ_UPDATE) != MLX5_WQE_CTRL_CQ_UPDATE) {
 		dv_qp->n_outstanding += n_bb;
+		dv_qp->comps[pi].n_outstanding = 0;
 		return;
 	}
 
