@@ -344,7 +344,7 @@ static inline int verbs_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 {
 	uint16_t max_tx_comp_value = max_tx_comp == -1 ? SNAP_DMA_MAX_TX_COMPLETIONS : max_tx_comp;
 #ifdef __COVERITY__
-	struct ibv_wc wcs[SNAP_DMA_MAX_TX_COMPLETIONS] = {};
+	struct ibv_wc wcs[max_tx_comp_value] = {};
 #else
 	struct ibv_wc wcs[max_tx_comp_value];
 #endif

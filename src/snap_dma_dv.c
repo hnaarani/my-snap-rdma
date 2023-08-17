@@ -693,6 +693,9 @@ static inline int dv_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 	uint8_t opcode;
 
 	n = 0;
+	if (max_tx_comp_value == 0)
+		goto out;
+
 	do {
 		cqe[n] = snap_dv_poll_cq(&q->sw_qp.dv_tx_cq, SNAP_DMA_Q_TX_CQE_SIZE);
 		if (!cqe[n])
@@ -720,6 +723,7 @@ static inline int dv_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 			comp[i]->func(comp[i], opcode);
 	}
 
+out:
 	snap_dv_tx_complete(dv_qp);
 	dv_qp->stat.tx.total_completed += n;
 	return n;
