@@ -300,23 +300,23 @@ static struct snap_vq_cmd_ops snap_vq_adm_cmd_ops = {
 	.prefetch = NULL,
 };
 
-static size_t snap_vq_adm_get_hdr_size_v1_2()
+static size_t snap_vq_adm_get_hdr_size_v1_2(void)
 {
 	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_2);
 }
 
-static size_t snap_vq_adm_get_hdr_size_v1_3()
+static size_t snap_vq_adm_get_hdr_size_v1_3(void)
 {
 	return sizeof(struct snap_virtio_adm_cmd_hdr_v1_3);
 }
 
-static size_t snap_vq_adm_get_ftr_size_v1_2()
+static size_t snap_vq_adm_get_ftr_size_v1_2(void)
 {
 	return snap_max(sizeof(union snap_virtio_adm_cmd_out),
 			sizeof(struct snap_virtio_adm_cmd_ftr_v1_2));
 }
 
-static size_t snap_vq_adm_get_ftr_size_v1_3()
+static size_t snap_vq_adm_get_ftr_size_v1_3(void)
 {
 	return snap_max(sizeof(union snap_virtio_adm_cmd_out),
 			sizeof(struct snap_virtio_adm_cmd_ftr_v1_3));
