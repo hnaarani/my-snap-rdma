@@ -20,6 +20,7 @@
 enum {
 	DPA_NVME_CQ_CREATE = SNAP_DPA_CMD_APP_FIRST,
 	DPA_NVME_CQ_DESTROY,
+	DPA_NVME_CQ_MODIFY,
 	DPA_NVME_CQ_QUERY,
 	DPA_NVME_SQ_CREATE,
 	DPA_NVME_SQ_DESTROY,
@@ -61,8 +62,22 @@ struct dpa_nvme_sq {
 
 };
 
+struct dpa_sq_modify_mask {
+	uint8_t state:1;
+	uint8_t host_sq_tail:1;
+};
+
+struct dpa_cq_modify_mask {
+	uint8_t state:1;
+};
+
 struct __attribute__((packed)) dpa_nvme_cmd_cq_create {
 	struct dpa_nvme_cq cq;
+};
+
+struct dpa_nvme_cmd_cq_modify {
+	enum dpa_nvme_state state;
+	struct dpa_cq_modify_mask mask;
 };
 
 struct __attribute__((packed)) dpa_nvme_cmd_sq_create {
@@ -72,6 +87,8 @@ struct __attribute__((packed)) dpa_nvme_cmd_sq_create {
 struct dpa_nvme_cmd_sq_modify {
 	uint32_t sqid;
 	enum dpa_nvme_state state;
+	uint16_t host_sq_tail;
+	struct dpa_sq_modify_mask mask;
 };
 
 struct dpa_nvme_cmd_sq_query {
@@ -88,6 +105,7 @@ struct dpa_nvme_cmd {
 	union {
 		struct dpa_nvme_cmd_cq_create cmd_cq_create;
 		struct dpa_nvme_cmd_sq_create cmd_sq_create;
+		struct dpa_nvme_cmd_cq_modify cmd_cq_modify;
 		struct dpa_nvme_cmd_sq_modify cmd_sq_modify;
 		struct dpa_nvme_cmd_sq_query cmd_sq_query;
 	};
