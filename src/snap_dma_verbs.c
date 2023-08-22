@@ -388,11 +388,7 @@ static inline void verbs_dma_q_complete_tx(struct snap_dma_q *q)
 static inline int verbs_dma_q_poll_rx(struct snap_dma_q *q,
 		struct snap_rx_completion *rx_completions, int max_completions)
 {
-#ifdef __COVERITY__
 	struct ibv_wc wcs[SNAP_DMA_MAX_RX_COMPLETIONS] = {};
-#else
-	struct ibv_wc wcs[SNAP_DMA_MAX_RX_COMPLETIONS];
-#endif
 	int i, n;
 	int rc;
 	struct ibv_recv_wr rx_wr[SNAP_DMA_MAX_RX_COMPLETIONS + 1], *bad_wr;
