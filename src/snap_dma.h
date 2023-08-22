@@ -360,11 +360,11 @@ enum {
 };
 
 enum {
-	/* wait for umr completion befor using crypto key */
+	/* wait for umr completion before using crypto key */
 	SNAP_DMA_Q_CRYPTO_UMR_WAIT,
 	/* immediately use crypto key, add small fence to the wqe */
 	SNAP_DMA_Q_CRYPTO_UMR_FENCE,
-	/* use separete qp to post umr, wait for umr completion. The qp
+	/* use separate qp to post umr, wait for umr completion. The qp
 	 * can be shared with several data qps
 	 */
 	SNAP_DMA_Q_CRYPTO_UMR_QP
