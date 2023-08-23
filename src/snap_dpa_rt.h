@@ -142,7 +142,7 @@ struct dpa_rt_context {
 #define SNAP_DPA_RT_THR_MSIX_CQE_SIZE 64
 #define SNAP_DPA_RT_THR_MSIX_CQE_CNT 2
 
-#define SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE (96 * 4096)
+#define SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE (96 * 3584)
 
 struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt,
 			struct snap_dpa_rt_filter *filter,
