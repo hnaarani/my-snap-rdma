@@ -57,6 +57,7 @@ struct snap_dpa_memh {
 struct snap_dpa_memh *snap_dpa_mem_alloc(struct snap_dpa_ctx *dctx, size_t size);
 uint64_t snap_dpa_mem_addr(struct snap_dpa_memh *mem);
 void snap_dpa_mem_free(struct snap_dpa_memh *mem);
+struct snap_dpa_memh *snap_dpa_zalloc(struct snap_dpa_ctx *dpa_proc, size_t size);
 
 struct snap_dpa_mkeyh {
 	struct flexio_mkey *mkey;

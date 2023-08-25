@@ -169,6 +169,56 @@ uint64_t snap_dpa_mem_addr(struct snap_dpa_memh *mem)
 }
 
 /**
+ * snap_dpa_zalloc() - allocate memory on DPA and memzero it
+ * @dpa_proc: dpa process
+ * @size: amount of memory to allocate
+ *
+ * The function allocate DPA virtual memory and will do memzero to
+ * this allocated memory.
+ *
+ * Return: memory handle or NULL on error
+ */
+struct snap_dpa_memh *snap_dpa_zalloc(struct snap_dpa_ctx *dpa_proc, size_t size)
+{
+	int ret;
+	void *tmp_buf;
+	struct snap_dpa_memh *dpa_mem;
+
+	tmp_buf = calloc(1, size);
+	if (!tmp_buf) {
+		snap_error("failed to alloc tmp buf\n");
+		errno = -ENOMEM;
+		return NULL;
+	}
+
+	dpa_mem = snap_dpa_mem_alloc(dpa_proc, size);
+	if (!dpa_mem) {
+		snap_error("failed to alloc mem on DPA\n");
+		errno = -ENOMEM;
+		goto free_tmp_buf;
+	}
+
+	ret = snap_dpa_memcpy(dpa_proc, snap_dpa_mem_addr(dpa_mem), tmp_buf, size);
+	if (ret) {
+		snap_error("failed to init qp buffer on DPA\n");
+		errno = ret;
+		goto free_dpa_mem;
+	}
+
+	free(tmp_buf);
+
+	return dpa_mem;
+
+free_dpa_mem:
+	snap_dpa_mem_free(dpa_mem);
+
+free_tmp_buf:
+	free(tmp_buf);
+
+	return NULL;
+}
+
+/**
  * snap_dpa_mkey_alloc() - create dpa process memory key
  * @dctx: device context
  * @pd:   protection domain
@@ -1159,6 +1209,11 @@ void snap_dpa_mem_free(struct snap_dpa_memh *mem)
 uint64_t snap_dpa_mem_addr(struct snap_dpa_memh *mem)
 {
 	return 0;
+}
+
+struct snap_dpa_memh *snap_dpa_zalloc(struct snap_dpa_ctx *dpa_proc, size_t size)
+{
+	return NULL;
 }
 
 uint32_t snap_dpa_process_umem_id(struct snap_dpa_ctx *ctx)
