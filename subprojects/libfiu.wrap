@@ -1,4 +1,4 @@
 [wrap-git]
 url = git@github.com:Mellanox/snap-rdma.git
-revision = 9b2aac6dd05f8d2ac4713462681b277b71aa151a
+revision = 91f24ac63ca4a8fe520bd99d00b56f6cda41f0c3
 depth = 1
