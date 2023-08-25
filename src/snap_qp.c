@@ -524,7 +524,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 			goto deref_uar;
 		}
 
-		devx_qp->devx.dpa_mem = snap_dpa_mem_alloc(attr->dpa_proc, qp_buf_len + SNAP_MLX5_DBR_SIZE);
+		devx_qp->devx.dpa_mem = snap_dpa_zalloc(attr->dpa_proc, qp_buf_len + SNAP_MLX5_DBR_SIZE);
 		if (!devx_qp->devx.dpa_mem) {
 			ret = -ENOMEM;
 			goto deref_uar;

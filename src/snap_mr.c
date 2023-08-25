@@ -306,6 +306,8 @@ int snap_umem_init(struct ibv_context *context, struct snap_umem *umem)
 		goto out_free;
 	}
 
+	memset(umem->buf, 0, umem->size);
+
 	return ret;
 
 out_free:
