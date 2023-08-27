@@ -245,7 +245,10 @@ static void snap_virtio_ctrl_sched_q(struct snap_virtio_ctrl *ctrl,
 {
 	struct snap_pg *pg;
 
-	pg = snap_pg_get_next(&ctrl->pg_ctx);
+	if (ctrl->q_ops->is_admin && ctrl->q_ops->is_admin(vq))
+		pg = snap_pg_get_admin(&ctrl->pg_ctx);
+	else
+		pg = snap_pg_get_next(&ctrl->pg_ctx);
 
 	pthread_spin_lock(&pg->lock);
 	snap_virtio_ctrl_sched_q_nolock(ctrl, vq, pg);
@@ -272,7 +275,9 @@ static void snap_virtio_ctrl_desched_q(struct snap_virtio_ctrl_queue *vq)
 		return;
 
 	pthread_spin_lock(&pg->lock);
-	snap_pg_usage_decrease(vq->pg->id);
+	if (!(vq->ctrl->q_ops->is_admin && vq->ctrl->q_ops->is_admin(vq)))
+		snap_pg_usage_decrease(vq->pg->id);
+
 	snap_virtio_ctrl_desched_q_nolock(vq);
 	pthread_spin_unlock(&pg->lock);
 }

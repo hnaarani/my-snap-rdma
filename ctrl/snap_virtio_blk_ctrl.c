@@ -1378,6 +1378,14 @@ snap_virtio_blk_ctrl_queue_get_io_stats(struct snap_virtio_ctrl_queue *vq)
 	return NULL;
 }
 
+bool
+snap_virtio_blk_ctrl_queue_is_admin(struct snap_virtio_ctrl_queue *vq)
+{
+	struct snap_virtio_blk_ctrl_queue *vbq = to_blk_ctrl_q(vq);
+
+	return vbq->is_adm_vq;
+}
+
 static int snap_virtio_blk_ctrl_recover(struct snap_virtio_blk_ctrl *ctrl,
 					struct snap_virtio_blk_ctrl_attr *attr)
 {
@@ -1426,7 +1434,8 @@ static struct snap_virtio_queue_ops snap_virtio_blk_queue_ops = {
 	.is_suspended = snap_virtio_blk_ctrl_queue_is_suspended,
 	.resume = snap_virtio_blk_ctrl_queue_resume,
 	.get_state = snap_virtio_blk_ctrl_queue_get_state,
-	.get_io_stats = snap_virtio_blk_ctrl_queue_get_io_stats
+	.get_io_stats = snap_virtio_blk_ctrl_queue_get_io_stats,
+	.is_admin = snap_virtio_blk_ctrl_queue_is_admin,
 };
 
 /**

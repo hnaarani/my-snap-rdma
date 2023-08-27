@@ -1446,7 +1446,7 @@ static void get_vring_rx_cb(struct snap_dma_q *q, const void *data, uint32_t dat
 int snap_virtio_get_avail_index_from_host(struct snap_dma_q *dma_q,
 		uint64_t drv_addr, uint32_t dma_mkey, uint16_t *hw_avail)
 {
-	struct vring_avail vra;
+	struct vring_avail vra = { 0 };
 	int ret;
 
 	ret = snap_dma_q_read_short(dma_q, &vra, sizeof(struct vring_avail),
@@ -1468,7 +1468,7 @@ int snap_virtio_get_avail_index_from_host(struct snap_dma_q *dma_q,
 int snap_virtio_get_used_index_from_host(struct snap_dma_q *dma_q,
 		uint64_t dev_addr, uint32_t dma_mkey, uint16_t *hw_used)
 {
-	struct vring_used vru;
+	struct vring_used vru = { 0 };
 	int ret;
 
 	ret = snap_dma_q_read_short(dma_q, &vru, sizeof(struct vring_used),

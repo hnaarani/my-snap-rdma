@@ -40,4 +40,6 @@ void snap_pgs_resume(struct snap_pg_ctx *ctx);
 struct snap_pg *snap_pg_get_next(struct snap_pg_ctx *ctx);
 void snap_pg_usage_decrease(size_t pg_index);
 
+struct snap_pg *snap_pg_get_admin(struct snap_pg_ctx *ctx);
+
 #endif

@@ -207,6 +207,7 @@ struct snap_virtio_queue_ops {
 			 struct snap_virtio_ctrl_queue_state *state);
 	const struct snap_virtio_ctrl_queue_stats *
 			(*get_io_stats)(struct snap_virtio_ctrl_queue *queue);
+	bool  (*is_admin)(struct snap_virtio_ctrl_queue *queue);
 };
 
 struct snap_virtio_ctrl_bar_ops {
