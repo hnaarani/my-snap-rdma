@@ -135,7 +135,7 @@ struct snap_dpa_memh *snap_dpa_mem_alloc(struct snap_dpa_ctx *dctx, size_t size)
 	mem->size = size;
 	st = flexio_buf_dev_alloc(dctx->dpa_proc, size, &mem->va);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to allocate dpa memory\n");
+		snap_error("Failed to allocate dpa memory with size 0x%lx\n", size);
 		free(mem);
 		return 0;
 	}
