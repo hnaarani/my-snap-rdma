@@ -1234,12 +1234,6 @@ int dv_worker_progress_tx(struct snap_dma_worker *wk)
 			snap_dv_cqe_err(cqe[n]);
 
 		cqe_id = be32toh(cqe[n]->srqn_uidx);
-#if SNAP_DEBUG
-		if (snap_unlikely(!wk->queues[cqe_id].in_use)) {
-			snap_debug("%s: Queue %d is not valid, dropping CQE\n", __func__, cqe_id);
-			continue;
-		}
-#endif
 
 		q = wk->queues[cqe_id];
 		comp[n] = dv_dma_q_get_comp(q, cqe[n]);
