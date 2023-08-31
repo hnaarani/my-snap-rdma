@@ -49,6 +49,8 @@ struct snap_dma_q_init_attr {
 	snap_dma_rx_cb_t rx_cb;
 	bool crypto_enable;
 	struct snap_dma_q_crypto_attr crypto_attr;
+	struct ibv_comp_channel *comp_channel;
+	void *comp_context;
 };
 
 struct snap_dpa_rt {

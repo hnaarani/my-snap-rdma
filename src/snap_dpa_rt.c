@@ -259,10 +259,22 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 		q_attr.rx_cb = q_init_attr->rx_cb;
 		q_attr.crypto_enable = q_init_attr->crypto_enable;
 		q_attr.crypto_attr = q_init_attr->crypto_attr;
+
+		/* only cq0 will use completion channel */
+		if (q_init_attr->comp_channel) {
+			q_attr.comp_channel = q_init_attr->comp_channel;
+			q_attr.comp_context = q_init_attr->comp_context;
+			q_attr.comp_vector = 0;
+			q_attr.mode = SNAP_DMA_Q_MODE_VERBS;
+		}
 	}
+
 	rt_thr->dpu_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
 	if (!rt_thr->dpu_cmd_chan.dma_q)
 		goto free_dpa_thread;
+
+	if (q_init_attr && q_init_attr->comp_channel)
+		snap_dma_q_arm(rt_thr->dpu_cmd_chan.dma_q);
 
 	q_attr.mode = SNAP_DMA_Q_MODE_DV;
 
@@ -281,6 +293,8 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 
 	q_attr.iov_enable = false;
 	q_attr.wk = NULL;
+	q_attr.comp_channel = NULL;
+	q_attr.comp_context = NULL;
 	if (q_init_attr)
 		q_attr.uctx = q_init_attr->cq;
 	rt_thr->dpa_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
