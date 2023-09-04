@@ -517,14 +517,21 @@ int snap_vq_create(struct snap_vq *q, struct snap_vq_create_attr *attr,
 			const struct snap_vq_cmd_ops *cmd_ops)
 {
 	uint16_t hw_used;
+	int flush_ret = 0;
 
 	if (snap_vq_dma_q_create(q, attr, cmd_ops))
 		goto err;
 
 	if (attr->in_recovery) {
 		if (snap_virtio_get_used_index_from_host(q->dma_q,
-					attr->device_pa, attr->xmkey, &hw_used))
+					attr->device_pa, attr->xmkey, &hw_used, &flush_ret))
 			goto destroy_dma_q;
+
+		if (flush_ret) {
+			snap_error("flush failed for used index (ctrl %p q# %d), ret %d\n", q->vctrl, q->index, flush_ret);
+			flush_ret = 0;
+		}
+
 	} else {
 		hw_used = 0;
 	}
@@ -714,23 +721,31 @@ int snap_vq_get_debugstat(struct snap_vq *q,
 	struct snap_virtio_queue_attr vq_attr = {};
 	struct snap_virtio_queue_counters_attr vqc_attr = {};
 	uint16_t vru, vra;
-	int ret;
+	int ret, flush_ret = 0;
 
 	ret = snap_virtio_get_used_index_from_host(q->dma_q, q->device_pa,
-						q->xmkey, &vru);
+						q->xmkey, &vru, &flush_ret);
 	if (ret) {
 		snap_error("failed to get vring used index from host memory for queue %d\n",
 			   q->index);
 		return ret;
 	}
 
+	if (flush_ret) {
+		snap_error("flush failed for used index (ctrl %p q# %d), ret %d\n", q->vctrl, q->index, flush_ret);
+		flush_ret = 0;
+	}
+
 	ret = snap_virtio_get_avail_index_from_host(q->dma_q, q->driver_pa,
-						q->xmkey, &vra);
+						q->xmkey, &vra, &flush_ret);
 	if (ret) {
-		snap_error("failed to get vring avail index from host memory for queue %d\n",
-			   q->index);
+		snap_error("failed to get vring avail index from host memory (ctrl %p q# %d)\n",
+			   q->vctrl, q->index);
 		return ret;
 	}
+
+	if (flush_ret)
+		snap_error("flush failed for avail index (ctrl %p q# %d), ret %d\n", q->vctrl, q->index, flush_ret);
 
 	ret = snap_virtio_query_queue(q->hw_q, &vq_attr);
 	if (ret) {

@@ -84,6 +84,7 @@ bool virtq_ctx_init(struct virtq_common_ctx *vq_ctx,
 	struct virtq_priv *vq_priv = calloc(1, sizeof(struct virtq_priv));
 	struct ibv_qp *fw_qp;
 	uint16_t hw_used;
+	int flush_ret = 0;
 
 	if (!vq_priv)
 		goto err;
@@ -114,8 +115,14 @@ bool virtq_ctx_init(struct virtq_common_ctx *vq_ctx,
 
 	if (attr->in_recovery) {
 		if (snap_virtio_get_used_index_from_host(vq_priv->dma_q,
-				attr->device, attr->xmkey, &hw_used))
+				attr->device, attr->xmkey, &hw_used, &flush_ret))
 			goto destroy_dma_q;
+
+		if (flush_ret) {
+			snap_error("flush failed for used index (ctrl %p q# %d), ret %d\n", vq_priv->vbq->ctrl, vq_ctx->idx, flush_ret);
+			flush_ret = 0;
+		}
+
 	} else {
 		hw_used = 0;
 	}

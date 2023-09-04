@@ -1444,7 +1444,7 @@ static void get_vring_rx_cb(struct snap_dma_q *q, const void *data, uint32_t dat
 }
 
 int snap_virtio_get_avail_index_from_host(struct snap_dma_q *dma_q,
-		uint64_t drv_addr, uint32_t dma_mkey, uint16_t *hw_avail)
+		uint64_t drv_addr, uint32_t dma_mkey, uint16_t *hw_avail, int *flush_ret)
 {
 	struct vring_avail vra = { 0 };
 	int ret;
@@ -1458,7 +1458,7 @@ int snap_virtio_get_avail_index_from_host(struct snap_dma_q *dma_q,
 
 	ret = snap_dma_q_flush(dma_q);
 	if (ret != 1)
-		snap_error("failed flush, ret %d\n", ret);
+		*flush_ret = ret;
 
 	*hw_avail = vra.idx;
 
@@ -1466,7 +1466,7 @@ int snap_virtio_get_avail_index_from_host(struct snap_dma_q *dma_q,
 }
 
 int snap_virtio_get_used_index_from_host(struct snap_dma_q *dma_q,
-		uint64_t dev_addr, uint32_t dma_mkey, uint16_t *hw_used)
+		uint64_t dev_addr, uint32_t dma_mkey, uint16_t *hw_used, int *flush_ret)
 {
 	struct vring_used vru = { 0 };
 	int ret;
@@ -1480,7 +1480,7 @@ int snap_virtio_get_used_index_from_host(struct snap_dma_q *dma_q,
 
 	ret = snap_dma_q_flush(dma_q);
 	if (ret != 1)
-		snap_error("failed flush, ret %d\n", ret);
+		*flush_ret = ret;
 
 	*hw_used = vru.idx;
 
