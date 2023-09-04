@@ -278,6 +278,12 @@ struct snap_dma_q_ir_ctx {
 	TAILQ_ENTRY(snap_dma_q_ir_ctx) entry;
 };
 
+struct snap_dma_fw_qp {
+	struct snap_dma_ibv_qp fw_qp;
+	struct ibv_qp fake_verbs_qp;
+	bool use_devx;
+};
+
 /**
  * struct snap_dma_q - DMA queue
  *
@@ -306,7 +312,7 @@ struct snap_dma_q {
 	int                    tx_elem_size;
 	int                    rx_elem_size;
 	snap_dma_rx_cb_t       rx_cb;
-	struct snap_dma_ibv_qp fw_qp;
+
 	const struct snap_dma_q_ops  *ops;
 
 	struct snap_dma_q_iov_ctx *iov_ctx;
@@ -335,13 +341,12 @@ struct snap_dma_q {
 	int                   rx_qsize;
 
 #if !defined(__DPA)
-	struct ibv_qp fw_verbs_qp;
-	bool fw_use_devx;
 	pthread_mutex_t lock;
 	bool destroy_done;
 	int flush_count;
 	free_dma_q_resources free_dma_q_resources_cb;
 #endif
+	struct snap_dma_fw_qp *fw_qp;
 	int n_crypto_ctx;
 	int crypto_place;
 };

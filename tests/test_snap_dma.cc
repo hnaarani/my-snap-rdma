@@ -34,7 +34,7 @@ int SnapDmaTest::snap_dma_q_fw_send_imm(struct snap_dma_q *q, uint32_t imm)
 int SnapDmaTest::snap_dma_q_fw_send(struct snap_dma_q *q, void *src_buf,
 		size_t len, uint32_t lkey)
 {
-	struct ibv_qp *qp = snap_qp_to_verbs_qp(q->fw_qp.qp);
+	struct ibv_qp *qp = snap_qp_to_verbs_qp(q->fw_qp->fw_qp.qp);
 	struct ibv_send_wr *bad_wr;
 	struct ibv_send_wr send_wr = {};
 	struct ibv_sge send_sgl = {};
@@ -167,7 +167,7 @@ struct snap_dma_q *SnapDmaTest::create_queue()
 
 	q = snap_dma_q_create(m_pd, &m_dma_q_attr);
 	if (q) {
-		EXPECT_TRUE(snap_qp_get_qpnum(q->fw_qp.qp) == snap_dma_q_get_fw_qp(q)->qp_num);
+		EXPECT_TRUE(snap_qp_get_qpnum(q->fw_qp->fw_qp.qp) == snap_dma_q_get_fw_qp(q)->qp_num);
 	}
 	return q;
 }
@@ -183,7 +183,7 @@ TEST_F(SnapDmaTest, ibv_create_ah_test) {
 
 	q = create_queue();
 	ASSERT_TRUE(q);
-	qp = snap_qp_to_verbs_qp(q->fw_qp.qp);
+	qp = snap_qp_to_verbs_qp(q->fw_qp->fw_qp.qp);
 
 	if (!ibv_query_gid(qp->context, 1, 0, &gid)) {
 		attr_mask = IBV_QP_AV;
@@ -454,7 +454,7 @@ TEST_F(SnapDmaTest, flush_qp) {
 	rx_wr.sg_list = &rx_sge;
 	rx_wr.num_sge = 1;
 
-	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->fw_qp.qp), &rx_wr, &bad_wr);
+	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->fw_qp->fw_qp.qp), &rx_wr, &bad_wr);
 	ASSERT_EQ(0, rc);
 
 	/* modify QP to error state */
@@ -527,7 +527,7 @@ TEST_F(SnapDmaTest, send_completion) {
 	rx_wr.sg_list = &rx_sge;
 	rx_wr.num_sge = 1;
 
-	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->fw_qp.qp), &rx_wr, &bad_wr);
+	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->fw_qp->fw_qp.qp), &rx_wr, &bad_wr);
 	ASSERT_EQ(0, rc);
 
 	memset(m_rbuf, 0, sizeof(cqe));
@@ -542,7 +542,7 @@ TEST_F(SnapDmaTest, send_completion) {
 	}
 	/* check that send was actually received */
 	struct ibv_wc wc;
-	rc = ibv_poll_cq(snap_cq_to_verbs_cq(q->fw_qp.rx_cq), 1, &wc);
+	rc = ibv_poll_cq(snap_cq_to_verbs_cq(q->fw_qp->fw_qp.rx_cq), 1, &wc);
 
 	ASSERT_EQ(0, memcmp(cqe, m_rbuf, sizeof(cqe)));
 	ASSERT_EQ(1, rc);
@@ -569,7 +569,7 @@ TEST_F(SnapDmaTest, flush) {
 	rx_wr.next = NULL;
 	rx_wr.sg_list = &rx_sge;
 	rx_wr.num_sge = 1;
-	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->fw_qp.qp), &rx_wr, &bad_wr);
+	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->fw_qp->fw_qp.qp), &rx_wr, &bad_wr);
 	ASSERT_EQ(0, rc);
 
 	rc = snap_dma_q_flush(q);
@@ -820,7 +820,7 @@ TEST_F(SnapDmaTest, inline_data_test) {
 	rx_wr.sg_list = &rx_sge;
 	rx_wr.num_sge = 1;
 
-	rc = ibv_post_recv(q->fw_qp.qp->verbs_qp, &rx_wr, &bad_wr);
+	rc = ibv_post_recv(q->fw_qp->fw_qp.qp->verbs_qp, &rx_wr, &bad_wr);
 
 	ASSERT_EQ(0, rc);
 	memset(m_rbuf, 0, 64);
@@ -835,7 +835,7 @@ TEST_F(SnapDmaTest, inline_data_test) {
 		n++;
 	}
 
-	rc = ibv_poll_cq(snap_cq_to_verbs_cq(q->fw_qp.rx_cq), 1, &wc);
+	rc = ibv_poll_cq(snap_cq_to_verbs_cq(q->fw_qp->fw_qp.rx_cq), 1, &wc);
 	ASSERT_EQ(1, rc);
 	ASSERT_EQ(0, memcmp(cqe, m_rbuf, sizeof(cqe)));
 	ASSERT_EQ(0, memcmp(rem_data, &m_rbuf[sizeof(cqe)], sizeof(rem_data)));

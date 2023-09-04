@@ -725,8 +725,10 @@ static int snap_create_sw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 
 static void snap_destroy_fw_qp(struct snap_dma_q *q)
 {
-	if (q->fw_qp.qp)
-		snap_destroy_qp_helper(&q->fw_qp, true);
+	if (q->fw_qp && q->fw_qp->fw_qp.qp)
+		snap_destroy_qp_helper(&q->fw_qp->fw_qp, true);
+
+	free(q->fw_qp);
 }
 
 /*
@@ -753,6 +755,12 @@ static int snap_create_fw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 	struct snap_dma_q_create_attr fw_dma_q_attr;
 	int rc;
 
+	q->fw_qp = calloc(1, sizeof(*q->fw_qp));
+	if (!q->fw_qp) {
+		snap_error("allocate fw_qp for dma_q failed.\n");
+		return -ENOMEM;
+	}
+
 	/* refactor fw qp creation code */
 	memcpy(&fw_dma_q_attr, attr, sizeof(*attr));
 	if (attr->fw_use_devx)
@@ -770,20 +778,24 @@ static int snap_create_fw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 	/* give one sge so that we can post which is useful for testing */
 	qp_init_attr.sq_max_sge = 1;
 
-	/* the qp 'resources' are going to be replaced by the fw. We do not
-	 * need use DV or GGA here
-	 **/
-	rc = snap_create_qp_helper(pd, &fw_dma_q_attr, &qp_init_attr, &q->fw_qp, fw_dma_q_attr.mode, attr->fw_use_devx);
+	/* the qp 'resources' are going to be replaced by the fw. */
+	rc = snap_create_qp_helper(pd, &fw_dma_q_attr, &qp_init_attr, &q->fw_qp->fw_qp,
+			fw_dma_q_attr.mode, attr->fw_use_devx);
 	if (rc) {
 		snap_error("create fw_qp failed, rc:%d\n", rc);
-		return rc;
+		goto free_fw_qp;
 	}
 
-	q->fw_use_devx = attr->fw_use_devx;
-	if (q->fw_use_devx)
-		snap_fill_fw_verbs_qp(&q->fw_qp, &q->fw_verbs_qp);
+	q->fw_qp->use_devx = attr->fw_use_devx;
+	if (q->fw_qp->use_devx)
+		snap_fill_fw_verbs_qp(&q->fw_qp->fw_qp, &q->fw_qp->fake_verbs_qp);
 
 	return 0;
+
+free_fw_qp:
+	free(q->fw_qp);
+
+	return rc;
 }
 
 static int snap_modify_lb_qp_init2init(struct snap_qp *qp)
@@ -1676,7 +1688,7 @@ struct snap_dma_q *snap_dma_q_create(struct ibv_pd *pd,
 	if (rc)
 		goto free_sw_qp;
 
-	rc = snap_dma_ep_connect_helper(&q->sw_qp, &q->fw_qp, pd);
+	rc = snap_dma_ep_connect_helper(&q->sw_qp, &q->fw_qp->fw_qp, pd);
 	if (rc)
 		goto free_fw_qp;
 

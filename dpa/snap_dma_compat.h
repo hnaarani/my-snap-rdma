@@ -42,6 +42,10 @@ struct ibv_sge {
 	uint32_t		lkey;
 };
 
+struct ibv_qp {
+	/*empty type only to let compilation pass */
+};
+
 /* prereqs for infiniband/mlx5dv.h */
 typedef uint16_t __be16;
 typedef uint32_t __be32;

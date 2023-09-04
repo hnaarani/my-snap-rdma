@@ -691,11 +691,11 @@ int snap_dma_q_send_completion(struct snap_dma_q *q, void *src_buf, size_t len)
 struct ibv_qp *snap_dma_q_get_fw_qp(struct snap_dma_q *q)
 {
 #if !defined(__DPA)
-	if (q->fw_use_devx) {
-		assert_debug(q->fw_qp.qp->type == SNAP_OBJ_DEVX);
-		return &q->fw_verbs_qp;
+	if (q->fw_qp->use_devx) {
+		assert_debug(q->fw_qp->fw_qp.qp->type == SNAP_OBJ_DEVX);
+		return &q->fw_qp->fake_verbs_qp;
 	} else {
-		return snap_qp_to_verbs_qp(q->fw_qp.qp);
+		return snap_qp_to_verbs_qp(q->fw_qp->fw_qp.qp);
 	}
 #else
 	return NULL;
