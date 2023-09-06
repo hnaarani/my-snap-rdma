@@ -240,8 +240,9 @@ static void snap_virtio_ctrl_sched_q_nolock(struct snap_virtio_ctrl *ctrl,
 		ctrl->q_ops->start(vq);
 }
 
-static void snap_virtio_ctrl_sched_q(struct snap_virtio_ctrl *ctrl,
-				     struct snap_virtio_ctrl_queue *vq)
+static struct snap_pg *
+snap_virtio_ctrl_next_pg_get(struct snap_virtio_ctrl *ctrl,
+		struct snap_virtio_ctrl_queue *vq)
 {
 	struct snap_pg *pg;
 
@@ -249,6 +250,14 @@ static void snap_virtio_ctrl_sched_q(struct snap_virtio_ctrl *ctrl,
 		pg = snap_pg_get_admin(&ctrl->pg_ctx);
 	else
 		pg = snap_pg_get_next(&ctrl->pg_ctx);
+
+	return pg;
+}
+
+static void snap_virtio_ctrl_sched_q(struct snap_virtio_ctrl *ctrl,
+				     struct snap_virtio_ctrl_queue *vq)
+{
+	struct snap_pg *pg = snap_virtio_ctrl_next_pg_get(ctrl, vq);
 
 	pthread_spin_lock(&pg->lock);
 	snap_virtio_ctrl_sched_q_nolock(ctrl, vq, pg);
@@ -800,7 +809,8 @@ int snap_virtio_ctrl_resume(struct snap_virtio_ctrl *ctrl)
 		/* preserve pg across resume */
 		pg = ctrl->queues[i]->pg;
 		if (!pg)
-			pg = snap_pg_get_next(&ctrl->pg_ctx);
+			pg = snap_virtio_ctrl_next_pg_get(ctrl, ctrl->queues[i]);
+
 		snap_virtio_ctrl_desched_q_nolock(ctrl->queues[i]);
 		snap_virtio_ctrl_sched_q_nolock(ctrl, ctrl->queues[i], pg);
 		snap_info("ctrl %p queue %d: pg_id %d RESUMED\n", ctrl, ctrl->queues[i]->index,
