@@ -1,0 +1,64 @@
+- job-template:
+    name: "{jjb_proj}"
+    project-type: pipeline
+    properties:
+        - github:
+            url: "{jjb_git}"
+        - build-discarder:
+            days-to-keep: 50
+            num-to-keep: 20
+        - inject:
+            keep-system-variables: true
+            properties-content: |
+              jjb_proj={jjb_proj}
+    description: Do NOT edit this job through the Web GUI !
+    concurrent: false
+    sandbox: true
+    parameters:
+        - string:
+            name: "GIT_BRANCH"
+            default: "{git_branch}"
+            description: "snap-rdma git branch to build from"
+        - bool:
+            name: "build_dockers"
+            default: false
+            description: "Rebuild docker containers"
+        - string:
+            name: "conf_file"
+            default: "{conf_file}"
+            description: "Regex to select job config file"
+        - string:
+            name: "script"
+            default: "{jjb_jenkinsfile}"
+            description: "Jenkinsfile to load on trigger"
+        - string:
+            name: "DEBUG"
+            default: 0
+            description: "Enable debug prints and traces, valid values are 0-9"
+    pipeline-scm:
+      scm:
+        - git:
+            url: "{jjb_git}"
+            credentials-id: 'fb735938-fa1c-4b61-b568-a7c153b4fe74'
+            branches: ['$GIT_BRANCH']
+            shallow-clone: true
+            depth: 1
+            honor-refspec: true
+            browser: githubweb
+            browser-url: "{jjb_git}"
+            submodule:
+              recursive: true
+              parent-credentials: true
+      script-path: "$script"
+
+- project:
+    name: proj_name
+    jjb_email: 'andiih@nvidia.com'
+    jjb_proj: 'snap-dpa-sign'
+    git_branch: 'main'
+    conf_file: '.ci/job_matrix_dpa_sign.yaml'
+    jjb_git: 'git@github.com:Mellanox/snap-rdma.git'
+    jjb_owner: 'andriih@nvidia.com'
+    jjb_jenkinsfile: '.ci/Jenkinsfile.shlib'
+    jobs:
+      - '{jjb_proj}'

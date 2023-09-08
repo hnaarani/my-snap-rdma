@@ -1,0 +1,37 @@
+FROM nvcr.io/nvidia/doca/doca:2.2.0-devel
+ARG _UID=6213
+ARG _GID=11429
+ARG _LOGIN=swx-jenkins
+ARG _HOME=/var/home/$_LOGIN
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+USER root
+
+RUN apt-get update && \
+    apt-get install -y \
+        sudo \
+        curl \
+        git \
+        wget \
+        binutils \
+        docker.io \
+        meson \
+        openssh-client
+
+RUN git clone "http://l-gerrit.mtl.labs.mlnx:8080/DevOps/3S/sign-tool" --depth=1 && \
+    cp sign-tool/build/bf3_dpa/* /usr/bin/ && \
+    rm -rf sign-tool
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN echo "${_LOGIN} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+RUN mkdir -p $_HOME && \
+    groupadd -f -g "$_GID" "$_LOGIN" && \
+    useradd -u "$_UID" -g "$_GID" -s /bin/bash -m -d ${_HOME} "$_LOGIN" && \
+    chown $_LOGIN $_HOME
+
+SHELL ["/bin/bash"]
+
+USER "${_LOGIN}"
+ENTRYPOINT [ "/bin/bash", "--login", "--rcfile", "/etc/bashrc", "-c" ]

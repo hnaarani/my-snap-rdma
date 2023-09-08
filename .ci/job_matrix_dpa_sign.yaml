@@ -1,0 +1,46 @@
+---
+job: dpa-sign
+
+registry_host: harbor.mellanox.com
+registry_path: /swx-storage/snap-rdma
+registry_auth: swx-storage
+
+credentials:
+  - {credentialsId: '3s-bf3-dpa-prod-role', usernameVariable: 'DPA_SIGN_USER', passwordVariable: 'DPA_SIGN_PASS'}
+
+failFast: false
+kubernetes:
+  cloud: swx-k8s-spray
+  namespace: snap-ci
+  runAsUser: "6213"
+  runAsGroup: "11429"
+
+volumes:
+    - {mountPath: /var/home/swx-jenkins/.ssh, hostPath: /labhome/swx-jenkins/.ssh}
+    - {mountPath: /tmp, hostPath: /tmp}
+
+runs_on_dockers:
+  - {file: '.ci/Dockerfile.dpa_sign', name: 'dpa_sign', category: 'tool', arch: 'aarch64'}
+
+steps:
+  - name: Sign DPA apps
+    containerSelector: "{name: 'dpa_sign'}"
+    credentialsId: '3s-bf3-dpa-prod-role'
+    run: |
+
+      meson setup \
+        --cross-file cross-dpa-clang-riscv64.txt \
+        -Dwith-flexio=subproject \
+        build
+
+      meson compile -C build
+
+      dpa_dir="build/dpa"
+
+      for app in $dpa_dir/{dpa_nvme,dpa_virtq_split}; do
+        sudo DPA_SIGN_USER=$DPA_SIGN_USER \
+             DPA_SIGN_PASS=$DPA_SIGN_PASS \
+             dpa/dpa_sign_prod.sh $app
+      done
+
+    archiveArtifacts: 'build/dpa/dpa_nvme*,build/dpa/dpa_virtq_split*'
