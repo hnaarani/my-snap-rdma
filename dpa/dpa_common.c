@@ -270,9 +270,9 @@ void dpa_logger(const char *file_name, unsigned int line_num,
 
 void dpa_error_freeze()
 {
-	int dummy = 0;
-
 	/* freeze calling thread so that we can debug it */
-	while (1) { dummy++; }
+	while (1) {
+		__asm("");
+	}
 	//flexio_os_event_wait();
 }
