@@ -131,19 +131,19 @@ void dpa_thread_free(void *addr);
 
 struct snap_dma_q *dpa_dma_ep_cmd_copy(struct snap_dpa_cmd *cmd);
 
-static inline void dpa_dma_q_ring_tx_db(uint16_t qpnum, uint16_t pi)
+static inline void dpa_dma_q_ring_tx_db(uint32_t qpnum, uint16_t pi)
 {
 	struct flexio_os_thread_ctx *ctx;
 
 	/* NOTE: thread context is not a syscall but a read of tp register
-	 * this is fast but flexio should make these inline 
+	 * this is fast but flexio should make these inline
 	 */
 	ctx = dpa_get_thread_ctx();
 	//flexio_dev_qp_sq_ring_db((struct flexio_dev_thread_ctx *)ctx, pi, qpnum);
 	outbox_write(ctx->outbox_base, SXD_DB, OUTBOX_V_SXD_DB(pi, qpnum));
 }
 
-static inline void dpa_dma_q_arm_cq(uint16_t cqnum, uint32_t ci)
+static inline void dpa_dma_q_arm_cq(uint32_t cqnum, uint32_t ci)
 {
 	struct flexio_os_thread_ctx *ctx;
 
