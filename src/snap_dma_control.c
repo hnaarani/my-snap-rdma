@@ -1786,7 +1786,7 @@ int snap_dma_ep_dpa_copy_sync(struct snap_dpa_thread *thr, struct snap_dma_q *q)
 	rsp = snap_dpa_rsp_wait(mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK) {
 		snap_error("Failed to copy DMA queue: %d\n", rsp->status);
-		ret = -EINVAL;
+		ret = -EIO;
 	}
 
 out:
