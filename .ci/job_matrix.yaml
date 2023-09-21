@@ -118,7 +118,7 @@ steps:
     run: NGCIBlackDuckScan
     args:
       projectName: "mlnx-libsnap"
-      projectVersion: "1.5.4"
+      projectVersion: "1.6.0"
       projectSrcPath: "src"
       attachArtifact: true
       reportName: "BlackDuck report"
