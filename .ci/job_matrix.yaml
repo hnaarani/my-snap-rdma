@@ -23,7 +23,7 @@ volumes:
   - {mountPath: /auto/sw/release/sw_acceleration, hostPath: /auto/sw/release/sw_acceleration}
 
 env:
-  MOFED_VER: 23.04-0.5.3.2
+  MOFED_VER: 23.07-0.5.0.0
   CCACHE_ENABLE: 'true'
   CCACHE_DIR: '/auto/sw/work/swx_devops/ccache/$job'
   CCACHE_TEMPDIR: '/tmp'
