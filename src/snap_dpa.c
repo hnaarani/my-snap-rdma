@@ -26,7 +26,11 @@
 
 #if HAVE_FLEXIO
 #include <libflexio/flexio.h>
+#if HAVE_FLEXIO_SUBPROJECT
+#include <libflexio/src/flexio_exp.h>
+#else
 #include <flexio_exp.h>
+#endif
 #endif
 
 #include "snap_dpa.h"
@@ -83,7 +87,7 @@ static struct snap_dpa_eq *snap_dpa_eq_create(struct snap_dpa_ctx *ctx)
 	/* TODO: set ownership bit on dpa mem*/
 	DEVX_SET(dpa_eq, eq_in, log_umem_size, EQ_LOG_SIZE);
 	DEVX_SET(dpa_eq, eq_in, oi, 1);
-	DEVX_SET(dpa_eq, eq_in, uar_page, ctx->uar->uar->page_id);
+	DEVX_SET(dpa_eq, eq_in, uar_page, snap_dpa_process_uar_id(ctx));
 	DEVX_SET(dpa_eq, eq_in, umem_id, snap_dpa_process_umem_id(ctx));
 	DEVX_SET64(dpa_eq, eq_in, umem_offset,
 			snap_dpa_process_umem_offset(ctx, snap_dpa_mem_addr(eq->devx.dpa_mem)));
@@ -647,20 +651,15 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 		goto free_dpa_pd;
 	}
 
-	dpa_ctx->uar = snap_uar_get(ctx);
-	if (!dpa_ctx->uar)
+	dpa_ctx->flexio_uar = flexio_process_get_uar(dpa_ctx->dpa_proc);
+	if (!dpa_ctx->flexio_uar)
 		goto free_dpa_proc;
 
-	/* convert to flexio uar... */
-	st = flexio_uar_create(dpa_ctx->dpa_proc, dpa_ctx->uar->uar, &dpa_ctx->flexio_uar);
-	if (st != FLEXIO_STATUS_SUCCESS)
-		goto deref_uar;
-
 	outbox_attr.uar = dpa_ctx->flexio_uar;
-	st = flexio_outbox_create(dpa_ctx->dpa_proc, NULL, &outbox_attr, &dpa_ctx->dpa_uar);
+	st = flexio_outbox_create(dpa_ctx->dpa_proc, &outbox_attr, &dpa_ctx->dpa_uar);
 	if (st != FLEXIO_STATUS_SUCCESS) {
 		snap_error("%s: Failed to create DPA outbox (uar)\n", app_name);
-		goto free_flexio_uar;
+		goto free_dpa_proc;
 	}
 
 	st = flexio_window_create(dpa_ctx->dpa_proc, dpa_ctx->pd, &dpa_ctx->dpa_window);
@@ -688,10 +687,6 @@ free_dpa_window:
 	flexio_window_destroy(dpa_ctx->dpa_window);
 free_dpa_outbox:
 	flexio_outbox_destroy(dpa_ctx->dpa_uar);
-free_flexio_uar:
-	flexio_uar_destroy(dpa_ctx->flexio_uar);
-deref_uar:
-	snap_uar_put(dpa_ctx->uar);
 free_dpa_proc:
 	flexio_process_destroy(dpa_ctx->dpa_proc);
 free_dpa_pd:
@@ -715,8 +710,6 @@ void snap_dpa_process_destroy(struct snap_dpa_ctx *ctx)
 	snap_dpa_eq_destroy(ctx->dpa_eq);
 	flexio_window_destroy(ctx->dpa_window);
 	flexio_outbox_destroy(ctx->dpa_uar);
-	flexio_uar_destroy(ctx->flexio_uar);
-	snap_uar_put(ctx->uar);
 	flexio_process_destroy(ctx->dpa_proc);
 	ibv_dealloc_pd(ctx->pd);
 	snap_dpa_unload_app(ctx);
@@ -778,6 +771,17 @@ const cpu_set_t *snap_dpa_process_cpu_set(struct snap_dpa_ctx *ctx)
 	return &ctx->dpa_cpu_set;
 }
 
+/**
+ * snap_dpa_process_uar_id() - get DPA process uar id
+ * @ctx: DPA context
+ *
+ * Return: DPA process uar id
+ */
+uint32_t snap_dpa_process_uar_id(struct snap_dpa_ctx *ctx)
+{
+	return flexio_uar_get_id(ctx->flexio_uar);
+}
+
 static void snap_dpa_thread_destroy_force(struct snap_dpa_thread *thr);
 
 static int trigger_q_create(struct snap_dpa_thread *thr)
@@ -796,6 +800,9 @@ static int trigger_q_create(struct snap_dpa_thread *thr)
 	thr->trigger_q = snap_dma_ep_create(thr->dctx->pd, &dma_q_attr);
 	if (!thr->trigger_q)
 		return -1;
+
+	/* make sure that wakeup is not delayed */
+	thr->trigger_q->sw_qp.dv_qp.db_flag = SNAP_DB_RING_IMM;
 
 	dma_q_attr.tx_qsize = 0;
 	dma_q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_NONE;
@@ -1155,12 +1162,6 @@ int snap_dpa_thread_wakeup(struct snap_dpa_thread *thr)
 	int ret;
 	struct snap_dma_completion comp = {0};
 
-	ret = snap_dma_q_arm(thr->trigger_q);
-	if (ret) {
-		snap_error("thr %p: Failed to arm trigger\n", thr);
-		return ret;
-	}
-
 	/* NOTE: flush_nowait always does zero length rdma write
 	 * with completion. Actually this is a bug in the flush_nowait ;)
 	 *
@@ -1327,6 +1328,11 @@ uint64_t snap_dpa_process_umem_size(struct snap_dpa_ctx *ctx)
 }
 
 uint32_t snap_dpa_process_eq_id(struct snap_dpa_ctx *ctx)
+{
+	return 0;
+}
+
+uint32_t snap_dpa_process_uar_id(struct snap_dpa_ctx *ctx)
 {
 	return 0;
 }

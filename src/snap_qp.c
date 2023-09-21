@@ -67,6 +67,7 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 	uint32_t umem_id, dbr_umem_id;
 	uint64_t umem_offset;
 	uint64_t dbr_addr;
+	uint32_t page_id;
 
 	cq_uar = snap_uar_get(ctx);
 	if (!cq_uar)
@@ -103,6 +104,7 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 		umem_offset = 0;
 		dbr_umem_id = umem_id;
 		dbr_addr = (uint64_t)attr->cqe_size * devx_cq->cqe_cnt;
+		page_id = cq_uar->uar->page_id;
 	} else {
 		if (attr->dpa_element_type == MLX5_APU_ELEMENT_TYPE_THREAD) {
 			if (!attr->dpa_thread) {
@@ -146,10 +148,18 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 
 		umem_id = snap_dpa_process_umem_id(dpa_proc);
 		umem_offset = snap_dpa_process_umem_offset(dpa_proc, snap_dpa_mem_addr(devx_cq->devx.dpa_mem));
+		/*
+		 * TODO: switch back to the host uar, our cqs on dpa should be either
+		 * always armed or be used in the polling mode
+		 * Remove dpa_arm_cq() and retest apps
+		 */
+		page_id = snap_dpa_process_uar_id(dpa_proc);
 
 		/* always put dbr record on dpu side. This way cq can be armed
 		 * both from dpu and dpa. Consider adding a special option for
 		 * this
+		 *
+		 * Note that with dpa uar it can not be reliably armoed from host
 		 */
 		devx_cq->devx.umem.size = SNAP_MLX5_DBR_SIZE;
 		ret = snap_umem_init(ctx, &devx_cq->devx.umem);
@@ -158,10 +168,9 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 
 		dbr_umem_id = devx_cq->devx.umem.devx_umem->umem_id;
 		dbr_addr = 0;
-
-		snap_debug("memsize %lu umem_id %d umem_offset %lu type %d eqn/thr_id %d dpa_va: 0x%0lx\n",
+		snap_debug("memsize %lu umem_id %d umem_offset %lu type %d eqn/thr_id %d dpa_va: 0x%0lx page_id host/dpa 0x%0x/0x%0x\n",
 				cq_mem_size + SNAP_MLX5_DBR_SIZE, umem_id, umem_offset, attr->dpa_element_type,
-				devx_cq->eqn_or_dpa_element, snap_dpa_mem_addr(devx_cq->devx.dpa_mem));
+				devx_cq->eqn_or_dpa_element, snap_dpa_mem_addr(devx_cq->devx.dpa_mem), cq_uar->uar->page_id, page_id);
 	}
 
 	/* create cq via devx */
@@ -181,7 +190,7 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 		DEVX_SET(cqc, cqctx, log_page_size, log_page_size - MLX5_ADAPTER_PAGE_SHIFT);
 
 	DEVX_SET(cqc, cqctx, c_eqn_or_apu_element, devx_cq->eqn_or_dpa_element);
-	DEVX_SET(cqc, cqctx, uar_page, cq_uar->uar->page_id);
+	DEVX_SET(cqc, cqctx, uar_page, page_id);
 
 	DEVX_SET(create_cq_in, in, cq_umem_valid, 1);
 	DEVX_SET(create_cq_in, in, cq_umem_id, umem_id);
@@ -480,6 +489,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 	uint32_t pd_id;
 	uint32_t umem_id;
 	uint64_t umem_offset;
+	uint32_t page_id;
 
 	/* TODO: check actual caps */
 	if (attr->sq_max_inline_size > 256)
@@ -517,7 +527,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 
 		umem_id = devx_qp->devx.umem.devx_umem->umem_id;
 		umem_offset = 0;
-
+		page_id = qp_uar->uar->page_id;
 	} else {
 		if (!attr->dpa_proc) {
 			ret = -EINVAL;
@@ -532,6 +542,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 
 		umem_id = snap_dpa_process_umem_id(attr->dpa_proc);
 		umem_offset = snap_dpa_process_umem_offset(attr->dpa_proc, snap_dpa_mem_addr(devx_qp->devx.dpa_mem));
+		page_id = snap_dpa_process_uar_id(attr->dpa_proc);
 	}
 
 	devx_qp->dbr_offset = qp_buf_len;
@@ -542,7 +553,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 		DEVX_SET(qpc, qpc, isolate_vl_tc, 1);
 	DEVX_SET(qpc, qpc, pd, pd_id);
 	DEVX_SET(qpc, qpc, pm_state, MLX5_QPC_PM_STATE_MIGRATED);
-	DEVX_SET(qpc, qpc, uar_page, qp_uar->uar->page_id);
+	DEVX_SET(qpc, qpc, uar_page, page_id);
 	//user index to speed up qp lookup when we have multiple qps per cq:
 	DEVX_SET(qpc, qpc, user_index, attr->uidx);
 	if (log_page_size > MLX5_ADAPTER_PAGE_SHIFT)

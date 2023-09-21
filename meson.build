@@ -58,12 +58,13 @@ flexio_pfx = get_option('with-flexio')
 if (flexio_pfx == 'subproject')
 	message('Using flexio from subproject')
 	flexio_proj = subproject('flexio', default_options: ['default_library=static'])
-	flexio = flexio_proj.get_variable('libflexio_dep')
+	flexio = flexio_proj.get_variable('flexiosdk_libflexio_dep')
 	flexio_pfx = 'subprojects/flexio'
-	libflexio_os_dep = flexio_proj.get_variable('libflexio_os_dep')
+	libflexio_os_dep = flexio_proj.get_variable('flexiosdk_libflexio_os_dep')
 	flexio_include = []
 	libsnap_core_depends += flexio
 	conf_data.set10('HAVE_FLEXIO', 1, description : 'Enable DPA host side support')
+	conf_data.set10('HAVE_FLEXIO_SUBPROJECT', 1, description : 'Enable DPA host side support')
 elif (flexio_pfx != '')
 	message('Checking flexio in ' + flexio_pfx)
 	flexio_include = [flexio_pfx + '/include', flexio_pfx + '/include/libflexio']

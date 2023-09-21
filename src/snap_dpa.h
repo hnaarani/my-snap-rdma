@@ -33,7 +33,6 @@ struct snap_dpa_ctx {
 	struct flexio_process  *dpa_proc;
 	struct flexio_outbox   *dpa_uar;
 	struct ibv_pd          *pd;
-	struct snap_uar        *uar;
 	struct snap_dma_q      *dma_q;
 	struct snap_dma_q      *dummy_q;
 	struct snap_dpa_mkeyh  *dma_mkeyh;
@@ -75,6 +74,7 @@ uint32_t snap_dpa_process_umem_id(struct snap_dpa_ctx *ctx);
 uint64_t snap_dpa_process_umem_addr(struct snap_dpa_ctx *ctx);
 uint64_t snap_dpa_process_umem_size(struct snap_dpa_ctx *ctx);
 uint32_t snap_dpa_process_eq_id(struct snap_dpa_ctx *ctx);
+uint32_t snap_dpa_process_uar_id(struct snap_dpa_ctx *ctx);
 const cpu_set_t *snap_dpa_process_cpu_set(struct snap_dpa_ctx *ctx);
 
 /**
