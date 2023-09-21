@@ -1661,12 +1661,12 @@ free_q:
  * Create and connect both software and fw qps
  *
  * The function creates a pair of QPs and connects them.
- * snap_dma_q_get_fw_qpnum() should be used to obtain qp number that
+ * snap_dma_q_get_fw_qp() should be used to obtain qp number that
  * can be given to firmware emulation objects.
  *
  * Note that on Blufield1 extra steps are required:
  *  - an on behalf QP with the same number as
- *    returned by the snap_dma_q_get_fw_qpnum() must be created
+ *    returned by the snap_dma_q_get_fw_qp() must be created
  *  - a fw qp state must be copied to the on behalf qp
  *  - steering rules must be set
  *
