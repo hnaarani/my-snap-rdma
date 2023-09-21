@@ -18,8 +18,6 @@
 #include "snap_env.h"
 #include "snap_dp_map.h"
 
-#define SNAP_DMA_Q_OPMODE   "SNAP_DMA_Q_OPMODE"
-
 static struct snap_dma_q *virtq_rdma_qp_init(struct virtq_create_attr *attr,
 		struct virtq_priv *vq_priv, int tx_elem_size, int rx_elem_size,
 		snap_dma_rx_cb_t cb)
