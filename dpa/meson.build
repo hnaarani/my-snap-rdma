@@ -50,12 +50,16 @@ dpa_link_script = meson.current_source_dir() + '/flexio_linker.ld'
 # external dependancies
 #
 dpa_ldflags = [
-	'-static', '-nostartfiles',
+	'-static',
 	'-T', dpa_link_script,
 	'-L' + flexio_pfx + '/lib',
 	'-L../' + flexio_pfx + '/libflexio-os/lib',
 	'-lflexio_os'
 ]
+
+if cross_cc.get_id() != 'clang'
+	dpa_ldflags += '-nostartfiles'
+endif
 
 #
 # GCC can compile with the picolibc but app is not loaded on DPA
@@ -108,19 +112,20 @@ foreach t : dpa_tests
 		link_depends : dpa_link_script,
 		dependencies : [ libdpa_dep, picolibc_dep, libflexio_os_dep ],
 		install : false,
+		pie : false,
 		native : false
 		)
 
-    if get_option('dpa-signed-apps')
-        custom_target(t + '.sig',
-                build_by_default : true,
-                depends : exec,
-                input : exec,
-                output : t + '.sig',
-                command : ['dpa_sign.sh', '@INPUT@', get_option('dpa-cert'), get_option('dpa-private-key')],
-                install : false
-                )
-    endif
+	if get_option('dpa-signed-apps')
+		custom_target(t + '.sig',
+				build_by_default : true,
+				depends : exec,
+				input : exec,
+				output : t + '.sig',
+				command : ['dpa_sign.sh', '@INPUT@', get_option('dpa-cert'), get_option('dpa-private-key')],
+				install : false
+			     )
+	endif
 
 endforeach
 
@@ -142,18 +147,19 @@ foreach app : dpa_apps
 		link_depends : dpa_link_script,
 		dependencies : [ libdpa_dep, picolibc_dep, libflexio_os_dep ],
 		install : true,
+		pie : false,
 		native : false
 		)
 
-    if get_option('dpa-signed-apps')
-        custom_target(app + '.sig',
-                build_by_default : true,
-                depends : exec,
-                input : exec,
-                output : app + '.sig',
-                command : ['dpa_sign.sh', '@INPUT@', get_option('dpa-cert'), get_option('dpa-private-key')],
-                install : false
-                )
-    endif
+	if get_option('dpa-signed-apps')
+		custom_target(app + '.sig',
+				build_by_default : true,
+				depends : exec,
+				input : exec,
+				output : app + '.sig',
+				command : ['dpa_sign.sh', '@INPUT@', get_option('dpa-cert'), get_option('dpa-private-key')],
+				install : false
+			     )
+	endif
 
 endforeach

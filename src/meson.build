@@ -25,7 +25,7 @@ libsnap_core_sources = [
 	'../ctrl/snap_dp_map.c'
 ]
 
-if meson.get_compiler('c').get_id() == 'clang'
+if meson.get_compiler('c', native: true).get_id() == 'clang'
 	common_cflags += '-Wno-microsoft-anon-tag'
 	common_cflags += '-Wno-gnu-variable-sized-type-not-at-end'
 endif
