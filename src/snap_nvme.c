@@ -37,6 +37,11 @@ static int snap_nvme_init_sq_legacy_mode(struct snap_device *sdev,
 static void snap_nvme_teardown_sq_legacy_mode(struct snap_device *sdev,
 					      struct snap_nvme_sq *sq);
 
+static uint32_t snap_get_dev_emu_id(struct snap_device *sdev)
+{
+	return sdev->mdev.device_emulation->obj_id;
+}
+
 bool snap_nvme_sq_is_fe_only(struct snap_nvme_sq *sq)
 {
 	struct snap_nvme_sq_attr sq_attr = {};
@@ -368,7 +373,7 @@ snap_nvme_create_namespace(struct snap_device *sdev,
 
 	namespace_in = in + DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr);
 	DEVX_SET(nvme_namespace, namespace_in, device_emulation_id,
-		 sdev->pci->mpci.vhca_id);
+		 snap_get_dev_emu_id(sdev));
 	DEVX_SET(nvme_namespace, namespace_in, src_nsid, attr->src_nsid);
 	DEVX_SET(nvme_namespace, namespace_in, dst_nsid, attr->dst_nsid);
 	DEVX_SET(nvme_namespace, namespace_in, lba_size, attr->lba_size);
@@ -495,7 +500,8 @@ snap_nvme_create_cq(struct snap_device *sdev, struct snap_nvme_cq_attr *attr)
 	DEVX_SET(general_obj_in_cmd_hdr, in, obj_type, MLX5_OBJ_TYPE_NVME_CQ);
 
 	cq_in = in + DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr);
-	DEVX_SET(nvme_cq, cq_in, device_emulation_id, sdev->pci->mpci.vhca_id);
+	DEVX_SET(nvme_cq, cq_in, device_emulation_id,
+		 snap_get_dev_emu_id(sdev));
 	DEVX_SET(nvme_cq, cq_in, offload_type, offload_type);
 	/* Calculate doorbell offset as described in the NVMe spec 3.1.17 */
 	DEVX_SET(nvme_cq, cq_in, nvme_doorbell_offset,
@@ -950,7 +956,8 @@ snap_nvme_create_sq(struct snap_device *sdev, struct snap_nvme_sq_attr *attr)
 	DEVX_SET(general_obj_in_cmd_hdr, in, obj_type, MLX5_OBJ_TYPE_NVME_SQ);
 
 	sq_in = in + DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr);
-	DEVX_SET(nvme_sq, sq_in, device_emulation_id, sdev->pci->mpci.vhca_id);
+	DEVX_SET(nvme_sq, sq_in, device_emulation_id,
+		 snap_get_dev_emu_id(sdev));
 	DEVX_SET(nvme_sq, sq_in, offload_type, offload_type);
 	DEVX_SET(nvme_sq, sq_in, nvme_num_of_entries, attr->queue_depth);
 	/* Calculate doorbell offset as described in the NVMe spec 3.1.16 */

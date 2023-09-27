@@ -949,7 +949,7 @@ snap_virtio_create_queue(struct snap_device *sdev,
 	/* common virtq attributes */
 	DEVX_SET(virtio_q, virtq_ctx, pd, pd_id);
 	DEVX_SET(virtio_q, virtq_ctx, device_emulation_id,
-		 sdev->pci->mpci.vhca_id);
+		 sdev->mdev.device_emulation->obj_id);
 	DEVX_SET(virtio_q, virtq_ctx, virtio_q_type, virtq_type);
 	DEVX_SET(virtio_q, virtq_ctx, event_mode, ev_mode);
 	DEVX_SET(virtio_q, virtq_ctx, queue_index, vattr->idx);
