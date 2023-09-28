@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 #include "config.h"
 #include "snap_macros.h"
@@ -37,7 +38,9 @@ SNAP_STATIC_ASSERT(sizeof(struct snap_dpa_tcb) % SNAP_MLX5_L2_CACHE_SIZE == 0,
 
 #if HAVE_FLEXIO
 
-SNAP_STATIC_ASSERT(CPU_SETSIZE > 256, "Static cpu set size must be greater than the max number of HARTS");
+SNAP_STATIC_ASSERT(CPU_SETSIZE >= 256, "Static cpu set size must be greater than the max number of HARTS");
+SNAP_STATIC_ASSERT(SNAP_DPA_HW_THREADS_COUNT > 0 && SNAP_DPA_HW_THREADS_COUNT <= CPU_SETSIZE,
+		"Invalid max hw threads count");
 
 /**
  * we need dummy dpa eq if we want to use dpa cq in the pure polling mode.
@@ -519,6 +522,77 @@ static uint64_t snap_dpa_get_mem_size(struct ibv_context *ctx)
 	return block_size * (1ULL << log_mem_blocks);
 }
 
+static int hex_char_to_int(char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	else if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	else if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+
+	return -1; // Invalid character
+}
+
+static void hex_to_cpuset(cpu_set_t *cpu_set, int hex_digit, int order)
+{
+	int i;
+
+	if (hex_digit == 0)
+		return;
+
+	for (i = 0; i < 4; i++) {
+		if ((hex_digit & (1<<i)) == 0)
+			continue;
+
+		int core = i + (4 * order);
+
+		snap_debug("digit 0x%x adding core %d\n", hex_digit, core);
+		CPU_SET(core, cpu_set);
+	}
+}
+
+static int snap_dpa_cpu_set_init(struct snap_dpa_ctx *ctx, const char *app_name)
+{
+	int i, n;
+	char *app_core_mask_env, *mask;
+	int ret;
+
+	ret = asprintf(&app_core_mask_env, "%s_core_mask", app_name);
+	if (ret < 0) {
+		snap_error("%s: failed to init dpa core mask\n", app_name);
+		return -ENOMEM;
+	}
+
+	mask = getenv(app_core_mask_env);
+	free(app_core_mask_env);
+
+	CPU_ZERO(&ctx->dpa_cpu_set);
+
+	if (!mask) {
+		for (i = 0; i < SNAP_DPA_HW_THREADS_COUNT; i++)
+			CPU_SET(i, &ctx->dpa_cpu_set);
+		return 0;
+	}
+
+	snap_info("%s: core mask %s\n", app_name, mask);
+	for (n = 0, i = strlen(mask) - 1; i >= 0; i--, n++) {
+		char c = tolower(mask[i]);
+
+		if (!isxdigit(c))
+			break;
+
+		hex_to_cpuset(&ctx->dpa_cpu_set, hex_char_to_int(c), n);
+	}
+
+	/* convert mask into allowed cores */
+	if (CPU_COUNT(&ctx->dpa_cpu_set) == 0) {
+		snap_error("%s: has no valid cores to run\n", app_name);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 /**
  * snap_dpa_process_create() - create DPA application process
  * @ctx:         snap context
@@ -546,6 +620,10 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 		snap_error("%s: Failed to allocate memory for DPA context\n", app_name);
 		return NULL;
 	}
+
+	ret = snap_dpa_cpu_set_init(dpa_ctx, app_name);
+	if (ret)
+		goto free_dpa_ctx;
 
 	dpa_ctx->dpa_mem_size = snap_dpa_get_mem_size(ctx);
 	if (!dpa_ctx->dpa_mem_size)
@@ -601,6 +679,7 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 	if (dma_q_create(dpa_ctx))
 		goto free_dpa_eq;
 
+	strncpy(dpa_ctx->app_name, app_name, sizeof(dpa_ctx->app_name) - 1);
 	return dpa_ctx;
 
 free_dpa_eq:
@@ -688,6 +767,17 @@ uint32_t snap_dpa_process_eq_id(struct snap_dpa_ctx *ctx)
 	return snap_dpa_eq_id(ctx->dpa_eq);
 }
 
+/**
+ * snap_dpa_process_cpu_set() - get DPA process allowed cores cpu set
+ * @ctx: DPA context
+ *
+ * Return: DPA process allowed cpu set
+ */
+const cpu_set_t *snap_dpa_process_cpu_set(struct snap_dpa_ctx *ctx)
+{
+	return &ctx->dpa_cpu_set;
+}
+
 static void snap_dpa_thread_destroy_force(struct snap_dpa_thread *thr);
 
 static int trigger_q_create(struct snap_dpa_thread *thr)
@@ -735,28 +825,33 @@ static void trigger_q_destroy(struct snap_dpa_thread *thr)
 static int set_hart_mask(struct snap_dpa_ctx *dctx, struct snap_dpa_thread_attr *attr,
 		struct flexio_event_handler_attr *f_thr_attr)
 {
-	int i, n;
+	int i;
 
 	f_thr_attr->affinity.type = FLEXIO_AFFINITY_NONE;
 
 	if (!attr->hart_set)
 		return 0;
 
-	/* convert cpu_set_t to strict affinity */
-	for (n = i = 0; n < CPU_COUNT(attr->hart_set) && i < CPU_SETSIZE; i++) {
+	/* convert cpu_set_t to strict affinity within allowed cpu cores */
+	for (i = 0; i < SNAP_DPA_HW_THREADS_COUNT; i++) {
 		if (!CPU_ISSET(i, attr->hart_set))
 			continue;
 
 		/* set hart mask, only strict core affinity is supported so
 		 * we bind to the first cpu set
 		 */
-		snap_info("hart_mask: adding hart %d\n", i);
+		if (!CPU_ISSET(i, &dctx->dpa_cpu_set))
+			continue;
+
+		snap_info("%s: scheduling thread on core %d\n", dctx->app_name, i);
 		f_thr_attr->affinity.type = FLEXIO_AFFINITY_STRICT;
 		f_thr_attr->affinity.id = i;
 		return 0;
-		//n++;
 	}
-	return 0;
+
+	/* TODO: pretty print */
+	snap_error("%s: required core is not available\n", dctx->app_name);
+	return -1;
 }
 
 /**
@@ -1277,6 +1372,11 @@ uint64_t snap_dpa_thread_heap_base(struct snap_dpa_thread *thr)
 int snap_dpa_thread_wakeup(struct snap_dpa_thread *thr)
 {
 	return -ENOTSUP;
+}
+
+const cpu_set_t *snap_dpa_process_cpu_set(struct snap_dpa_ctx *ctx)
+{
+	return NULL;
 }
 
 #endif

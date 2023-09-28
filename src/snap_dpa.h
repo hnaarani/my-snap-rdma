@@ -43,6 +43,8 @@ struct snap_dpa_ctx {
 	struct flexio_window   *dpa_window;
 	struct snap_dpa_eq     *dpa_eq;
 	uint64_t                dpa_mem_size;
+	cpu_set_t               dpa_cpu_set;
+	char                    app_name[32];
 	struct {
 		uint64_t heap_memory;
 	} stats;
@@ -73,6 +75,7 @@ uint32_t snap_dpa_process_umem_id(struct snap_dpa_ctx *ctx);
 uint64_t snap_dpa_process_umem_addr(struct snap_dpa_ctx *ctx);
 uint64_t snap_dpa_process_umem_size(struct snap_dpa_ctx *ctx);
 uint32_t snap_dpa_process_eq_id(struct snap_dpa_ctx *ctx);
+const cpu_set_t *snap_dpa_process_cpu_set(struct snap_dpa_ctx *ctx);
 
 /**
  * snap_dpa_umem_offset() - get virtual address umem offset
