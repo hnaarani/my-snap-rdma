@@ -40,7 +40,7 @@ runs_on_dockers:
   - {file: '.ci/Dockerfile.debian10', name: 'debian10', arch: 'x86_64', tag: '$MOFED_VER', build_args: '--build-arg MOFED_VER=$MOFED_VER'}
   - {file: '.ci/Dockerfile.debian10', name: 'debian10', arch: 'aarch64', tag: '$MOFED_VER', build_args: '--build-arg MOFED_VER=$MOFED_VER'}
   - {file: '.ci/Dockerfile.euleros2sp8aarch64', name: 'euleros2sp8ofed56', arch: 'aarch64', tag: '5.6-2.0.9.0', build_args: '--build-arg MOFED_VER=5.6-2.0.9.0'}
-  - {file: '.ci/Dockerfile.euleros2sp9x86', name: 'euleros2sp9ofed59', arch: 'x86_64', tag: '5.9-0.1.9.0', build_args: '--build-arg MOFED_VER=5.9-0.1.9.0'}
+  #- {file: '.ci/Dockerfile.euleros2sp9x86', name: 'euleros2sp9ofed59', arch: 'x86_64', tag: '5.9-0.1.9.0', build_args: '--build-arg MOFED_VER=5.9-0.1.9.0'}
   - {file: '.ci/Dockerfile.ubuntu2204', name: 'toolbox', category: 'tool', arch: 'x86_64', tag: '$MOFED_VER', build_args: '--build-arg MOFED_VER=$MOFED_VER'}
   - {file: '.ci/Dockerfile.openeuler.20.03', name: 'openeuler2003', arch: 'aarch64', tag: '$MOFED_VER', build_args: '--build-arg MOFED_VER=$MOFED_VER'}
   - {url: '$registry_host/toolbox/ngci-centos:7.9.2009.2', name: 'blackduck', category: 'tool', arch: 'x86_64'}
@@ -71,7 +71,6 @@ steps:
       - "{name: 'ubuntu2204', variant:1}"
       - "{name: 'centos79', variant:1}"
       - "{name: 'euleros2sp8ofed56', variant:1}"
-      - "{name: 'euleros2sp9ofed59', variant:1}"
       - "{name: 'openeuler2003', variant:1}"
     run: |
       .ci/upload.sh urm
