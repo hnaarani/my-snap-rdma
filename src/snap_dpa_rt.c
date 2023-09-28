@@ -42,7 +42,6 @@ static struct snap_dpa_rt *snap_dpa_rt_create(struct ibv_context *ctx, const cha
 	strncpy(rt->name, name, sizeof(rt->name) - 1);
 	CPU_ZERO(&rt->polling_cores);
 	CPU_ZERO(&rt->polling_core_set);
-	CPU_ZERO(&rt->event_core_set);
 
 	/* TODO: allocate rt, worker list, mutex etc */
 	return rt;
@@ -142,13 +141,15 @@ int snap_dpa_rt_polling_core_get(struct snap_dpa_rt *rt)
 {
 	int hart;
 	int i;
+	const cpu_set_t *app_allowed_cores;
 
 	pthread_mutex_lock(&rt->lock);
 
+	app_allowed_cores = snap_dpa_process_cpu_set(rt->dpa_proc);
 	hart = rt->next_polling_core;
 	for (i = 0; i < SNAP_DPA_HW_THREADS_COUNT; i++) {
-		/* todo: check that core is in polling core set */
-		if (!CPU_ISSET(hart, &rt->polling_cores)) {
+		if (!CPU_ISSET(hart, &rt->polling_cores) &&
+		    CPU_ISSET(hart, app_allowed_cores)) {
 			CPU_SET(hart, &rt->polling_cores);
 			rt->next_polling_core = (hart + 1) % SNAP_DPA_HW_THREADS_COUNT;
 			goto found;
@@ -172,16 +173,26 @@ void snap_dpa_rt_polling_core_put(struct snap_dpa_rt *rt, int i)
 
 int snap_dpa_rt_event_core_get(struct snap_dpa_rt *rt)
 {
-	int hart;
+	const cpu_set_t *app_allowed_cores;
+	int i;
 
 	/* todo: prefer sceduling across cores first, but at the moment
 	 * there seems to be no advantage
 	 */
 	pthread_mutex_lock(&rt->lock);
-	hart = rt->next_event_core;
-	rt->next_event_core = (rt->next_event_core + 1) % SNAP_DPA_HW_THREADS_COUNT;
+	app_allowed_cores = snap_dpa_process_cpu_set(rt->dpa_proc);
+	for (i = 0; i < SNAP_DPA_HW_THREADS_COUNT; i++) {
+		if (CPU_ISSET(rt->next_event_core, app_allowed_cores)) {
+			int core = rt->next_event_core;
+
+			rt->next_event_core = (rt->next_event_core + 1) % SNAP_DPA_HW_THREADS_COUNT;
+			pthread_mutex_unlock(&rt->lock);
+			return core;
+		}
+		rt->next_event_core = (rt->next_event_core + 1) % SNAP_DPA_HW_THREADS_COUNT;
+	}
 	pthread_mutex_unlock(&rt->lock);
-	return hart;
+	return -1;
 }
 
 void snap_dpa_rt_event_core_put(struct snap_dpa_rt *rt, int i)

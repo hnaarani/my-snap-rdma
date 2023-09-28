@@ -68,7 +68,6 @@ struct snap_dpa_rt {
 	cpu_set_t polling_cores;
 	int next_polling_core;
 
-	cpu_set_t event_core_set;
 	int next_event_core;
 };
 
