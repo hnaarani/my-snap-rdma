@@ -16,9 +16,17 @@
     sandbox: true
     parameters:
         - string:
-            name: "GIT_BRANCH"
-            default: "{git_branch}"
-            description: "snap-rdma git branch to build from"
+            name: "REFSPEC"
+            default: "{refspec}"
+            description: |
+              <p>refspec to checkout by git. By default <b>refs/heads/main</b><br />
+              You can change it to checkout to a specific <b>branch</b>, <b>pull request</b> or <b>tag</b><br />
+              Examples:</p>
+              <ul>
+                <li><b>refs/heads/mlnx_libsnap_1_5_4</b> - will checkout into mlnx_libsnap_1_5_4 branch</li>
+                <li><b>refs/pull/1274/head</b> - will checkout into pull request 1274</li>
+                <li><b>refs/tags/v1.5.4-9</b> - will checkout into v1.5.4-9 tag</li>
+              </ul>
         - bool:
             name: "build_dockers"
             default: false
@@ -40,7 +48,8 @@
         - git:
             url: "{jjb_git}"
             credentials-id: 'fb735938-fa1c-4b61-b568-a7c153b4fe74'
-            branches: ['$GIT_BRANCH']
+            branches: ['FETCH_HEAD']
+            refspec: "$REFSPEC"
             shallow-clone: true
             depth: 1
             honor-refspec: true
@@ -55,7 +64,7 @@
     name: proj_name
     jjb_email: 'andiih@nvidia.com'
     jjb_proj: 'snap-dpa-sign'
-    git_branch: 'main'
+    refspec: 'refs/heads/main'
     conf_file: '.ci/job_matrix_dpa_sign.yaml'
     jjb_git: 'git@github.com:Mellanox/snap-rdma.git'
     jjb_owner: 'andriih@nvidia.com'
