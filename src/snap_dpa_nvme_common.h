@@ -15,6 +15,7 @@
 
 #include "snap_dpa_common.h"
 
+#define SNAP_DPA_NVME_APP "dpa_nvme"
 #define SNAP_DPA_NVME_SQE_SHADOW_ALIGN 64
 
 enum {
@@ -115,7 +116,5 @@ struct dpa_nvme_rsp {
 	struct snap_dpa_rsp base;
 	struct dpa_nvme_rsp_query state;
 };
-
-#define SNAP_DPA_NVME_APP "dpa_nvme"
 
 #endif

@@ -109,6 +109,7 @@ struct snap_dpa_rt_filter {
 	enum snap_dpa_rt_thr_mode mode;
 	enum snap_dpa_rt_thr_nqs queue_mux_mode;
 	struct snap_dpa_rt_worker *w;
+	size_t heap_size;
 };
 
 struct snap_dpa_rt_thread {

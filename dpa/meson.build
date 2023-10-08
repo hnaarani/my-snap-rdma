@@ -129,7 +129,8 @@ endforeach
 # installable (todo) apps
 dpa_apps = [
 	'dpa_virtq_split',
-	'dpa_nvme'
+	'dpa_nvme',
+	'dpa_nvme_mp',
 ]
 
 #
