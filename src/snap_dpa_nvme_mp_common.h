@@ -56,10 +56,10 @@ struct dpa_nvme_mp_sq {
 	uint32_t dpu_mkey;
 	enum dpa_nvme_mp_state state;
 
-	struct nvme_cmd *sqes;
-	struct snap_dma_completion comp;
 	uint32_t arm_sq_tail;
 	uint32_t last_read_sq_tail;
+	struct nvme_cmd *sqe_buffer;
+	struct snap_dma_completion host2dpa_comp;
 
 	TAILQ_ENTRY(dpa_nvme_mp_sq) entry;
 };
