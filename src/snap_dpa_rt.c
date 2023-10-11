@@ -213,13 +213,12 @@ void dummy_rx_cb(struct snap_dma_q *q, const void *data, uint32_t data_len, uint
 	snap_error("OOPS: rx cb called\n");
 }
 
-static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_in,
-		struct snap_dpa_rt_thread_init_attr *rtt_attr)
+int snap_dpa_rt_p2p_queue_create(struct snap_dpa_rt_thread *rt_thr,
+		struct ibv_pd *pd, struct snap_dma_q_init_attr *q_init_attr,
+		struct snap_dpa_p2p_q *dpu_cmd_chan, struct snap_dpa_p2p_q *dpa_cmd_chan)
 {
-	struct snap_dpa_thread_attr attr = {
-		.heap_size = rtt_attr->heap_size,
-	};
-	struct snap_dma_q_create_attr q_attr = {
+	struct snap_dma_q_create_attr dpa_q_attr = { 0 };
+	struct snap_dma_q_create_attr arm_q_attr = {
 		.tx_qsize = SNAP_DPA_RT_QP_TX_SIZE,
 		.tx_elem_size = SNAP_DPA_RT_QP_TX_ELEM_SIZE,
 		.rx_qsize = SNAP_DPA_RT_QP_RX_SIZE,
@@ -228,6 +227,79 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 		.sw_use_devx = true,
 		.dpa_mode = SNAP_DMA_Q_DPA_MODE_NONE
 	};
+	int ret;
+
+	arm_q_attr.rx_cb = dummy_rx_cb;
+	arm_q_attr.iov_enable = true;
+
+	if (q_init_attr) {
+		arm_q_attr.wk = q_init_attr->wk;
+		arm_q_attr.uctx = q_init_attr->cq;
+		arm_q_attr.rx_cb = q_init_attr->rx_cb;
+		arm_q_attr.crypto_enable = q_init_attr->crypto_enable;
+		arm_q_attr.crypto_attr = q_init_attr->crypto_attr;
+
+		/* only cq0 will use completion channel */
+		if (q_init_attr->comp_channel) {
+			arm_q_attr.comp_channel = q_init_attr->comp_channel;
+			arm_q_attr.comp_context = q_init_attr->comp_context;
+			arm_q_attr.comp_vector = 0;
+			arm_q_attr.mode = SNAP_DMA_Q_MODE_VERBS;
+		}
+	}
+
+	/* Prepare dpa q attributes based on arm q attributes */
+	dpa_q_attr = arm_q_attr;
+
+	dpa_q_attr.mode = SNAP_DMA_Q_MODE_DV;
+
+	if (rt_thr->mode == SNAP_DPA_RT_THR_POLLING) {
+		dpa_q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_POLLING;
+		dpa_q_attr.dpa_proc = rt_thr->rt->dpa_proc;
+	} else if (rt_thr->mode == SNAP_DPA_RT_THR_EVENT) {
+		dpa_q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_EVENT;
+		dpa_q_attr.dpa_thread = rt_thr->thread;
+	} else {
+		return -1;
+	}
+
+	dpa_q_attr.iov_enable = false;
+	dpa_q_attr.wk = NULL;
+	dpa_q_attr.comp_channel = NULL;
+	dpa_q_attr.comp_context = NULL;
+
+	if (q_init_attr)
+		dpa_q_attr.uctx = q_init_attr->cq;
+
+	/* Create all p2p queues and connect them */
+	dpu_cmd_chan->dma_q = snap_dma_ep_create(pd, &arm_q_attr);
+	if (!dpu_cmd_chan->dma_q)
+		return -1;
+
+	if (q_init_attr && q_init_attr->comp_channel)
+		snap_dma_q_arm(dpu_cmd_chan->dma_q);
+
+	dpa_cmd_chan->dma_q = snap_dma_ep_create(pd, &dpa_q_attr);
+	if (!dpa_cmd_chan->dma_q)
+		return -1;
+
+	ret = snap_dma_ep_connect(dpu_cmd_chan->dma_q, dpa_cmd_chan->dma_q);
+	if (ret)
+		return -1;
+
+	dpu_cmd_chan->q_size = SNAP_DPA_RT_QP_RX_SIZE;
+	dpu_cmd_chan->credit_count = SNAP_DPA_RT_QP_RX_SIZE;
+
+	return 0;
+}
+
+static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_in,
+		struct snap_dpa_rt_thread_init_attr *rtt_attr)
+{
+	struct snap_dpa_thread_attr attr = {
+		.heap_size = rtt_attr->heap_size,
+	};
+
 	struct snap_cq_attr db_cq_attr = {
 		.cq_type = SNAP_OBJ_DEVX,
 		.cqe_size = SNAP_DPA_RT_THR_SINGLE_DB_CQE_SIZE,
@@ -263,67 +335,18 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 	if (!rt_thr->thread)
 		return -EINVAL;
 
-	q_attr.rx_cb = dummy_rx_cb;
-	q_attr.iov_enable = true;
-
-	if (q_init_attr) {
-		q_attr.wk = q_init_attr->wk;
-		q_attr.uctx = q_init_attr->cq;
-		q_attr.rx_cb = q_init_attr->rx_cb;
-		q_attr.crypto_enable = q_init_attr->crypto_enable;
-		q_attr.crypto_attr = q_init_attr->crypto_attr;
-
-		/* only cq0 will use completion channel */
-		if (q_init_attr->comp_channel) {
-			q_attr.comp_channel = q_init_attr->comp_channel;
-			q_attr.comp_context = q_init_attr->comp_context;
-			q_attr.comp_vector = 0;
-			q_attr.mode = SNAP_DMA_Q_MODE_VERBS;
-		}
-	}
-
-	rt_thr->dpu_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
-	if (!rt_thr->dpu_cmd_chan.dma_q)
-		goto free_dpa_thread;
-
-	if (q_init_attr && q_init_attr->comp_channel)
-		snap_dma_q_arm(rt_thr->dpu_cmd_chan.dma_q);
-
-	q_attr.mode = SNAP_DMA_Q_MODE_DV;
-
 	if (rt_thr->mode == SNAP_DPA_RT_THR_POLLING) {
-		q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_POLLING;
-		q_attr.dpa_proc = rt->dpa_proc;
 		db_cq_attr.dpa_element_type = MLX5_APU_ELEMENT_TYPE_EQ;
 		db_cq_attr.dpa_proc = rt->dpa_proc;
 	} else if (rt_thr->mode == SNAP_DPA_RT_THR_EVENT) {
-		q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_EVENT;
-		q_attr.dpa_thread = rt_thr->thread;
 		db_cq_attr.dpa_element_type = MLX5_APU_ELEMENT_TYPE_THREAD;
 		db_cq_attr.dpa_thread = rt_thr->thread;
 	} else
-		goto free_dpu_qp;
-
-	q_attr.iov_enable = false;
-	q_attr.wk = NULL;
-	q_attr.comp_channel = NULL;
-	q_attr.comp_context = NULL;
-	if (q_init_attr)
-		q_attr.uctx = q_init_attr->cq;
-	rt_thr->dpa_cmd_chan.dma_q = snap_dma_ep_create(pd, &q_attr);
-	if (!rt_thr->dpa_cmd_chan.dma_q)
-		goto free_dpu_qp;
-
-	ret = snap_dma_ep_connect(rt_thr->dpu_cmd_chan.dma_q, rt_thr->dpa_cmd_chan.dma_q);
-	if (ret)
-		goto free_dpa_qp;
-
-	rt_thr->dpu_cmd_chan.q_size = SNAP_DPA_RT_QP_RX_SIZE;
-	rt_thr->dpu_cmd_chan.credit_count = SNAP_DPA_RT_QP_RX_SIZE;
+		goto free_dpa_thread;
 
 	rt_thr->db_cq = snap_cq_create(dpa_pd->context, &db_cq_attr);
 	if (!rt_thr->db_cq)
-		goto free_dpa_qp;
+		goto free_dpa_thread;
 
 	ret = snap_cq_to_hw_cq(rt_thr->db_cq, &hw_cq);
 	if (ret)
@@ -333,6 +356,11 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 	ret = snap_dpa_memcpy(rt->dpa_proc,
 			snap_dpa_thread_heap_base(rt_thr->thread) + offsetof(struct dpa_rt_context, db_cq),
 			&hw_cq, sizeof(hw_cq));
+	if (ret)
+		goto free_db_cq;
+
+	ret = snap_dpa_rt_p2p_queue_create(rt_thr, pd, q_init_attr,
+			&rt_thr->dpu_cmd_chan, &rt_thr->dpa_cmd_chan);
 	if (ret)
 		goto free_db_cq;
 
@@ -350,10 +378,6 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 
 free_db_cq:
 	snap_cq_destroy(rt_thr->db_cq);
-free_dpa_qp:
-	snap_dma_ep_destroy(rt_thr->dpa_cmd_chan.dma_q);
-free_dpu_qp:
-	snap_dma_ep_destroy(rt_thr->dpu_cmd_chan.dma_q);
 free_dpa_thread:
 	snap_dpa_thread_destroy(rt_thr->thread);
 	return -EINVAL;

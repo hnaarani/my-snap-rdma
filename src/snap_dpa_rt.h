@@ -154,6 +154,9 @@ struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt,
 			struct snap_dpa_rt_thread_init_attr *rtt_attr);
 void snap_dpa_rt_thread_put(struct snap_dpa_rt_thread *rt);
 
+int snap_dpa_rt_p2p_queue_create(struct snap_dpa_rt_thread *rt_thr,
+		struct ibv_pd *pd, struct snap_dma_q_init_attr *q_init_attr,
+		struct snap_dpa_p2p_q *dpu_cmd_chan, struct snap_dpa_p2p_q *dpa_cmd_chan);
 int snap_dpa_rt_thread_msix_add(struct snap_dpa_rt_thread *rt_thr, struct snap_dpa_msix_eq *msix_eq, uint32_t *msix_cqnum);
 void snap_dpa_rt_thread_msix_remove(struct snap_dpa_rt_thread *rt_thr, struct snap_dpa_msix_eq *msix_eq);
 
