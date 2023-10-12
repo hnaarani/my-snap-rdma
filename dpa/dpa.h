@@ -129,7 +129,7 @@ static inline void *dpa_mbox(void)
 void *dpa_thread_alloc(size_t size);
 void dpa_thread_free(void *addr);
 
-struct snap_dma_q *dpa_dma_ep_cmd_copy(struct snap_dpa_cmd *cmd);
+struct snap_dma_q *dpa_dma_ep_cmd_copy(struct snap_dpa_cmd *cmd, bool dummy_rq);
 
 static inline void dpa_dma_q_ring_tx_db(uint32_t qpnum, uint16_t pi)
 {
@@ -220,7 +220,7 @@ static inline struct dpa_rt_context *dpa_rt_ctx()
 }
 
 void dpa_rt_init(void);
-void dpa_rt_start(void);
+void dpa_rt_start(bool dummy_rq);
 int dpa_p2p_recv(void);
 void dpa_msix_arm(void);
 bool is_event_mode(void);

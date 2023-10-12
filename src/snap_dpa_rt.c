@@ -213,10 +213,11 @@ void dummy_rx_cb(struct snap_dma_q *q, const void *data, uint32_t data_len, uint
 	snap_error("OOPS: rx cb called\n");
 }
 
-static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_in, struct snap_dma_q_init_attr *q_init_attr)
+static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_in,
+		struct snap_dpa_rt_thread_init_attr *rtt_attr)
 {
 	struct snap_dpa_thread_attr attr = {
-		.heap_size = SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE
+		.heap_size = rtt_attr->heap_size,
 	};
 	struct snap_dma_q_create_attr q_attr = {
 		.tx_qsize = SNAP_DPA_RT_QP_TX_SIZE,
@@ -236,6 +237,7 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 	struct snap_dpa_rt *rt = rt_thr->rt;
 	struct ibv_pd *pd = pd_in ? pd_in : rt->dpa_proc->pd;
 	struct ibv_pd *dpa_pd = rt->dpa_proc->pd;
+	struct snap_dma_q_init_attr *q_init_attr = rtt_attr->q_init_attr;
 	struct snap_hw_cq hw_cq;
 	int ret;
 	cpu_set_t cpu_mask;
@@ -386,7 +388,7 @@ static void rt_thread_reset(struct snap_dpa_rt_thread *rt_thr)
  */
 struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt,
 			struct snap_dpa_rt_filter *filter,
-			struct snap_dma_q_init_attr *q_init_attr)
+			struct snap_dpa_rt_thread_init_attr *rtt_attr)
 {
 	int ret;
 	struct snap_dpa_rt_thread *rt_thr;
@@ -407,7 +409,7 @@ struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt,
 	rt_thr->refcount = 1;
 
 	/* TODO: modify attribute to accept external snap_dma_q */
-	ret = rt_thread_init(rt_thr, filter->pd, q_init_attr);
+	ret = rt_thread_init(rt_thr, filter->pd, rtt_attr);
 	if (ret)
 		goto free_mem;
 

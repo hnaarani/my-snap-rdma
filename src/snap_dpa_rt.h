@@ -53,6 +53,11 @@ struct snap_dma_q_init_attr {
 	void *comp_context;
 };
 
+struct snap_dpa_rt_thread_init_attr {
+	struct snap_dma_q_init_attr *q_init_attr;
+	size_t heap_size;
+};
+
 struct snap_dpa_rt {
 	struct snap_dpa_ctx *dpa_proc;
 	/* TODO: keep list of current threads. At first we are going to
@@ -143,11 +148,9 @@ struct dpa_rt_context {
 #define SNAP_DPA_RT_THR_MSIX_CQE_SIZE 64
 #define SNAP_DPA_RT_THR_MSIX_CQE_CNT 2
 
-#define SNAP_DPA_RT_THR_SINGLE_HEAP_SIZE (310 * 1024)
-
 struct snap_dpa_rt_thread *snap_dpa_rt_thread_get(struct snap_dpa_rt *rt,
 			struct snap_dpa_rt_filter *filter,
-			struct snap_dma_q_init_attr *q_init_attr);
+			struct snap_dpa_rt_thread_init_attr *rtt_attr);
 void snap_dpa_rt_thread_put(struct snap_dpa_rt_thread *rt);
 
 int snap_dpa_rt_thread_msix_add(struct snap_dpa_rt_thread *rt_thr, struct snap_dpa_msix_eq *msix_eq, uint32_t *msix_cqnum);

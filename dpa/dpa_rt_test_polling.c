@@ -24,7 +24,7 @@ int dpa_init()
 int dpa_run()
 {
 	printf("RT test starting\n");
-	dpa_rt_start();
+	dpa_rt_start(false);
 
 	printf("All done. Waiting for DPU command\n");
 	snap_dpa_cmd_recv(dpa_mbox(), SNAP_DPA_CMD_STOP);

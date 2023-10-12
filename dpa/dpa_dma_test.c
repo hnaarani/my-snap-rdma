@@ -118,7 +118,7 @@ int dpa_run()
 	printf("DMA test starting\n");
 	printf("Waiting for EP\n");
 	cmd = snap_dpa_cmd_recv(dpa_mbox(), SNAP_DPA_CMD_DMA_EP_COPY);
-	q = dpa_dma_ep_cmd_copy(cmd);
+	q = dpa_dma_ep_cmd_copy(cmd, false);
 	snap_dpa_rsp_send(dpa_mbox(), SNAP_DPA_RSP_OK);
 	printf("dma q at %p\n", q);
 

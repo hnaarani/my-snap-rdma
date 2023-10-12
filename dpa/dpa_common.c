@@ -20,11 +20,12 @@
  * dpa_dma_ep_init() - initialize dma_q endpoint on DPA
  * @tcb: thread control block
  * @q: dpa endpoint address in dpa memory
+ * @dummy_rq: enable a memory optimization if rq data isn't used
  *
  * The function takes endpoint that was created with snap_dma_ep_create()
  * and prepares it for use on DPA
  */
-int dpa_dma_ep_init(struct snap_dma_q *q)
+int dpa_dma_ep_init(struct snap_dma_q *q, bool dummy_rq)
 {
 	uint32_t sq_wqe_cnt = q->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
 	uint32_t rq_wqe_cnt = q->sw_qp.dv_qp.hw_qp.rq.wqe_cnt;
@@ -36,12 +37,11 @@ int dpa_dma_ep_init(struct snap_dma_q *q)
 	 */
 	/* If qp has non zero rx post receives */
 	if (rq_wqe_cnt) {
-		q->sw_qp.rx_buf = dpa_thread_alloc(2 * rq_wqe_cnt * q->rx_elem_size);
+		q->sw_qp.rx_buf = dpa_thread_alloc(dummy_rq ? q->rx_elem_size : 2 * rq_wqe_cnt * q->rx_elem_size);
 		for (i = 0; i < 2 * rq_wqe_cnt; i++) {
 			snap_dv_post_recv(&q->sw_qp.dv_qp,
-					  q->sw_qp.rx_buf + i * q->rx_elem_size,
-					  q->rx_elem_size,
-					  snap_dma_q_dpa_mkey(q));
+					dummy_rq ? q->sw_qp.rx_buf : q->sw_qp.rx_buf + i * q->rx_elem_size,
+					q->rx_elem_size, snap_dma_q_dpa_mkey(q));
 			snap_dv_ring_rx_db(&q->sw_qp.dv_qp);
 		}
 	}
@@ -57,14 +57,14 @@ int dpa_dma_ep_init(struct snap_dma_q *q)
 	return 0;
 }
 
-struct snap_dma_q *dpa_dma_ep_cmd_copy(struct snap_dpa_cmd *cmd)
+struct snap_dma_q *dpa_dma_ep_cmd_copy(struct snap_dpa_cmd *cmd, bool dummy_rq)
 {
 	struct snap_dma_ep_copy_cmd *ep_cmd = (struct snap_dma_ep_copy_cmd *)cmd;
 	struct snap_dma_q *q;
 
 	q = dpa_thread_alloc(sizeof(*q));
 	memcpy(q, &ep_cmd->q, sizeof(*q));
-	dpa_dma_ep_init(q);
+	dpa_dma_ep_init(q, dummy_rq);
 	return q;
 }
 
@@ -195,7 +195,7 @@ void dpa_rt_init(void)
 		dpa_fatal("oops, rt context is not at the beginning of the heap\n");
 }
 
-void dpa_rt_start(void)
+void dpa_rt_start(bool dummy_rq)
 {
 	struct snap_dpa_tcb *tcb = dpa_tcb();
 	struct dpa_rt_context *ctx = dpa_rt_ctx();
@@ -203,7 +203,7 @@ void dpa_rt_start(void)
 
 	cmd = snap_dpa_cmd_recv(dpa_mbox(), SNAP_DPA_CMD_DMA_EP_COPY);
 
-	ctx->dpa_cmd_chan.dma_q = dpa_dma_ep_cmd_copy(cmd);
+	ctx->dpa_cmd_chan.dma_q = dpa_dma_ep_cmd_copy(cmd, dummy_rq);
 	ctx->dpa_cmd_chan.q_size = SNAP_DPA_RT_QP_RX_SIZE;
 	ctx->dpa_cmd_chan.credit_count = SNAP_DPA_RT_QP_RX_SIZE;
 

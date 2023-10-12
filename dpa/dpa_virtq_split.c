@@ -667,7 +667,7 @@ static void dpa_run_polling()
 {
 	int done = 0;
 
-	dpa_rt_start();
+	dpa_rt_start(true);
 
 	do {
 		process_commands(&done);
@@ -682,7 +682,7 @@ static inline void dpa_run_event()
 
 	/* may be add post init ?? */
 	if (snap_unlikely(tcb->init_done == 1)) {
-		dpa_rt_start();
+		dpa_rt_start(true);
 		tcb->init_done = 2;
 	}
 

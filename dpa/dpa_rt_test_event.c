@@ -30,7 +30,7 @@ int dpa_run()
 
 	if (tcb->user_flag == SNAP_DPA_RT_THR_EVENT) {
 		printf("RT event test starting\n");
-		dpa_rt_start();
+		dpa_rt_start(false);
 		/* hack to run once in event mode */
 		tcb->user_flag++;
 		return 0;
