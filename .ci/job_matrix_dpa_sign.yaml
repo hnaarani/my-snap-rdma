@@ -37,7 +37,7 @@ steps:
 
       dpa_dir="build/dpa"
 
-      for app in $dpa_dir/{dpa_nvme,dpa_virtq_split}; do
+      for app in $dpa_dir/{dpa_nvme,dpa_virtq_split,dpa_nvme_mp}; do
         sudo DPA_SIGN_USER=$DPA_SIGN_USER \
              DPA_SIGN_PASS=$DPA_SIGN_PASS \
              dpa/dpa_sign_prod.sh $app

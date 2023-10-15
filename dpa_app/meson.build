@@ -21,6 +21,6 @@ install_data('dpa_nvme_mp', install_dir: install_dir)
 # Apps must now always have signatre
 install_data('dpa_virtq_split.sig', install_dir: install_dir)
 install_data('dpa_nvme.sig', install_dir: install_dir)
-#install_data('dpa_nvme_mp.sig', install_dir: install_dir)
+install_data('dpa_nvme_mp.sig', install_dir: install_dir)
 #endif
 
