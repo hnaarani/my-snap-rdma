@@ -81,7 +81,6 @@ static int dpa_nvme_mp_sq_create(struct snap_dpa_cmd *cmd)
 	struct dpa_nvme_mp_cmd *nvme_cmd = (struct dpa_nvme_mp_cmd *)cmd;
 	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
 	struct dpa_nvme_mp_sq *sq;
-	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
 
 	sq = dpa_thread_alloc(sizeof(*sq));
 
@@ -97,7 +96,6 @@ static int dpa_nvme_mp_sq_create(struct snap_dpa_cmd *cmd)
 	/* TODO_Doron: input validation/sanity check */
 	TAILQ_INSERT_TAIL(&cq->sqs, sq, entry);
 
-	dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 	snap_debug("sq create: id %d, state:%d\n", sq->sqid, sq->state);
 
 	return SNAP_DPA_RSP_OK;
@@ -115,16 +113,27 @@ static int dpa_nvme_mp_sq_destroy(struct snap_dpa_cmd *cmd)
 	return SNAP_DPA_RSP_OK;
 }
 
-static int dpa_nvme_mp_sq_modify(struct snap_dpa_cmd *cmd)
+int dpa_nvme_mp_sq_modify(struct snap_dpa_cmd *cmd)
 {
 	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
 	struct dpa_nvme_mp_sq *sq;
 	struct dpa_nvme_mp_cmd *ncmd = (struct dpa_nvme_mp_cmd *)cmd;
 	enum dpa_nvme_mp_state next_state = ncmd->cmd_sq_modify.state;
+	struct dpa_sq_modify_mask mask = ncmd->cmd_sq_modify.mask;
+	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
 
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
 		if (sq->sqid == ncmd->cmd_sq_modify.sqid) {
 			sq->state = next_state;
+			if (mask.state)
+				sq->state = next_state;
+			if (mask.host_sq_tail)
+				sq->arm_sq_tail =
+					ncmd->cmd_sq_modify.host_sq_tail;
+
+			if (mask.state && sq->state == DPA_NVME_MP_STATE_RDY)
+				dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
+
 			return SNAP_DPA_RSP_OK;
 		}
 	}
@@ -143,6 +152,8 @@ static int dpa_nvme_mp_sq_query(struct snap_dpa_cmd *cmd)
 
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
 		if (sq->sqid == ncmd->cmd_sq_query.sqid) {
+			dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
+			if (sq->state == DPA_NVME_MP_STATE_RDY)
 			dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 			host_sq_tail = dpa_ctx_read(sq->duar_id);
 			dpa_write_rsp(sq->state, host_sq_tail);
@@ -170,6 +181,18 @@ static int dpa_nvme_mp_cq_destroy(struct snap_dpa_cmd *cmd)
 	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
 
 	cq->state = DPA_NVME_MP_STATE_ERR;
+	return SNAP_DPA_RSP_OK;
+}
+
+static int dpa_nvme_cq_modify(struct snap_dpa_cmd *cmd)
+{
+	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
+	struct dpa_nvme_mp_cmd *ncmd = (struct dpa_nvme_mp_cmd *)cmd;
+	struct dpa_cq_modify_mask mask = ncmd->cmd_cq_modify.mask;
+
+	if (mask.state)
+		cq->state = ncmd->cmd_cq_modify.state;
+
 	return SNAP_DPA_RSP_OK;
 }
 
@@ -209,6 +232,9 @@ static int do_command(int *done)
 			break;
 		case DPA_NVME_MP_CQ_DESTROY:
 			rsp_status = dpa_nvme_mp_cq_destroy(cmd);
+			break;
+		case DPA_NVME_MP_CQ_MODIFY:
+			rsp_status = dpa_nvme_cq_modify(cmd);
 			break;
 		case DPA_NVME_MP_CQ_QUERY:
 			rsp_status = dpa_nvme_mp_cq_query(cmd);
