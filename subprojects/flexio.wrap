@@ -3,6 +3,8 @@ directory = flexio
 url = http://l-gerrit.mtl.labs.mlnx:8080/flexio-sdk
 revision = RC2Ver23.10
 depth = 50
+# patch file is needed to make flexio work with address sanitizer
+patch_filename = flexio.tar.gz
 
 # This is an example how to work with private flexio branch
 # Comment out lines above and uncomment/modify line below
