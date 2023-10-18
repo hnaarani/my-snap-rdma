@@ -273,7 +273,7 @@ static inline void nvme_progress()
 	if (snap_unlikely(cq->state != DPA_NVME_STATE_RDY))
 		return;
 
-	msix_count = dpa_p2p_recv();
+	msix_count = dpa_p2p_recv(&rt_ctx->dpa_cmd_chan);
 	if (msix_count)
 		dpa_msix_raise();
 

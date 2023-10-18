@@ -17,6 +17,7 @@
 
 #define SNAP_DPA_NVME_MP_APP "dpa_nvme_mp"
 #define SNAP_DPA_NVME_MP_SQE_SHADOW_ALIGN 64
+#define SNAP_DPA_NVME_MP_MAX_NUM_QPS 8
 
 enum {
 	DPA_NVME_MP_CQ_CREATE = SNAP_DPA_CMD_APP_FIRST,
@@ -42,6 +43,8 @@ struct dpa_nvme_mp_cq {
 	struct dpa_nvme_mp_sq_list sqs;
 	enum dpa_nvme_mp_state state;
 	struct snap_hw_cq cq_head_db_hw_cq;
+	struct snap_dpa_p2p_q p2p_queues[SNAP_DPA_NVME_MP_MAX_NUM_QPS];
+	uint32_t num_p2p_queues;
 	uint32_t cq_head_duar_id;
 	uint32_t host_cq_head;
 	uint32_t msix_cqnum;

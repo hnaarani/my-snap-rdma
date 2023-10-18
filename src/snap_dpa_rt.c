@@ -292,6 +292,8 @@ int snap_dpa_rt_p2p_queue_create(struct snap_dpa_rt_thread *rt_thr,
 
 	dpu_cmd_chan->q_size = SNAP_DPA_RT_QP_RX_SIZE;
 	dpu_cmd_chan->credit_count = SNAP_DPA_RT_QP_RX_SIZE;
+	dpa_cmd_chan->q_size = SNAP_DPA_RT_QP_RX_SIZE;
+	dpa_cmd_chan->credit_count = SNAP_DPA_RT_QP_RX_SIZE;
 
 	return 0;
 }

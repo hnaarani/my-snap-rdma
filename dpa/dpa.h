@@ -219,9 +219,12 @@ static inline struct dpa_rt_context *dpa_rt_ctx()
 	return (struct dpa_rt_context *)dpa_tcb()->data_address;
 }
 
+struct snap_dpa_p2p_q;
+
 void dpa_rt_init(void);
 void dpa_rt_start(bool dummy_rq);
-int dpa_p2p_recv(void);
+int dpa_dma_ep_init(struct snap_dma_q *q, bool dummy_rq);
+int dpa_p2p_recv(struct snap_dpa_p2p_q *p2p_q);
 void dpa_msix_arm(void);
 bool is_event_mode(void);
 #endif

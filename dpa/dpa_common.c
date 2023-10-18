@@ -117,19 +117,18 @@ inline bool is_event_mode()
 	return dpa_tcb()->user_flag == SNAP_DPA_RT_THR_EVENT;
 }
 
-inline int dpa_p2p_recv()
+inline int dpa_p2p_recv(struct snap_dpa_p2p_q *p2p_q)
 {
-	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
 	struct snap_dpa_p2p_msg *msgs[16];
 	int n, msix_count;
 
 	/* cq shall be armed before it is polled. See man ibv_get_cq_event */
 	if (is_event_mode())
-		snap_dv_arm_cq(&rt_ctx->dpa_cmd_chan.dma_q->sw_qp.dv_rx_cq);
+		snap_dv_arm_cq(&p2p_q->dma_q->sw_qp.dv_rx_cq);
 
 	msix_count = 0;
 	do {
-		n = snap_dpa_p2p_recv_msg(&rt_ctx->dpa_cmd_chan, msgs, 16);
+		n = snap_dpa_p2p_recv_msg(p2p_q, msgs, 16);
 		if (n)
 			snap_debug("recv %d new messages", n);
 		msix_count += n;
