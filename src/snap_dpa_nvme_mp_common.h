@@ -18,6 +18,17 @@
 #define SNAP_DPA_NVME_MP_APP "dpa_nvme_mp"
 #define SNAP_DPA_NVME_MP_SQE_SHADOW_ALIGN 64
 #define SNAP_DPA_NVME_MP_MAX_NUM_QPS 8
+#define NVME_MP_PACKED __attribute__((packed))
+
+struct NVME_MP_PACKED nvme_cmd {
+	uint8_t opc:8;
+	uint8_t fuse:2;
+	uint8_t:4;
+	uint8_t psdt:2;
+	uint16_t cid;
+	uint32_t nsid;
+	uint8_t rsv[56];
+};
 
 enum {
 	DPA_NVME_MP_CQ_CREATE = SNAP_DPA_CMD_APP_FIRST,
@@ -48,6 +59,14 @@ struct dpa_nvme_mp_cq {
 	uint32_t cq_head_duar_id;
 	uint32_t host_cq_head;
 	uint32_t msix_cqnum;
+
+	struct snap_dma_completion comp;
+	uint64_t host_cq_addr;
+	uint32_t host_mkey;
+	uint16_t cq_tail;
+	uint16_t cq_depth;
+	bool msix_required;
+	bool phase;
 };
 
 struct dpa_nvme_mp_sq {

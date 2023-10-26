@@ -94,7 +94,7 @@ void *dpa_thread_alloc(size_t size)
 		tcb->data_used += size;
 
 	if (tcb->data_used > tcb->heap_size)
-		dpa_fatal("thread alloc: OOM: want %d bytes, will use %d which is more than %d bytes\n",
+		dpa_fatal("thread alloc: OOM: want %lu bytes, will use %lu which is more than %lu bytes\n",
 				size, tcb->data_used, tcb->heap_size);
 
 	dpa_debug("thread alloc: addr %p wanted %ld total used %ld\n", data_add, size, tcb->data_used);

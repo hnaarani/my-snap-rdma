@@ -22,6 +22,16 @@
 #include "dpa_dma_utils.h"
 
 #define COMMAND_DELAY 100000
+#define NVME_MP_MAX_COMPS_POLL 16
+
+struct NVME_MP_PACKED nvme_cqe {
+	uint32_t	result;
+	uint32_t	rsvd;
+	uint16_t	sq_head;
+	uint16_t	sq_id;
+	uint16_t	cid;
+	uint16_t	status;
+};
 
 /**
  * Single nvme queue per thread implementation. The thread can be
@@ -76,6 +86,20 @@ static int dpa_nvme_mp_queues_init(struct dpa_nvme_mp_cq *cq)
 	return 0;
 }
 
+static inline void dpa_msix_raise()
+{
+	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
+
+	dpa_msix_arm();
+	dpa_msix_send(cq->msix_cqnum);
+}
+
+static void
+dpa_nvme_mp_dpa2host_done(struct snap_dma_completion *comp, int status)
+{
+	dpa_msix_raise();
+}
+
 static int dpa_nvme_mp_cq_create(struct snap_dpa_cmd *cmd)
 {
 	struct dpa_nvme_mp_cmd *nvme_cmd = (struct dpa_nvme_mp_cmd *)cmd;
@@ -87,6 +111,11 @@ static int dpa_nvme_mp_cq_create(struct snap_dpa_cmd *cmd)
 
 	if (dpa_nvme_mp_queues_init(cq))
 		return SNAP_DPA_RSP_ERR;
+
+	/* Set count to 1 if msix isn't required, so callback won't be called */
+	cq->comp.count = !cq->msix_required;
+	cq->comp.func = dpa_nvme_mp_dpa2host_done;
+	cq->phase = 1;
 
 	/* TODO_Doron: input validation/sanity check */
 	dpa_debug("nvme cq create\n");
@@ -288,12 +317,36 @@ static inline int process_commands(int *done)
 	return do_command(done);
 }
 
-static inline void dpa_msix_raise()
+static inline void
+nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct snap_dma_q *q)
 {
-	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
+	struct snap_rx_completion comps[NVME_MP_MAX_COMPS_POLL];
+	struct nvme_cqe *cqe;
+	int n, i, rc;
 
-	dpa_msix_arm();
-	dpa_msix_send(cq->msix_cqnum);
+	snap_dv_arm_cq(&q->sw_qp.dv_rx_cq);
+
+	do {
+		n = snap_dma_q_poll_rx(q, comps, NVME_MP_MAX_COMPS_POLL);
+
+		for (i = 0; i < n; i++) {
+			cqe = comps[i].data;
+			/* Assumes cqe phase is always 0 */
+			cqe->status |= (cq->phase & 1);
+
+			cq->comp.count++;
+			rc = snap_dma_q_write(q, cqe, sizeof(struct nvme_cqe),
+					snap_dma_q_dpa_mkey(q), cq->host_cq_addr + (cq->cq_tail << 4),
+					cq->host_mkey, &cq->comp);
+			if (rc)
+				dpa_error("Failed to write completion to host, err: %d\n", rc);
+
+			cq->cq_tail = (cq->cq_tail + 1) & (cq->cq_depth - 1);
+			cq->phase = cq->phase ^ (!cq->cq_tail);
+		}
+	} while (n);
+
+	q->ops->progress_tx(q, -1);
 }
 
 static inline void nvme_mp_progress()
@@ -301,16 +354,15 @@ static inline void nvme_mp_progress()
 	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
 	uint64_t sq_tail;
 	uint64_t cq_head;
-	int msix_count;
 	struct dpa_nvme_mp_sq *sq;
 	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
 
 	if (snap_unlikely(cq->state != DPA_NVME_MP_STATE_RDY))
 		return;
 
-	msix_count = dpa_p2p_recv(&cq->p2p_queues[0]);
-	if (msix_count)
-		dpa_msix_raise();
+	/* TODO_Itay: to be replaced by shared rx cq */
+	for (int i = 0; i < cq->num_p2p_queues; i++)
+		nvme_mp_completions_poll(cq, cq->p2p_queues[i].dma_q);
 
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
 		if (snap_unlikely(sq->state != DPA_NVME_MP_STATE_RDY))
