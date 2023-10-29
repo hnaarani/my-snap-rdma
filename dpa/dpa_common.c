@@ -37,8 +37,8 @@ int dpa_dma_ep_init(struct snap_dma_q *q, bool dummy_rq)
 	 */
 	/* If qp has non zero rx post receives */
 	if (rq_wqe_cnt) {
-		q->sw_qp.rx_buf = dpa_thread_alloc(dummy_rq ? q->rx_elem_size : 2 * rq_wqe_cnt * q->rx_elem_size);
-		for (i = 0; i < 2 * rq_wqe_cnt; i++) {
+		q->sw_qp.rx_buf = dpa_thread_alloc(dummy_rq ? q->rx_elem_size : rq_wqe_cnt * q->rx_elem_size);
+		for (i = 0; i < rq_wqe_cnt; i++) {
 			snap_dv_post_recv(&q->sw_qp.dv_qp,
 					dummy_rq ? q->sw_qp.rx_buf : q->sw_qp.rx_buf + i * q->rx_elem_size,
 					q->rx_elem_size, snap_dma_q_dpa_mkey(q));
