@@ -56,18 +56,96 @@ static void dpa_write_rsp(enum dpa_nvme_mp_state state, uint32_t db_value)
 	rsp->state.db_value = db_value;
 }
 
+static inline void
+dpa_nvme_mp_ns_next_rb_get(struct dpa_nvme_mp_ns *ns, uint32_t num_p2p_queues)
+{
+	do
+		ns->active_rb = (ns->active_rb + 1) % num_p2p_queues;
+	while (!ns->rbs[ns->active_rb].weight);
+
+	ns->credits = ns->rbs[ns->active_rb].weight;
+}
+
+static inline void
+dpa_nvme_mp_sqes_send(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq,
+		uint32_t nsid, uint32_t start_idx, uint32_t end_idx)
+{
+	struct snap_dpa_p2p_msg_rb_tail msg;
+	struct dpa_nvme_mp_ns *ns = sq->namespaces[nsid];
+	struct snap_dpa_p2p_q *p2p_q;
+	struct dpa_nvme_mp_rb *rb;
+	uint16_t num_elements;
+	// int i;
+
+	if (!ns || ns->active_rb >= cq->num_p2p_queues) {
+		printf("TODO: Handle NVMe cmds with wrong nsid\n");
+		return;
+	}
+
+	/* TODO_Itay: check perf against an array of only active rbs */
+	if (!ns->credits)
+		dpa_nvme_mp_ns_next_rb_get(ns, cq->num_p2p_queues);
+
+	p2p_q = &cq->p2p_queues[ns->active_rb];
+	rb = &ns->rbs[ns->active_rb];
+	ns->credits--;
+
+	/* Optimization: write as a batch (need to consider wraparounds of sq + rb)*/
+	// for (i = start_idx; i != end_idx; i = (i + 1) & (sq->queue_depth - 1)) {
+	// 	snap_dma_q_write(p2p_q->dma_q, sq->sqe_buffer + i,
+	// 			sizeof(struct nvme_cmd), snap_dma_q_dpa_mkey(p2p_q->dma_q),
+	// 			rb->arm_rb_addr + ((uint64_t)rb->tail * sizeof(struct nvme_cmd)),
+	// 			rb->arm_rb_mkey, NULL);
+	// 	rb->tail = (rb->tail + 1) & (sq->queue_depth - 1);
+	// }
+
+	num_elements = (end_idx - start_idx) % sq->queue_depth;
+	snap_dpa_dma_rb_write(p2p_q->dma_q, sq->sqe_buffer, snap_dma_q_dpa_mkey(p2p_q->dma_q),
+			rb->arm_rb_addr, rb->arm_rb_mkey, start_idx, rb->tail,
+			num_elements, sizeof(struct nvme_cmd), sq->queue_depth, NULL);
+	rb->tail = (rb->tail + num_elements) % sq->queue_depth;
+
+	msg = (struct snap_dpa_p2p_msg_rb_tail) {
+		.base.type = SNAP_DPA_P2P_MSG_NVME_MP_RB_TAIL,
+		.base.qid = sq->sqid,
+		.rb_addr = (void *) rb->arm_rb_addr,
+		.rb_tail = rb->tail,
+	};
+
+	snap_dpa_p2p_send_msg(p2p_q, (struct snap_dpa_p2p_msg *) &msg);
+
+	p2p_q->dma_q->ops->progress_tx(p2p_q->dma_q, -1);
+}
+
 static void
-dpa_nvme_mp_host2dpa_done(struct snap_dma_completion *comp, int status)
+dpa_nvme_mp_io_host2dpa_done(struct snap_dma_completion *comp, int status)
+{
+	struct dpa_nvme_mp_sq *sq = container_of(comp, struct dpa_nvme_mp_sq, host2dpa_comp);
+	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
+	uint32_t prev_nsid, curr_nsid, i;
+
+	prev_nsid = sq->sqe_buffer[sq->arm_sq_tail].nsid;
+	for (i = sq->arm_sq_tail; i != sq->last_read_sq_tail; i = (i + 1) % sq->queue_depth) {
+		/* Recovery mark should go here */
+		curr_nsid = sq->sqe_buffer[i].nsid;
+		if (prev_nsid != curr_nsid) {
+			dpa_nvme_mp_sqes_send(cq, sq, prev_nsid, sq->arm_sq_tail, i);
+			sq->arm_sq_tail = i;
+			prev_nsid = curr_nsid;
+		}
+	}
+
+	dpa_nvme_mp_sqes_send(cq, sq, curr_nsid, sq->arm_sq_tail, sq->last_read_sq_tail);
+	sq->arm_sq_tail = sq->last_read_sq_tail;
+}
+
+static void
+dpa_nvme_mp_admin_host2dpa_done(struct snap_dma_completion *comp, int status)
 {
 	struct dpa_nvme_mp_sq *sq = container_of(comp, struct dpa_nvme_mp_sq, host2dpa_comp);
 	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
 
-	/* TODO_Itay: re-use rb_write + an inline p2p msg func here */
-	snap_dpa_p2p_send_sq_tail(&cq->p2p_queues[0], sq->sqid, sq->last_read_sq_tail,
-			(uint64_t) sq->sqe_buffer, snap_dma_q_dpa_mkey(cq->p2p_queues[0].dma_q),
-			sq->dpu_sqe_shadow_addr, sq->dpu_sqe_shadow_mkey, sq->arm_sq_tail, sq->queue_depth);
-
-	cq->p2p_queues[0].dma_q->ops->progress_tx(cq->p2p_queues[0].dma_q, -1);
+	dpa_nvme_mp_sqes_send(cq, sq, 0, sq->arm_sq_tail, sq->last_read_sq_tail);
 	sq->arm_sq_tail = sq->last_read_sq_tail;
 }
 
@@ -123,6 +201,33 @@ static int dpa_nvme_mp_cq_create(struct snap_dpa_cmd *cmd)
 	return SNAP_DPA_RSP_OK;
 }
 
+static int
+dpa_nvme_mp_rb_create(struct snap_dpa_cmd *cmd)
+{
+	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
+	struct dpa_nvme_mp_sq *sq = TAILQ_FIRST(&cq->sqs);
+	struct dpa_nvme_mp_cmd *ncmd = (struct dpa_nvme_mp_cmd *)cmd;
+	struct dpa_nvme_mp_cmd_rb_create *rb_cmd = &ncmd->cmd_rb_create;
+	struct dpa_nvme_mp_ns *ns;
+	size_t ns_size;
+
+	if (!sq->namespaces[rb_cmd->nsid]) {
+		ns_size = sizeof(struct dpa_nvme_mp_ns) + cq->num_p2p_queues * sizeof(struct dpa_nvme_mp_rb);
+		sq->namespaces[rb_cmd->nsid] = dpa_thread_alloc(ns_size);
+		memset(sq->namespaces[rb_cmd->nsid], 0, ns_size);
+	}
+
+	ns = sq->namespaces[rb_cmd->nsid];
+	ns->rbs[rb_cmd->qp_id] = (struct dpa_nvme_mp_rb) {
+		.arm_rb_addr = rb_cmd->arm_rb_addr,
+		.arm_rb_mkey = rb_cmd->arm_rb_mkey,
+		.weight = rb_cmd->weight,
+		.tail = 0,
+	};
+
+	return 0;
+}
+
 static int dpa_nvme_mp_sq_create(struct snap_dpa_cmd *cmd)
 {
 	struct dpa_nvme_mp_cmd *nvme_cmd = (struct dpa_nvme_mp_cmd *)cmd;
@@ -133,11 +238,13 @@ static int dpa_nvme_mp_sq_create(struct snap_dpa_cmd *cmd)
 
 	memcpy(sq, &nvme_cmd->cmd_sq_create.sq, sizeof(nvme_cmd->cmd_sq_create.sq));
 
+	memset(sq->namespaces, 0, sizeof(*sq->namespaces));
 	sq->sqe_buffer = (struct nvme_cmd *) dpa_thread_alloc(sq->queue_depth * SNAP_DPA_NVME_SQE_SIZE);
 	sq->host2dpa_comp = (struct snap_dma_completion) {
-		.func = dpa_nvme_mp_host2dpa_done,
+		.func = sq->sqid ? dpa_nvme_mp_io_host2dpa_done : dpa_nvme_mp_admin_host2dpa_done,
 		.count = 0,
 	};
+	sq->sq_head = 0;
 	sq->last_read_sq_tail = 0;
 
 	/* TODO_Doron: input validation/sanity check */
@@ -298,6 +405,9 @@ static int do_command(int *done)
 		case DPA_NVME_MP_SQ_QUERY:
 			rsp_status = dpa_nvme_mp_sq_query(cmd);
 			break;
+		case DPA_NVME_MP_RB_CREATE:
+			rsp_status = dpa_nvme_mp_rb_create(cmd);
+			break;
 		default:
 			dpa_warn("unsupported command %d\n", cmd->cmd);
 	}
@@ -318,7 +428,7 @@ static inline int process_commands(int *done)
 }
 
 static inline void
-nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct snap_dma_q *q)
+nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq, struct snap_dma_q *q)
 {
 	struct snap_rx_completion comps[NVME_MP_MAX_COMPS_POLL];
 	struct nvme_cqe *cqe;
@@ -330,9 +440,13 @@ nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct snap_dma_q *q)
 		n = snap_dma_q_poll_rx(q, comps, NVME_MP_MAX_COMPS_POLL);
 
 		for (i = 0; i < n; i++) {
+			/* Assumes that our CQ has 1 SQ */
+			sq->sq_head = (sq->sq_head + 1) % sq->queue_depth;
 			cqe = comps[i].data;
+
 			/* Assumes cqe phase is always 0 */
 			cqe->status |= (cq->phase & 1);
+			cqe->sq_head = sq->sq_head;
 
 			cq->comp.count++;
 			rc = snap_dma_q_write(q, cqe, sizeof(struct nvme_cqe),
@@ -341,7 +455,7 @@ nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct snap_dma_q *q)
 			if (rc)
 				dpa_error("Failed to write completion to host, err: %d\n", rc);
 
-			cq->cq_tail = (cq->cq_tail + 1) & (cq->cq_depth - 1);
+			cq->cq_tail = (cq->cq_tail + 1) & (cq->queue_depth - 1);
 			cq->phase = cq->phase ^ (!cq->cq_tail);
 		}
 	} while (n);
@@ -352,45 +466,36 @@ nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct snap_dma_q *q)
 static inline void nvme_mp_progress()
 {
 	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
-	uint64_t sq_tail;
-	uint64_t cq_head;
 	struct dpa_nvme_mp_sq *sq;
 	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
+	uint64_t sq_tail;
 
 	if (snap_unlikely(cq->state != DPA_NVME_MP_STATE_RDY))
 		return;
-
-	/* TODO_Itay: to be replaced by shared rx cq */
-	for (int i = 0; i < cq->num_p2p_queues; i++)
-		nvme_mp_completions_poll(cq, cq->p2p_queues[i].dma_q);
 
 	TAILQ_FOREACH(sq, &cq->sqs, entry) {
 		if (snap_unlikely(sq->state != DPA_NVME_MP_STATE_RDY))
 			continue;
 
+		/* TODO_Itay: to be replaced by shared rx cq */
+		for (int i = 0; i < cq->num_p2p_queues; i++)
+			nvme_mp_completions_poll(cq, sq, cq->p2p_queues[i].dma_q);
+
 		dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
 		sq_tail = dpa_ctx_read(sq->duar_id);
 		if (sq_tail != sq->last_read_sq_tail) {
-			snap_dpa_dma_rb_write(cq->p2p_queues[0].dma_q, (void *) sq->host_sq_addr,
+			sq->host2dpa_comp.count += snap_dpa_dma_rb_write(cq->p2p_queues[0].dma_q, (void *) sq->host_sq_addr,
 					sq->dpu_mkey, (uint64_t) sq->sqe_buffer, snap_dma_q_dpa_mkey(cq->p2p_queues[0].dma_q),
-					&sq->host2dpa_comp, sq_tail, sq->last_read_sq_tail, SNAP_DPA_NVME_SQE_SIZE,
-					sq->queue_depth);
+					sq->last_read_sq_tail, sq->last_read_sq_tail, (sq_tail - sq->last_read_sq_tail) & (sq->queue_depth - 1),
+					SNAP_DPA_NVME_SQE_SIZE, sq->queue_depth, &sq->host2dpa_comp);
 			sq->last_read_sq_tail = sq_tail;
 		}
 
-		/* kick off sq tail message fast */
 		cq->p2p_queues[0].dma_q->ops->progress_tx(cq->p2p_queues[0].dma_q, -1);
 	}
 
 	dpa_duar_arm(cq->cq_head_duar_id, rt_ctx->db_cq.cq_num);
-	cq_head = dpa_ctx_read(cq->cq_head_duar_id);
-	if (cq->host_cq_head != cq_head) {
-		snap_dpa_p2p_send_cq_head(&cq->p2p_queues[0], cq_head);
-		cq->host_cq_head = cq_head;
-	}
-
-	/* kick off cq head message */
-	cq->p2p_queues[0].dma_q->ops->progress_tx(cq->p2p_queues[0].dma_q, -1);
+	cq->cq_head = dpa_ctx_read(cq->cq_head_duar_id);
 }
 
 int dpa_init()

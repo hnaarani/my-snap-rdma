@@ -283,7 +283,7 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 	if (sqes_to_write == 1 && wrap_around_sqes == 0) {
 		imm = 1;
 		return snap_dma_q_send(q->dma_q, NULL, 0, sqe_table + sqe_offset,
-			SNAP_DPA_NVME_SQE_SIZE, driver_mkey, &imm);
+				SNAP_DPA_NVME_SQE_SIZE, driver_mkey, &imm);
 	}
 	return snap_dpa_p2p_send_msg(q, (struct snap_dpa_p2p_msg *) &msg);
 }

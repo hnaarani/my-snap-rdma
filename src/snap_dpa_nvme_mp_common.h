@@ -18,6 +18,7 @@
 #define SNAP_DPA_NVME_MP_APP "dpa_nvme_mp"
 #define SNAP_DPA_NVME_MP_SQE_SHADOW_ALIGN 64
 #define SNAP_DPA_NVME_MP_MAX_NUM_QPS 8
+#define SNAP_DPA_NVME_MP_MAX_NSID 32
 #define NVME_MP_PACKED __attribute__((packed))
 
 struct NVME_MP_PACKED nvme_cmd {
@@ -39,6 +40,7 @@ enum {
 	DPA_NVME_MP_SQ_DESTROY,
 	DPA_NVME_MP_SQ_MODIFY,
 	DPA_NVME_MP_SQ_QUERY,
+	DPA_NVME_MP_RB_CREATE,
 };
 
 enum dpa_nvme_mp_state {
@@ -64,12 +66,27 @@ struct dpa_nvme_mp_cq {
 	uint64_t host_cq_addr;
 	uint32_t host_mkey;
 	uint16_t cq_tail;
-	uint16_t cq_depth;
+	uint16_t cq_head;
+	uint16_t queue_depth;
 	bool msix_required;
 	bool phase;
 };
 
+struct dpa_nvme_mp_rb {
+	uint64_t arm_rb_addr;
+	uint32_t arm_rb_mkey;
+	uint16_t tail;
+	uint8_t weight;
+};
+
+struct dpa_nvme_mp_ns {
+	uint8_t active_rb;
+	uint8_t credits;
+	struct dpa_nvme_mp_rb rbs[0];
+};
+
 struct dpa_nvme_mp_sq {
+	struct dpa_nvme_mp_ns *namespaces[SNAP_DPA_NVME_MP_MAX_NSID + 1];
 	uint32_t sqid;
 	uint32_t dpu_sqe_shadow_mkey;
 	uint64_t dpu_sqe_shadow_addr;
@@ -79,6 +96,7 @@ struct dpa_nvme_mp_sq {
 	uint32_t dpu_mkey;
 	enum dpa_nvme_mp_state state;
 
+	uint32_t sq_head;
 	uint32_t arm_sq_tail;
 	uint32_t last_read_sq_tail;
 	struct nvme_cmd *sqe_buffer;
@@ -120,6 +138,14 @@ struct dpa_nvme_mp_cmd_sq_query {
 	uint32_t sqid;
 };
 
+struct dpa_nvme_mp_cmd_rb_create {
+	uint64_t arm_rb_addr;
+	uint32_t arm_rb_mkey;
+	uint32_t nsid;
+	uint8_t qp_id;
+	uint8_t weight;
+};
+
 struct dpa_nvme_mp_rsp_query {
 	enum dpa_nvme_mp_state state;
 	uint32_t db_value;
@@ -133,6 +159,7 @@ struct dpa_nvme_mp_cmd {
 		struct dpa_nvme_mp_cmd_cq_modify cmd_cq_modify;
 		struct dpa_nvme_mp_cmd_sq_modify cmd_sq_modify;
 		struct dpa_nvme_mp_cmd_sq_query cmd_sq_query;
+		struct dpa_nvme_mp_cmd_rb_create cmd_rb_create;
 	};
 };
 struct dpa_nvme_mp_rsp {

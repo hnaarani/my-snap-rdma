@@ -12,43 +12,47 @@
 
 #include "snap_dma.h"
 
+/**
+ * @brief Transfer data using DMA from one ring buffer to another, handling wraparounds.
+ *
+ * This function copies data from one ring buffer to another using DMA, taking into account
+ * potential wraparounds in both ring buffers.
+ *
+ * @return The number of DMA operations initiated.
+ *
+ * @note The 'comp->count' field is not updated by this function.
+ */
 static inline int
 snap_dpa_dma_rb_write(struct snap_dma_q *q, void *src_buffer,
 		uint32_t src_mkey, uint64_t dst_buffer, uint32_t dst_mkey,
-		struct snap_dma_completion *comp, uint16_t new_elem_idx,
-		uint32_t old_elem_idx, const uint32_t element_size, uint32_t q_depth)
+		uint32_t src_idx, uint32_t dst_idx, uint16_t num_elements,
+		uint32_t element_size, uint32_t q_depth, struct snap_dma_completion *comp)
 {
-	uint32_t start_offset = old_elem_idx * element_size;
-	uint32_t elements_reg, elements_wrapped;
-	int rc;
+	uint32_t src_wa = q_depth - src_idx, dst_wa = q_depth - dst_idx;
+	uint32_t first_wa = MIN(src_wa, dst_wa);
+	uint32_t second_wa = src_wa + dst_wa - (2 * first_wa);
+	int dma_count = 1;
 
-	if (snap_unlikely(new_elem_idx < old_elem_idx)) {
-		elements_reg = q_depth - old_elem_idx;
-		elements_wrapped = new_elem_idx;
-	} else {
-		elements_reg = new_elem_idx - old_elem_idx;
-		elements_wrapped = 0;
+	if (snap_unlikely(num_elements > first_wa)) {
+		snap_dma_q_write(q, src_buffer + (src_idx * element_size), first_wa * element_size,
+				src_mkey, dst_buffer + (dst_idx * element_size), dst_mkey, comp);
+		num_elements -= first_wa;
+		src_idx = (src_idx + first_wa) % q_depth;
+		dst_idx = (dst_idx + first_wa) % q_depth;
+		dma_count++;
 	}
 
-	comp->count++;
-	rc = snap_dma_q_write(q, src_buffer + start_offset,
-			element_size * elements_reg, src_mkey,
-			dst_buffer + start_offset, dst_mkey, comp);
-	if (snap_unlikely(rc)) {
-		snap_debug("Ring buffer dma write failed with err %d", rc);
-		return rc;
+	if (snap_unlikely(second_wa && num_elements > second_wa)) {
+		snap_dma_q_write(q, src_buffer + (src_idx * element_size), second_wa * element_size,
+				src_mkey, dst_buffer + (dst_idx * element_size), dst_mkey, comp);
+		num_elements -= second_wa;
+		src_idx = (src_idx + second_wa) % q_depth;
+		dst_idx = (dst_idx + second_wa) % q_depth;
+		dma_count++;
 	}
 
-	if (snap_unlikely(elements_wrapped)) {
-		comp->count++;
-		rc = snap_dma_q_write(q, src_buffer,
-				element_size * elements_wrapped,
-				src_mkey, dst_buffer, dst_mkey, comp);
-		if (snap_unlikely(rc)) {
-			snap_debug("Ring buffer dma write failed with err %d", rc);
-			return rc;
-		}
-	}
+	snap_dma_q_write(q, src_buffer + (src_idx * element_size), num_elements * element_size,
+			src_mkey, dst_buffer + (dst_idx * element_size), dst_mkey, comp);
 
-	return rc;
+	return dma_count;
 }

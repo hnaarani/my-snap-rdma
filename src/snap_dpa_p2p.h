@@ -74,8 +74,10 @@ enum {
 	/* DPA->DPU */
 	SNAP_DPA_P2P_MSG_NVME_SQ_TAIL = 40,
 	SNAP_DPA_P2P_MSG_NVME_CQ_HEAD = 41,
+
+	SNAP_DPA_P2P_MSG_NVME_MP_RB_TAIL = 42,
 	/* DPU->DPA */
-	SNAP_DPA_P2P_MSGS_NVME_MSIX = 50
+	SNAP_DPA_P2P_MSGS_NVME_MSIX = 50,
 };
 
 #define SNAP_DPA_P2P_CREDIT_COUNT 64
@@ -120,6 +122,12 @@ struct snap_dpa_p2p_msg_vq_update {
 struct snap_dpa_p2p_msg_sq_tail {
 	struct snap_dpa_p2p_msg_base base;
 	uint32_t sq_tail;
+};
+
+struct snap_dpa_p2p_msg_rb_tail {
+	struct snap_dpa_p2p_msg_base base;
+	void *rb_addr;
+	uint16_t rb_tail;
 };
 
 struct snap_dpa_p2p_msg_cq_head {
