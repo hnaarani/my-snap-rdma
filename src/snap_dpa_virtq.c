@@ -25,6 +25,10 @@
 
 #include "mlx5_ifc.h"
 
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(DPA_VIRTQ);
+
 #define SNAP_DPA_VIRTQ_BBUF_ALIGN 4096
 
 /* make sure our virtq commands are fit into mailbox */
@@ -155,7 +159,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 		if (ret)
 			goto free_msix_eq;
 
-		snap_info("MSIX eqn 0x%x cqn 0x%x msix_vector %d\n",
+		SNAP_LIB_LOG_INFO("MSIX eqn 0x%x cqn 0x%x msix_vector %d",
 				snap_dpa_msix_eq_id(vq->msix_eq),
 				cmd->cmd_create.vq.msix_cqnum,
 				vq->common.msix_vector);

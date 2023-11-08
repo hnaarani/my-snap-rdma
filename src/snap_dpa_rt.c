@@ -23,6 +23,9 @@
 #include "snap_dpa_rt.h"
 #include "snap_dma.h"
 #include "mlx5_ifc.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(DPA_RT);
 
 static struct snap_dpa_rt *snap_dpa_rt_create(struct ibv_context *ctx, const char *name,
 		struct snap_dpa_rt_attr *attr)
@@ -369,7 +372,7 @@ static int rt_thread_init(struct snap_dpa_rt_thread *rt_thr, struct ibv_pd *pd_i
 	if (ret)
 		goto free_db_cq;
 
-	snap_info("DPA_RT: qp 0x%x rx_cq 0x%x tx_cq 0x%x db_cq 0x%x\n",
+	SNAP_LIB_LOG_INFO("DPA_RT: qp 0x%x rx_cq 0x%x tx_cq 0x%x db_cq 0x%x",
 		  rt_thr->dpa_cmd_chan.dma_q->sw_qp.dv_qp.hw_qp.qp_num,
 		  rt_thr->dpa_cmd_chan.dma_q->sw_qp.dv_rx_cq.cq_num,
 		  rt_thr->dpa_cmd_chan.dma_q->sw_qp.dv_tx_cq.cq_num,

@@ -28,14 +28,16 @@ libsnap_mr_la_LIBADD = $(IBVERBS_LIBS) -lpthread
 
 #snap-dma lib
 libsnap_dma_ladir = $(includedir)/
-libsnap_dma_la_HEADERS = snap_dma.h \
+libsnap_dma_la_HEADERS = snap_lib_log.h \
+		     snap_dma.h \
 		     snap_dma_stat.h \
 		     snap_qp.h \
 		     snap_umr.h \
 		     snap_macros.h \
 		     snap_mb.h
 
-libsnap_dma_la_SOURCES = snap_dma.c \
+libsnap_dma_la_SOURCES = snap_lib_log.c \
+		     snap_dma.c \
 		     snap_dma_control.c \
 		     snap_dma_verbs.c \
 		     snap_dma_dv.c \

@@ -13,6 +13,7 @@
 libsnap_core_include = include_directories('.', '..', '../ctrl', flexio_include)
 
 libsnap_core_sources = [
+	'snap_lib_log.c',
 	'snap_dma.c',
 	'snap_dma_control.c',
 	'snap_dma_dv.c',
@@ -31,7 +32,7 @@ if meson.get_compiler('c', native: true).get_id() == 'clang'
 endif
 
 #TODO remove once DOCA moves to work over dev_emu_dma_* API
-install_headers('snap_dma.h', 'snap_qp.h', 'snap_macros.h', 'snap_mr.h', 'snap_env.h', 'snap_dma_stat.h', 'snap_mb.h', 'snap_dpa_common.h')
+install_headers('snap_lib_log.h', 'snap_dma.h', 'snap_qp.h', 'snap_macros.h', 'snap_mr.h', 'snap_env.h', 'snap_dma_stat.h', 'snap_mb.h', 'snap_dpa_common.h')
 
 libsnap_core = static_library('snap_core',
 			libsnap_core_sources,
