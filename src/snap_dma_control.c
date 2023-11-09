@@ -1155,6 +1155,13 @@ static int snap_dma_ep_connect_helper(struct snap_dma_ibv_qp *qp1,
 	    ((roce_caps.roce_enabled && roce_caps.fl_when_roce_enabled) ||
 	     (!roce_caps.roce_enabled && roce_caps.fl_when_roce_disabled)))) {
 		force_loopback = true;
+		/*
+		 * If force loopback is set it seems that we can ignore port
+		 * mtu settings.
+		 * Using 4k mtu gives better RDMA performance
+		 * And it rises crypto limit from 600Kiops to 2.2Miops
+		 */
+		mtu = IBV_MTU_4096;
 	} else {
 		snap_error("Force-loopback QP is not supported. Cannot create queue.\n");
 		return -ENOTSUP;
