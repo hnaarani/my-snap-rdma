@@ -51,6 +51,9 @@ struct snap_dma_q_init_attr {
 	struct snap_dma_q_crypto_attr crypto_attr;
 	struct ibv_comp_channel *comp_channel;
 	void *comp_context;
+	/* If DPA sizes are 0, defaults will be used */
+	size_t dpa_rx_qsize;
+	size_t dpa_tx_qsize;
 };
 
 struct snap_dpa_rt_thread_init_attr {

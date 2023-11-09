@@ -253,8 +253,12 @@ int snap_dpa_rt_p2p_queue_create(struct snap_dpa_rt_thread *rt_thr,
 
 	/* Prepare dpa q attributes based on arm q attributes */
 	dpa_q_attr = arm_q_attr;
-
 	dpa_q_attr.mode = SNAP_DMA_Q_MODE_DV;
+
+	if (q_init_attr) {
+		dpa_q_attr.rx_qsize = q_init_attr->dpa_rx_qsize ? q_init_attr->dpa_rx_qsize : dpa_q_attr.rx_qsize;
+		dpa_q_attr.tx_qsize = q_init_attr->dpa_tx_qsize ? q_init_attr->dpa_tx_qsize : dpa_q_attr.tx_qsize;
+	}
 
 	if (rt_thr->mode == SNAP_DPA_RT_THR_POLLING) {
 		dpa_q_attr.dpa_mode = SNAP_DMA_Q_DPA_MODE_POLLING;
