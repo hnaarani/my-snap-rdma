@@ -375,16 +375,12 @@ int snap_dma_q_writev2vc(struct snap_dma_q *q,
 	struct snap_dma_q_io_attr io_attr = {0};
 	int i, rc, n_bb = 0;
 	uint32_t rkey[dst_iov_cnt];
-	uint32_t lkey[src_iov_cnt];
 
 	for (i = 0; i < dst_iov_cnt; i++)
 		rkey[i] = rmkey;
 
-	for (i = 0; i < src_iov_cnt; i++)
-		lkey[i] = lmkey[i];
-
 	io_attr.io_type = SNAP_DMA_Q_IO_TYPE_IOV | SNAP_DMA_Q_IO_TYPE_ENCRYPTO;
-	io_attr.lkey = lkey;
+	io_attr.lkey = lmkey;
 	io_attr.liov = src_iov;
 	io_attr.liov_cnt = src_iov_cnt;
 	io_attr.rkey = rkey;
