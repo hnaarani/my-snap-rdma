@@ -40,7 +40,8 @@ enum {
 	DPA_NVME_MP_SQ_DESTROY,
 	DPA_NVME_MP_SQ_MODIFY,
 	DPA_NVME_MP_SQ_QUERY,
-	DPA_NVME_MP_RB_CREATE,
+	DPA_NVME_MP_RB_ATTACH,
+	DPA_NVME_MP_RB_DETACH,
 };
 
 enum dpa_nvme_mp_state {
@@ -142,12 +143,17 @@ struct dpa_nvme_mp_cmd_sq_query {
 	uint32_t sqid;
 };
 
-struct dpa_nvme_mp_cmd_rb_create {
+struct dpa_nvme_mp_cmd_rb_attach {
 	uint64_t arm_rb_addr;
 	uint32_t arm_rb_mkey;
 	uint32_t nsid;
 	uint8_t qp_id;
 	uint8_t weight;
+};
+
+struct dpa_nvme_mp_cmd_rb_detach {
+	uint32_t nsid;
+	uint8_t qp_id;
 };
 
 struct dpa_nvme_mp_rsp_query {
@@ -163,9 +169,11 @@ struct dpa_nvme_mp_cmd {
 		struct dpa_nvme_mp_cmd_cq_modify cmd_cq_modify;
 		struct dpa_nvme_mp_cmd_sq_modify cmd_sq_modify;
 		struct dpa_nvme_mp_cmd_sq_query cmd_sq_query;
-		struct dpa_nvme_mp_cmd_rb_create cmd_rb_create;
+		struct dpa_nvme_mp_cmd_rb_attach cmd_rb_attach;
+		struct dpa_nvme_mp_cmd_rb_detach cmd_rb_detach;
 	};
 };
+
 struct dpa_nvme_mp_rsp {
 	struct snap_dpa_rsp base;
 	struct dpa_nvme_mp_rsp_query state;

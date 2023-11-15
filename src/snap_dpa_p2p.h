@@ -76,6 +76,7 @@ enum {
 	SNAP_DPA_P2P_MSG_NVME_CQ_HEAD = 41,
 
 	SNAP_DPA_P2P_MSG_NVME_MP_RB_TAIL = 42,
+	SNAP_DPA_P2P_MSG_NVME_MP_RB_DETACHED = 43,
 	/* DPU->DPA */
 	SNAP_DPA_P2P_MSGS_NVME_MSIX = 50,
 };
@@ -128,6 +129,11 @@ struct snap_dpa_p2p_msg_rb_tail {
 	struct snap_dpa_p2p_msg_base base;
 	void *rb_addr;
 	uint16_t rb_tail;
+};
+
+struct snap_dpa_p2p_msg_rb_detached {
+	struct snap_dpa_p2p_msg_base base;
+	void *rb_addr;
 };
 
 struct snap_dpa_p2p_msg_cq_head {
