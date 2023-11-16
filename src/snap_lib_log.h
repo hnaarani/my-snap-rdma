@@ -30,7 +30,8 @@ enum SNAP_LIB_LOG_LEVEL {
 	SNAP_LIB_LOG_LEVEL_ERROR,   /**< Error log level */
 	SNAP_LIB_LOG_LEVEL_WARNING, /**< Warning log level */
 	SNAP_LIB_LOG_LEVEL_INFO,    /**< Info log level */
-	SNAP_LIB_LOG_LEVEL_DEBUG    /**< Debug log level */
+	SNAP_LIB_LOG_LEVEL_DEBUG,   /**< Debug log level */
+	SNAP_LIB_LOG_LEVEL_TRACE    /**< Trace log level */
 };
 
 void snap_lib_log(uint32_t level, uint32_t source, int line, const char *format, ...);
@@ -42,6 +43,7 @@ void snap_lib_log(uint32_t level, uint32_t source, int line, const char *format,
 #define SNAP_LIB_LOG_WARN(format...) SNAP_LIB_LOG(WARNING, format)
 #define SNAP_LIB_LOG_INFO(format...) SNAP_LIB_LOG(INFO, format)
 #define SNAP_LIB_LOG_DBG(format...) SNAP_LIB_LOG(DEBUG, format)
+#define SNAP_LIB_LOG_TRACE(format...) SNAP_LIB_LOG(TRACE, format)
 
 void snap_lib_log_register(struct log_register_info_t *info);
 
