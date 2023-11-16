@@ -116,7 +116,7 @@ static int snap_virtio_fs_ctrl_bar_get_attr(struct snap_virtio_ctrl *vctrl,
 	if (!rc)
 		memcpy(vbar, &fs_attr.vattr, sizeof(fs_attr.vattr));
 	else
-		snap_error("Failed to query bar\n");
+		SNAP_LIB_LOG_ERR("Failed to query bar");
 
 	return rc;
 }
@@ -145,7 +145,7 @@ snap_virtio_fs_ctrl_bar_dump_state(struct snap_virtio_ctrl *ctrl,
 	uint8_t last_ch;
 
 	if (len < snap_virtio_fs_ctrl_bar_get_state_size(ctrl)) {
-		snap_info(">>> fs_config: state is truncated (%d < %lu)\n", len,
+		SNAP_LIB_LOG_INFO(">>> fs_config: state is truncated (%d < %lu)", len,
 			  snap_virtio_fs_ctrl_bar_get_state_size(ctrl));
 		return;
 	}
@@ -155,7 +155,7 @@ snap_virtio_fs_ctrl_bar_dump_state(struct snap_virtio_ctrl *ctrl,
 	if (last_ch != 0)
 		dev_cfg->tag[sizeof(dev_cfg->tag) - 1] = 0;
 
-	snap_info(">>> tag: '%s num_request_queues: %u\n",
+	SNAP_LIB_LOG_INFO(">>> tag: '%s num_request_queues: %u",
 		       dev_cfg->tag, dev_cfg->num_request_queues);
 	dev_cfg->tag[sizeof(dev_cfg->tag) - 1] = last_ch;
 }
@@ -218,7 +218,7 @@ snap_virtio_fs_ctrl_bar_set_state(struct snap_virtio_ctrl *ctrl,
 					    SNAP_VIRTIO_MOD_QUEUE_CFG,
 					    vfsbar);
 	if (ret)
-		snap_error("Failed to restore virtio fs device config\n");
+		SNAP_LIB_LOG_ERR("Failed to restore virtio fs device config");
 
 	return ret;
 }
@@ -255,14 +255,14 @@ snap_virtio_fs_ctrl_bar_is_setup_valid(const struct snap_virtio_fs_device_attr *
 	/* virtio_common_pci_config registers */
 	if ((regs->device_features ^ bar->vattr.device_feature) &
 	    SNAP_VIRTIO_FS_MODIFIABLE_FTRS) {
-		snap_error("Can't modify device_features, host driver is up- conf.device_features: 0x%lx bar.device_features: 0x%lx\n",
+		SNAP_LIB_LOG_ERR("Can't modify device_features, host driver is up- conf.device_features: 0x%lx bar.device_features: 0x%lx",
 			   regs->device_features, bar->vattr.device_feature);
 		ret = false;
 	}
 
 	if (regs->queue_size &&
 	    regs->queue_size != bar->vattr.max_queue_size) {
-		snap_error("Can't modify queue_size, host driver is up - conf.queue_size: %d bar.queue_size: %d\n",
+		SNAP_LIB_LOG_ERR("Can't modify queue_size, host driver is up - conf.queue_size: %d bar.queue_size: %d",
 			   regs->queue_size, bar->vattr.max_queue_size);
 		ret = false;
 	}
@@ -286,14 +286,14 @@ snap_virtio_fs_ctrl_bar_is_setup_valid(const struct snap_virtio_fs_device_attr *
 		memcpy(bar_tag, bar->tag, SNAP_VIRTIO_FS_DEV_CFG_TAG_LEN);
 		bar_tag[SNAP_VIRTIO_FS_DEV_CFG_TAG_LEN] = 0;
 
-		snap_error("Can't modify tag, host driver is up - conf.tag: '%s' bar.tag: '%s'\n",
+		SNAP_LIB_LOG_ERR("Can't modify tag, host driver is up - conf.tag: '%s' bar.tag: '%s'",
 			   conf_tag, bar_tag);
 		ret = false;
 	}
 
 	if (regs->num_request_queues &&
 	    (regs->num_request_queues + 1) != bar->vattr.max_queues) {
-		snap_error("Can't modify num_request_queues, host driver is up - conf.request_queues: %d bar.request_queues: %d\n",
+		SNAP_LIB_LOG_ERR("Can't modify num_request_queues, host driver is up - conf.request_queues: %d bar.request_queues: %d",
 			   regs->num_request_queues + 1, bar->vattr.max_queues);
 		ret = false;
 	}
@@ -311,7 +311,7 @@ snap_virtio_fs_ctrl_bar_setup_valid(struct snap_virtio_fs_ctrl *ctrl,
 	 * for more detail refer to ../fs/fuse/virtio_fs.c::virtio_fs_setup_vqs
 	 */
 	if (regs->num_request_queues + 1 > ctrl->common.max_queues) {
-		snap_error("Cannot create %d queues (max %lu)\n", regs->num_request_queues,
+		SNAP_LIB_LOG_ERR("Cannot create %d queues (max %lu)", regs->num_request_queues,
 			   ctrl->common.max_queues);
 		return false;
 	}
@@ -344,12 +344,12 @@ int snap_virtio_fs_ctrl_bar_setup(struct snap_virtio_fs_ctrl *ctrl,
 	/* Get last bar values as a reference */
 	ret = snap_virtio_fs_query_device(ctrl->common.sdev, &bar);
 	if (ret) {
-		snap_error("Failed to query bar\n");
+		SNAP_LIB_LOG_ERR("Failed to query bar");
 		return -EINVAL;
 	}
 
 	if (!snap_virtio_fs_ctrl_bar_setup_valid(ctrl, &bar, regs)) {
-		snap_error("Setup is not valid\n");
+		SNAP_LIB_LOG_ERR("Setup is not valid");
 		return -EINVAL;
 	}
 
@@ -361,7 +361,7 @@ int snap_virtio_fs_ctrl_bar_setup(struct snap_virtio_fs_ctrl *ctrl,
 	if (!regs->num_request_queues) {
 		if (bar.vattr.max_queues < 1 ||
 		    bar.vattr.max_queues > ctrl->common.max_queues) {
-			snap_warn("Invalid num_queues detected on bar. Clamping down to max possible (%lu)\n",
+			SNAP_LIB_LOG_WARN("Invalid num_queues detected on bar. Clamping down to max possible (%lu)",
 				  ctrl->common.max_queues - 1);
 			regs->num_request_queues = ctrl->common.max_queues - 1;
 		}
@@ -398,7 +398,7 @@ int snap_virtio_fs_ctrl_bar_setup(struct snap_virtio_fs_ctrl *ctrl,
 	ret = snap_virtio_fs_modify_device(ctrl->common.sdev,
 					    regs_mask | extra_flags, &bar);
 	if (ret) {
-		snap_error("Failed to config virtio controller - ret: %d\n", ret);
+		SNAP_LIB_LOG_ERR("Failed to config virtio controller - ret: %d", ret);
 		return ret;
 	}
 
@@ -435,7 +435,7 @@ snap_virtio_fs_ctrl_count_error(struct snap_virtio_fs_ctrl *ctrl)
 		attr = (struct snap_virtio_common_queue_attr *)(void *)vfsq->attr;
 		ret = fs_virtq_query_error_state(vfsq->q_impl, attr);
 		if (ret) {
-			snap_error("Failed to query queue error state\n");
+			SNAP_LIB_LOG_ERR("Failed to query queue error state");
 			return ret;
 		}
 
@@ -468,7 +468,7 @@ snap_virtio_fs_ctrl_global_get_debugstat(struct snap_virtio_fs_ctrl *ctrl,
 
 		ret = snap_virtio_query_queue_counters(virtq->virtq.ctrs_obj, &vqc_attr);
 		if (ret) {
-			snap_error("Failed to query virtio_q_counter obj\n");
+			SNAP_LIB_LOG_ERR("Failed to query virtio_q_counter obj");
 			return ret;
 		}
 
@@ -479,7 +479,7 @@ snap_virtio_fs_ctrl_global_get_debugstat(struct snap_virtio_fs_ctrl *ctrl,
 
 	ret = snap_virtio_fs_ctrl_count_error(ctrl);
 	if (ret) {
-		snap_error("Failed to count queue error stats\n");
+		SNAP_LIB_LOG_ERR("Failed to count queue error stats");
 		return ret;
 	}
 
@@ -554,7 +554,7 @@ static int fs_virtq_create_helper(struct snap_virtio_fs_ctrl_queue *vfsq,
 	vfsq->q_impl = fs_virtq_create(vfsq, fs_ctrl->fs_dev_ops, fs_ctrl->fs_dev,
 				       vctrl->sdev, &attr);
 	if (!vfsq->q_impl) {
-		snap_error("controller failed to create fs virtq\n");
+		SNAP_LIB_LOG_ERR("controller failed to create fs virtq");
 		return -EINVAL;
 	}
 
@@ -626,7 +626,7 @@ static bool snap_virtio_fs_ctrl_queue_is_suspended(struct snap_virtio_ctrl_queue
 	if (!virtq_is_suspended(&to_fs_ctx(vfsq->q_impl)->common_ctx))
 		return false;
 
-	snap_info("queue %d: pg_id %d SUSPENDED\n", vq->index, vq->pg->id);
+	SNAP_LIB_LOG_INFO("queue %d: pg_id %d SUSPENDED", vq->index, vq->pg->id);
 	return true;
 
 }
@@ -653,7 +653,7 @@ static int snap_virtio_fs_ctrl_queue_resume(struct snap_virtio_ctrl_queue *vq)
 		/* save hw_used and hw_avail to allow resume */
 		ret = fs_virtq_get_state(vfsq->q_impl, &state);
 		if (ret) {
-			snap_error("queue %d: failed to get state, cannot resume.\n",
+			SNAP_LIB_LOG_ERR("queue %d: failed to get state, cannot resume.",
 					vq->index);
 			return -EINVAL;
 		}
@@ -667,7 +667,7 @@ static int snap_virtio_fs_ctrl_queue_resume(struct snap_virtio_ctrl_queue *vq)
 	if (ret)
 		return ret;
 
-	snap_info("queue %d: pg_id %d RESUMED with hw_avail %u hw_used %u\n",
+	SNAP_LIB_LOG_INFO("queue %d: pg_id %d RESUMED with hw_avail %u hw_used %u",
 		  vq->index, vq->pg->id,
 		  dev_attr->q_attrs[index].hw_available_index,
 		  dev_attr->q_attrs[index].hw_used_index);
@@ -705,26 +705,26 @@ static int snap_virtio_fs_ctrl_recover(struct snap_virtio_fs_ctrl *ctrl,
 	int ret;
 	struct snap_virtio_fs_device_attr fs_attr = {};
 
-	snap_info("create controller in recover mode - ctrl=%p max_queues=%ld enabled_queues=%ld\n",
+	SNAP_LIB_LOG_INFO("create controller in recover mode - ctrl=%p max_queues=%ld enabled_queues=%ld",
 		   ctrl, ctrl->common.max_queues, ctrl->common.enabled_queues);
 
 	fs_attr.queues = ctrl->common.max_queues;
 	fs_attr.q_attrs = calloc(fs_attr.queues, sizeof(*fs_attr.q_attrs));
 	if (!fs_attr.q_attrs) {
-		snap_error("Failed to allocate memory for Qs attribute\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate memory for Qs attribute");
 		ret = -ENOMEM;
 		goto err;
 	}
 
 	ret = snap_virtio_fs_query_device(ctrl->common.sdev, &fs_attr);
 	if (ret) {
-		snap_error("Failed to query bar during recovery of controller\n");
+		SNAP_LIB_LOG_ERR("Failed to query bar during recovery of controller");
 		ret = -EINVAL;
 		goto err;
 	}
 
 	if (!snap_virtio_fs_ctrl_bar_is_setup_valid(&fs_attr, &attr->regs)) {
-		snap_error("The configured parameters don't fit bar data\n");
+		SNAP_LIB_LOG_ERR("The configured parameters don't fit bar data");
 		ret = -EINVAL;
 		goto err;
 	}
@@ -778,7 +778,7 @@ snap_virtio_fs_ctrl_open(struct snap_context *sctx,
 
 	if (attr->common.pf_id < 0 ||
 	    attr->common.pf_id >= sctx->virtio_fs_pfs.max_pfs) {
-		snap_error("Bad PF id (%d). Only %d PFs are supported\n",
+		SNAP_LIB_LOG_ERR("Bad PF id (%d). Only %d PFs are supported",
 			   attr->common.pf_id, sctx->virtio_fs_pfs.max_pfs);
 		errno = -ENODEV;
 		goto free_ctrl;
@@ -787,7 +787,7 @@ snap_virtio_fs_ctrl_open(struct snap_context *sctx,
 	if (attr->common.pci_type == SNAP_VIRTIO_FS_VF &&
 	    (attr->common.vf_id < 0 ||
 	     attr->common.vf_id >= sctx->virtio_fs_pfs.pfs[attr->common.pf_id].num_vfs)) {
-		snap_error("Bad VF id (%d). Only %d VFs are supported for PF %d\n",
+		SNAP_LIB_LOG_ERR("Bad VF id (%d). Only %d VFs are supported for PF %d",
 			   attr->common.vf_id,
 			   sctx->virtio_fs_pfs.pfs[attr->common.pf_id].num_vfs,
 			   attr->common.pf_id);
@@ -842,7 +842,7 @@ snap_virtio_fs_ctrl_open(struct snap_context *sctx,
 		 */
 		ctrl->common.state = SNAP_VIRTIO_CTRL_SUSPENDED;
 		flags = 0;
-		snap_info("creating virtio fs controller in the SUSPENDED state\n");
+		SNAP_LIB_LOG_INFO("creating virtio fs controller in the SUSPENDED state");
 	} else
 		flags = SNAP_VIRTIO_MOD_PCI_COMMON_CFG | SNAP_VIRTIO_MOD_DEV_CFG;
 

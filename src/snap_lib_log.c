@@ -35,9 +35,10 @@ void snap_lib_log(uint32_t level, uint32_t source, int line, const char *format,
 
 	va_start(ap, format);
 
-	if (!lib_log_info.log_msg_cb || !lib_log_info.log_sources_data)
+	if (!lib_log_info.log_msg_cb || !lib_log_info.log_sources_data) {
 		vprintf(format, ap);
-	else
+		printf("\n");
+	} else
 		lib_log_info.log_msg_cb(level, source, lib_log_info.log_sources_data, line, format, ap);
 
 	va_end(ap);

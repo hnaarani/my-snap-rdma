@@ -112,7 +112,7 @@ static int snap_virtio_blk_ctrl_bar_get_attr(struct snap_virtio_ctrl *vctrl,
 	if (!rc)
 		memcpy(vbar, &blk_attr.vattr, sizeof(blk_attr.vattr));
 	else
-		snap_error("Failed to query bar\n");
+		SNAP_LIB_LOG_ERR("Failed to query bar");
 
 	return rc;
 }
@@ -139,13 +139,13 @@ snap_virtio_blk_ctrl_bar_dump_state(struct snap_virtio_ctrl *ctrl, const void *b
 	const struct virtio_state_blk_config *dev_cfg;
 
 	if (len < snap_virtio_blk_ctrl_bar_get_state_size(ctrl)) {
-		snap_info(">>> blk_config: state is truncated (%d < %lu)\n", len,
+		SNAP_LIB_LOG_INFO(">>> blk_config: state is truncated (%d < %lu)", len,
 			  snap_virtio_blk_ctrl_bar_get_state_size(ctrl));
 		return;
 	}
 
 	dev_cfg = buf;
-	snap_info(">>> capacity: %llu size_max: %u seg_max: %u blk_size: %u num_queues: %u\n",
+	SNAP_LIB_LOG_INFO(">>> capacity: %llu size_max: %u seg_max: %u blk_size: %u num_queues: %u",
 		  dev_cfg->capacity, dev_cfg->size_max, dev_cfg->seg_max,
 		  dev_cfg->blk_size, dev_cfg->num_queues);
 }
@@ -207,7 +207,7 @@ snap_virtio_blk_ctrl_bar_set_state(struct snap_virtio_ctrl *ctrl,
 					    SNAP_VIRTIO_MOD_QUEUE_CFG,
 					    vbbar);
 	if (ret)
-		snap_error("Failed to restore virtio blk device config\n");
+		SNAP_LIB_LOG_ERR("Failed to restore virtio blk device config");
 
 	return ret;
 }
@@ -245,46 +245,46 @@ snap_virtio_blk_ctrl_bar_is_setup_valid(const struct snap_virtio_blk_device_attr
 	/* virtio_common_pci_config registers */
 	if ((regs->device_features ^ bar->vattr.device_feature) &
 	    SNAP_VIRTIO_BLK_MODIFIABLE_FTRS) {
-		snap_error("Can't modify device_features, host driver is up - conf.device_features: 0x%lx bar.device_features: 0x%lx\n",
+		SNAP_LIB_LOG_ERR("Can't modify device_features, host driver is up - conf.device_features: 0x%lx bar.device_features: 0x%lx",
 			   regs->device_features, bar->vattr.device_feature);
 		ret = false;
 	}
 
 	if (regs->max_queues &&
 	    regs->max_queues != bar->vattr.max_queues) {
-		snap_error("Can't modify max_queues, host driver is up - conf.queues: %d bar.queues: %d\n",
+		SNAP_LIB_LOG_ERR("Can't modify max_queues, host driver is up - conf.queues: %d bar.queues: %d",
 			   regs->max_queues, bar->vattr.max_queues);
 		ret = false;
 	}
 
 	if (regs->queue_size &&
 	    regs->queue_size != bar->vattr.max_queue_size) {
-		snap_error("Can't modify queue_size host driver is up - conf.queue_size: %d bar.queue_size: %d\n",
+		SNAP_LIB_LOG_ERR("Can't modify queue_size host driver is up - conf.queue_size: %d bar.queue_size: %d",
 			   regs->queue_size, bar->vattr.max_queue_size);
 		ret = false;
 	}
 
 	/* virtio_blk_config registers */
 	if (recover && regs->capacity != bar->capacity) {
-		snap_error("Can't change capacity, host driver is up - conf.capacity: %ld bar.capacity: %ld\n",
+		SNAP_LIB_LOG_ERR("Can't change capacity, host driver is up - conf.capacity: %ld bar.capacity: %ld",
 			   regs->capacity, bar->capacity);
 		ret = false;
 	}
 
 	if (regs->blk_size && regs->blk_size != bar->blk_size) {
-		snap_error("Can't modify blk_size, host driver is up - conf.blk_size: %d bar.blk_size: %d\n",
+		SNAP_LIB_LOG_ERR("Can't modify blk_size, host driver is up - conf.blk_size: %d bar.blk_size: %d",
 			   regs->blk_size, bar->blk_size);
 		ret = false;
 	}
 
 	if (regs->size_max && regs->size_max != bar->size_max) {
-		snap_error("Can't modify size_max, host driver is up - conf.size_max: %d bar.size_max: %d\n",
+		SNAP_LIB_LOG_ERR("Can't modify size_max, host driver is up - conf.size_max: %d bar.size_max: %d",
 			   regs->size_max, bar->size_max);
 		ret = false;
 	}
 
 	if (regs->seg_max && regs->seg_max != bar->seg_max) {
-		snap_error("Can't modify seg_max, host driver is up - conf.seg_max: %d bar.seg_max: %d\n",
+		SNAP_LIB_LOG_ERR("Can't modify seg_max, host driver is up - conf.seg_max: %d bar.seg_max: %d",
 			   regs->seg_max, bar->seg_max);
 		ret = false;
 	}
@@ -308,7 +308,7 @@ snap_virtio_blk_ctrl_bar_setup_valid(struct snap_virtio_blk_ctrl *ctrl,
 		return true;
 
 	if (regs->max_queues > ctrl->common.max_queues) {
-		snap_error("Cannot create %d queues (max %lu)\n", regs->max_queues,
+		SNAP_LIB_LOG_ERR("Cannot create %d queues (max %lu)", regs->max_queues,
 			   ctrl->common.max_queues);
 		return false;
 	}
@@ -342,7 +342,7 @@ int snap_virtio_blk_ctrl_bar_setup(struct snap_virtio_blk_ctrl *ctrl,
 	/* Get last bar values as a reference */
 	ret = snap_virtio_blk_query_device(sdev, &bar);
 	if (ret) {
-		snap_error("Failed to query bar\n");
+		SNAP_LIB_LOG_ERR("Failed to query bar");
 		return -EINVAL;
 	}
 
@@ -355,7 +355,7 @@ int snap_virtio_blk_ctrl_bar_setup(struct snap_virtio_blk_ctrl *ctrl,
 		 * That means we only left to verify it doesn't break capacity
 		 */
 		if (snap_unlikely(regs->max_queues > ctrl->common.max_queues)) {
-			snap_error("Too many queues were requested (max allowed %lu)\n",
+			SNAP_LIB_LOG_ERR("Too many queues were requested (max allowed %lu)",
 				ctrl->common.max_queues);
 			return -EINVAL;
 		}
@@ -377,7 +377,7 @@ int snap_virtio_blk_ctrl_bar_setup(struct snap_virtio_blk_ctrl *ctrl,
 		regs->max_queues++;
 
 	if (!snap_virtio_blk_ctrl_bar_setup_valid(ctrl, &bar, regs, ctrl_configurable)) {
-		snap_error("Setup is not valid\n");
+		SNAP_LIB_LOG_ERR("Setup is not valid");
 		return -EINVAL;
 	}
 
@@ -402,7 +402,7 @@ int snap_virtio_blk_ctrl_bar_setup(struct snap_virtio_blk_ctrl *ctrl,
 
 		ret = snap_virtio_blk_modify_device(sdev, SNAP_VIRTIO_MOD_DEV_CFG, &bar);
 		if (ret) {
-			snap_error("Failed to update `capacity` attribute for device %s, ret:%d\n",
+			SNAP_LIB_LOG_ERR("Failed to update `capacity` attribute for device %s, ret:%d",
 				sdev->pci->pci_number, ret);
 			return ret;
 		}
@@ -439,14 +439,14 @@ int snap_virtio_blk_ctrl_bar_setup(struct snap_virtio_blk_ctrl *ctrl,
 		bar.size_max = regs->size_max ? : bar.size_max;
 		if (regs->seg_max > bar.vattr.max_queue_size - 2) {
 			regs->seg_max = bar.vattr.max_queue_size - 2;
-			snap_warn("Seg_max cannot be larger than queue depth - 2. Changed seg_max to %d.\n", regs->seg_max);
+			SNAP_LIB_LOG_WARN("Seg_max cannot be larger than queue depth - 2. Changed seg_max to %d.", regs->seg_max);
 		}
 		bar.seg_max = regs->seg_max ? : bar.seg_max;
 	}
 
 	ret = snap_virtio_blk_modify_device(sdev, regs_mask | extra_flags, &bar);
 	if (ret) {
-		snap_error("Failed to config virtio controller\n");
+		SNAP_LIB_LOG_ERR("Failed to config virtio controller");
 		return ret;
 	}
 
@@ -487,7 +487,7 @@ snap_virtio_blk_ctrl_count_error(struct snap_virtio_blk_ctrl *ctrl)
 		attr = (struct snap_virtio_common_queue_attr *)(void *)vbq->attr;
 		ret = blk_virtq_query_error_state(vbq->q_impl, attr);
 		if (ret) {
-			snap_error("Failed to query queue error state\n");
+			SNAP_LIB_LOG_ERR("Failed to query queue error state");
 			return ret;
 		}
 
@@ -520,7 +520,7 @@ snap_virtio_blk_ctrl_global_get_debugstat(struct snap_virtio_blk_ctrl *ctrl,
 
 		ret = snap_virtio_query_queue_counters(virtq->virtq.ctrs_obj, &vqc_attr);
 		if (ret) {
-			snap_error("Failed to query virtio_q_counter obj\n");
+			SNAP_LIB_LOG_ERR("Failed to query virtio_q_counter obj");
 			return ret;
 		}
 
@@ -531,7 +531,7 @@ snap_virtio_blk_ctrl_global_get_debugstat(struct snap_virtio_blk_ctrl *ctrl,
 
 	ret = snap_virtio_blk_ctrl_count_error(ctrl);
 	if (ret) {
-		snap_error("Failed to count queue error stats\n");
+		SNAP_LIB_LOG_ERR("Failed to count queue error stats");
 		return ret;
 	}
 
@@ -602,7 +602,7 @@ snap_virtio_blk_ctrl_get_vf(struct snap_virtio_ctrl *vctrl, struct snap_vq_cmd *
 	if (pf_ctrl->common.sdev->pci->num_vfs > vdev_id && pf_ctrl->vfs_ctrl) {
 		vf_ctrl =  pf_ctrl->vfs_ctrl[vdev_id];
 		if (vf_ctrl) {
-			snap_info("%p: PF:%d (%s) got adm cmd %d:%d to run on VF:%d (%s) ctrl %p\n",
+			SNAP_LIB_LOG_INFO("%p: PF:%d (%s) got adm cmd %d:%d to run on VF:%d (%s) ctrl %p",
 				  pf_ctrl,
 				  vctrl->sdev->pci->id,
 				  vctrl->sdev->pci->pci_number,
@@ -614,7 +614,7 @@ snap_virtio_blk_ctrl_get_vf(struct snap_virtio_ctrl *vctrl, struct snap_vq_cmd *
 		}
 	}
 
-	snap_error("%p: PF:%d (%s) got adm cmd %d:%d to run on VF:%d - failed to find VF controller\n",
+	SNAP_LIB_LOG_ERR("%p: PF:%d (%s) got adm cmd %d:%d to run on VF:%d - failed to find VF controller",
 		   pf_ctrl,
 		   vctrl->sdev->pci->id,
 		   vctrl->sdev->pci->pci_number,
@@ -709,7 +709,7 @@ static void snap_virtio_blk_ctrl_lm_dp_start_track(struct snap_virtio_ctrl *vctr
 		blk_ctrl = to_blk_ctrl(vctrl);
 		blk_ctrl->lm_buf = snap_buf_alloc(vctrl->lb_pd, sgl_len);
 		if (!blk_ctrl->lm_buf) {
-			snap_error("Failed allocating data buf for restore internal state.\n");
+			SNAP_LIB_LOG_ERR("Failed allocating data buf for restore internal state.");
 			snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
 			return;
 		}
@@ -723,7 +723,7 @@ static void snap_virtio_blk_ctrl_lm_dp_start_track(struct snap_virtio_ctrl *vctr
 		}
 		break;
 	default:
-		snap_error("Unsupported dirty pages track mode %d\n", dp_cmd->track_mode);
+		SNAP_LIB_LOG_ERR("Unsupported dirty pages track mode %d", dp_cmd->track_mode);
 		snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_ERR);
 	}
 }
@@ -925,7 +925,7 @@ static void snap_virtio_blk_ctrl_lm_state_save(struct snap_virtio_ctrl *vctrl,
 	blk_ctrl = to_blk_ctrl(vctrl);
 	blk_ctrl->lm_buf = snap_buf_alloc(vctrl->lb_pd, data.length * sizeof(uint8_t));
 	if (!blk_ctrl->lm_buf) {
-		snap_error("Failed allocating data buf for save internal state.\n");
+		SNAP_LIB_LOG_ERR("Failed allocating data buf for save internal state.");
 		snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
 	}
 	snap_virtio_ctrl_progress_lock(vf_vctrl);
@@ -962,7 +962,7 @@ static void snap_virtio_blk_ctrl_lm_state_restore(struct snap_virtio_ctrl *vctrl
 
 	blk_ctrl->lm_buf = snap_buf_alloc(vctrl->lb_pd, data.length * sizeof(uint8_t));
 	if (!blk_ctrl->lm_buf) {
-		snap_error("Failed allocating data buf for restore internal state.\n");
+		SNAP_LIB_LOG_ERR("Failed allocating data buf for restore internal state.");
 		snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
 		return;
 	}
@@ -1000,7 +1000,7 @@ static void snap_virtio_blk_ctrl_lm_dp_report_map(struct snap_virtio_ctrl *vctrl
 	blk_ctrl = to_blk_ctrl(vctrl);
 	blk_ctrl->lm_buf = snap_buf_alloc(vctrl->lb_pd, data->length * sizeof(uint8_t));
 	if (!blk_ctrl->lm_buf) {
-		snap_error("Failed allocating data buf for dirty pages\n");
+		SNAP_LIB_LOG_ERR("Failed allocating data buf for dirty pages");
 		snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_DEVICE_INTERNAL_ERR);
 	}
 	ret = snap_virtio_ctrl_serialize_dirty_pages(vf_vctrl, blk_ctrl->lm_buf, data->length);
@@ -1021,7 +1021,7 @@ static void snap_virtio_blk_adm_cmd_process(struct snap_virtio_ctrl *vctrl,
 {
 	struct snap_virtio_adm_cmd_hdr_v1_2 hdr = snap_vaq_cmd_layout_get(cmd)->hdr.hdr_v1_2;
 
-	snap_debug("Proceessing adm cmd class %d cmd %d\n", hdr.cmd_class, hdr.command);
+	SNAP_LIB_LOG_DBG("Proceessing adm cmd class %d cmd %d", hdr.cmd_class, hdr.command);
 	switch (hdr.cmd_class) {
 	case SNAP_VQ_ADM_MIG_CTRL:
 		switch (hdr.command) {
@@ -1041,7 +1041,7 @@ static void snap_virtio_blk_adm_cmd_process(struct snap_virtio_ctrl *vctrl,
 			snap_virtio_blk_ctrl_lm_state_restore(vctrl, cmd);
 			break;
 		default:
-			snap_error("Invalid admin commamd %d for class %d\n", hdr.command, hdr.cmd_class);
+			SNAP_LIB_LOG_ERR("Invalid admin commamd %d for class %d", hdr.command, hdr.cmd_class);
 			snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_INVALID_COMMAND);
 			break;
 		}
@@ -1062,13 +1062,13 @@ static void snap_virtio_blk_adm_cmd_process(struct snap_virtio_ctrl *vctrl,
 			break;
 		case SNAP_VQ_ADM_DP_IDENTITY:
 		default:
-			snap_error("Invalid admin commamd %d for class %d\n", hdr.command, hdr.cmd_class);
+			SNAP_LIB_LOG_ERR("Invalid admin commamd %d for class %d", hdr.command, hdr.cmd_class);
 			snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_INVALID_COMMAND);
 			break;
 		}
 		break;
 	default:
-		snap_error("Invalid admin cmd class %d\n", hdr.cmd_class);
+		SNAP_LIB_LOG_ERR("Invalid admin cmd class %d", hdr.cmd_class);
 		snap_vaq_cmd_complete(cmd, SNAP_VIRTIO_ADM_STATUS_INVALID_CLASS);
 		break;
 	}
@@ -1104,7 +1104,7 @@ static int blk_adm_virtq_create_helper(struct snap_virtio_blk_ctrl_queue *vbq,
 
 	vbq->q_impl = snap_vq_adm_create(&attr);
 	if (!vbq->q_impl) {
-		snap_error("Controller failed to create admin virtq\n");
+		SNAP_LIB_LOG_ERR("Controller failed to create admin virtq");
 		return -EINVAL;
 	}
 
@@ -1157,7 +1157,7 @@ static int blk_virtq_create_helper(struct snap_virtio_blk_ctrl_queue *vbq,
 	vbq->q_impl = blk_virtq_create(vbq, blk_ctrl->bdev_ops, blk_ctrl->bdev,
 				       vctrl->sdev, &attr);
 	if (!vbq->q_impl) {
-		snap_error("controller %p bdf 0x%x - failed to create blk virtq\n", vctrl,
+		SNAP_LIB_LOG_ERR("controller %p bdf 0x%x - failed to create blk virtq", vctrl,
 			   dev_attr->vattr.pci_bdf);
 		return -EINVAL;
 	}
@@ -1242,7 +1242,7 @@ static void snap_virtio_blk_ctrl_queue_suspend(struct snap_virtio_ctrl_queue *vq
 	}
 
 	snap_vq_suspend(vbq->q_impl);
-	snap_info("ctrl %p qid %d is FLUSHING\n", vq->ctrl, vq->index);
+	SNAP_LIB_LOG_INFO("ctrl %p qid %d is FLUSHING", vq->ctrl, vq->index);
 }
 
 static bool snap_virtio_blk_ctrl_queue_is_suspended(struct snap_virtio_ctrl_queue *vq)
@@ -1257,13 +1257,13 @@ static bool snap_virtio_blk_ctrl_queue_is_suspended(struct snap_virtio_ctrl_queu
 		if (!virtq_is_suspended(&to_blk_ctx(vbq->q_impl)->common_ctx))
 			return false;
 
-		snap_info("ctrl %p queue %d: pg_id %d SUSPENDED\n", vbq->common.ctrl, vq->index, vq->pg->id);
+		SNAP_LIB_LOG_INFO("ctrl %p queue %d: pg_id %d SUSPENDED", vbq->common.ctrl, vq->index, vq->pg->id);
 		return true;
 	}
 
 	suspended = snap_vq_is_suspended(vbq->q_impl);
 	if (suspended)
-		snap_info("ctrl %p qid %d is SUSPENDED\n", vq->ctrl, vq->index);
+		SNAP_LIB_LOG_INFO("ctrl %p qid %d is SUSPENDED", vq->ctrl, vq->index);
 	return suspended;
 }
 
@@ -1280,7 +1280,7 @@ static int snap_virtio_blk_ctrl_queue_resume(struct snap_virtio_ctrl_queue *vq)
 			return 0;
 
 		snap_vq_resume(vbq->q_impl);
-		snap_info("ctrl %p qid %d is RESUMED\n", vq->ctrl, vq->index);
+		SNAP_LIB_LOG_INFO("ctrl %p qid %d is RESUMED", vq->ctrl, vq->index);
 		return 0;
 	}
 
@@ -1297,7 +1297,7 @@ static int snap_virtio_blk_ctrl_queue_resume(struct snap_virtio_ctrl_queue *vq)
 		/* save hw_used and hw_avail to allow resume */
 		ret = blk_virtq_get_state(vbq->q_impl, &state);
 		if (ret) {
-			snap_error("queue %d: failed to get state, cannot resume.\n",
+			SNAP_LIB_LOG_ERR("queue %d: failed to get state, cannot resume.",
 					vq->index);
 			return -EINVAL;
 		}
@@ -1317,7 +1317,7 @@ static int snap_virtio_blk_ctrl_queue_resume(struct snap_virtio_ctrl_queue *vq)
 	if (ret)
 		return ret;
 
-	snap_info("ctrl %p queue %d: RESUMED with hw_avail %u hw_used %u\n",
+	SNAP_LIB_LOG_INFO("ctrl %p queue %d: RESUMED with hw_avail %u hw_used %u",
 		  vq->ctrl, vq->index,
 		  dev_attr->q_attrs[index].hw_available_index,
 		  dev_attr->q_attrs[index].hw_used_index);
@@ -1393,20 +1393,20 @@ static int snap_virtio_blk_ctrl_recover(struct snap_virtio_blk_ctrl *ctrl,
 	struct snap_virtio_blk_device_attr blk_attr = {};
 	bool check_cap;
 
-	snap_info("create controller in recover mode - ctrl=%p max_queues=%ld enabled_queues=%ld\n",
+	SNAP_LIB_LOG_INFO("create controller in recover mode - ctrl=%p max_queues=%ld enabled_queues=%ld",
 		   ctrl, ctrl->common.max_queues, ctrl->common.enabled_queues);
 
 	blk_attr.queues = ctrl->common.max_queues;
 	blk_attr.q_attrs = calloc(blk_attr.queues, sizeof(*blk_attr.q_attrs));
 	if (!blk_attr.q_attrs) {
-		snap_error("Failed to allocate memory for Qs attribute\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate memory for Qs attribute");
 		ret = -ENOMEM;
 		goto err;
 	}
 
 	ret = snap_virtio_blk_query_device(ctrl->common.sdev, &blk_attr);
 	if (ret) {
-		snap_error("Failed to query bar during recovery of controller\n");
+		SNAP_LIB_LOG_ERR("Failed to query bar during recovery of controller");
 		ret = -EINVAL;
 		goto err;
 	}
@@ -1414,7 +1414,7 @@ static int snap_virtio_blk_ctrl_recover(struct snap_virtio_blk_ctrl *ctrl,
 	/* Allow capacity to change while driver is up if we are forcing recover */
 	check_cap = !attr->common.force_recover;
 	if (!snap_virtio_blk_ctrl_bar_is_setup_valid(&blk_attr, &attr->regs, check_cap)) {
-		snap_error("The configured parameters don't fit bar data\n");
+		SNAP_LIB_LOG_ERR("The configured parameters don't fit bar data");
 		ret = -EINVAL;
 		goto err;
 	}
@@ -1471,7 +1471,7 @@ snap_virtio_blk_ctrl_open(struct snap_context *sctx,
 
 	if (attr->common.pf_id < 0 ||
 	    attr->common.pf_id >= sctx->virtio_blk_pfs.max_pfs) {
-		snap_error("Bad PF id (%d). Only %d PFs are supported\n",
+		SNAP_LIB_LOG_ERR("Bad PF id (%d). Only %d PFs are supported",
 			   attr->common.pf_id, sctx->virtio_blk_pfs.max_pfs);
 		errno = -ENODEV;
 		goto free_ctrl;
@@ -1480,7 +1480,7 @@ snap_virtio_blk_ctrl_open(struct snap_context *sctx,
 	if (attr->common.pci_type == SNAP_VIRTIO_BLK_VF &&
 	    (attr->common.vf_id < 0 ||
 	    attr->common.vf_id >= sctx->virtio_blk_pfs.pfs[attr->common.pf_id].num_vfs)) {
-		snap_error("Bad VF id (%d). Only %d VFs are supported for PF %d\n",
+		SNAP_LIB_LOG_ERR("Bad VF id (%d). Only %d VFs are supported for PF %d",
 			   attr->common.vf_id,
 			   sctx->virtio_blk_pfs.pfs[attr->common.pf_id].num_vfs,
 			   attr->common.pf_id);
@@ -1536,7 +1536,7 @@ snap_virtio_blk_ctrl_open(struct snap_context *sctx,
 		 */
 		ctrl->common.state = SNAP_VIRTIO_CTRL_SUSPENDED;
 		flags = 0;
-		snap_info("creating virtio block controller in the SUSPENDED state\n");
+		SNAP_LIB_LOG_INFO("creating virtio block controller in the SUSPENDED state");
 	} else
 		flags = SNAP_VIRTIO_MOD_PCI_COMMON_CFG | SNAP_VIRTIO_MOD_DEV_CFG;
 

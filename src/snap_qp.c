@@ -23,6 +23,9 @@
 #include "snap_env.h"
 
 #include "mlx5_ifc.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(QP)
 
 #ifndef SNAP_QP_ISOLATE_VL_TC_ENABLE_DEFAULT
 #define SNAP_QP_ISOLATE_VL_TC_ENABLE_DEFAULT 1
@@ -131,7 +134,7 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 			if (attr->dpa_element_type == MLX5_APU_ELEMENT_TYPE_EMULATED_DEV_EQ)
 				DEVX_SET(cqc, cqctx, always_armed_cq, 1);
 		} else {
-			snap_debug("bad dpa cq type %d\n", attr->dpa_element_type);
+			SNAP_LIB_LOG_DBG("bad dpa cq type %d", attr->dpa_element_type);
 			ret = -EINVAL;
 			goto deref_uar;
 		}
@@ -168,7 +171,7 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 
 		dbr_umem_id = devx_cq->devx.umem.devx_umem->umem_id;
 		dbr_addr = 0;
-		snap_debug("memsize %lu umem_id %d umem_offset %lu type %d eqn/thr_id %d dpa_va: 0x%0lx page_id host/dpa 0x%0x/0x%0x\n",
+		SNAP_LIB_LOG_DBG("memsize %lu umem_id %d umem_offset %lu type %d eqn/thr_id %d dpa_va: 0x%0lx page_id host/dpa 0x%0x/0x%0x",
 				cq_mem_size + SNAP_MLX5_DBR_SIZE, umem_id, umem_offset, attr->dpa_element_type,
 				devx_cq->eqn_or_dpa_element, snap_dpa_mem_addr(devx_cq->devx.dpa_mem), cq_uar->uar->page_id, page_id);
 	}
@@ -230,14 +233,14 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 		ret = snap_dpa_memcpy(dpa_proc, snap_dpa_mem_addr(devx_cq->devx.dpa_mem), tmp_buf, cq_mem_size);
 		free(tmp_buf);
 		if (ret) {
-			snap_error("failed to init cq buffer on DPA\n");
+			SNAP_LIB_LOG_ERR("failed to init cq buffer on DPA");
 			goto reset_cq_umem;
 		}
 	}
 	/* TODO: notification support */
 
 	devx_cq->devx.id = DEVX_GET(create_cq_out, out, cqn);
-	snap_debug("created devx cq 0x%x cqe_size %u nelems %d memsize %lu\n",
+	SNAP_LIB_LOG_DBG("created devx cq 0x%x cqe_size %u nelems %d memsize %lu",
 		   devx_cq->devx.id, devx_cq->cqe_size, devx_cq->cqe_cnt, cq_mem_size);
 	return 0;
 
@@ -286,7 +289,7 @@ int devx_cq_to_hw_cq(struct snap_cq *cq, struct snap_hw_cq *hw_cq)
 	hw_cq->uar_addr = (uintptr_t)devx_cq->devx.uar->uar->base_addr;
 	hw_cq->cq_sn = 0;
 
-	snap_debug("dv_hw_cq 0x%x: buf = 0x%lx, cqe_size = %u, cqe_count = %d dbr_addr = 0x%lx\n",
+	SNAP_LIB_LOG_DBG("dv_hw_cq 0x%x: buf = 0x%lx, cqe_size = %u, cqe_count = %d dbr_addr = 0x%lx",
 		   devx_cq->devx.id, hw_cq->cq_addr, hw_cq->cqe_size, hw_cq->cqe_cnt, hw_cq->dbr_addr);
 	return 0;
 }
@@ -301,7 +304,7 @@ static int verbs_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const stru
 {
 	cq->verbs_cq = ibv_create_cq(ctx, attr->cqe_cnt, attr->cq_context,
 				     attr->comp_channel, attr->comp_vector);
-	snap_debug("ibv_create cq: %p\n", cq->verbs_cq);
+	SNAP_LIB_LOG_DBG("ibv_create cq: %p", cq->verbs_cq);
 	return cq->verbs_cq ? 0 : -errno;
 }
 
@@ -339,7 +342,7 @@ static int dv_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struct 
 	};
 
 	cq->verbs_cq = ibv_cq_ex_to_cq(mlx5dv_create_cq(ctx, &cq_attr, &cq_ex_attr));
-	snap_debug("dv_create cq: %p\n", cq->verbs_cq);
+	SNAP_LIB_LOG_DBG("dv_create cq: %p", cq->verbs_cq);
 	return cq->verbs_cq ? 0 : -errno;
 }
 
@@ -370,7 +373,7 @@ int dv_cq_to_hw_cq(struct snap_cq *cq, struct snap_hw_cq *hw_cq)
 	hw_cq->uar_addr = (uintptr_t)mlx5_cq.cq_uar;
 	hw_cq->cq_sn = 0;
 
-	snap_debug("dv_hw_cq 0x%x: buf = 0x%lx, cqe_size = %u, cqe_count = %d, dbr_addr = 0x%lx\n",
+	SNAP_LIB_LOG_DBG("dv_hw_cq 0x%x: buf = 0x%lx, cqe_size = %u, cqe_count = %d, dbr_addr = 0x%lx",
 		   mlx5_cq.cqn, hw_cq->cq_addr, hw_cq->cqe_size, hw_cq->cqe_cnt, hw_cq->dbr_addr);
 	return 0;
 }
@@ -583,7 +586,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 		}
 
 		if (attr->rq_cq->devx_cq.cqe_size != 128) {
-			snap_error("RX CQE size %u must be 128\n", attr->rq_cq->devx_cq.cqe_size);
+			SNAP_LIB_LOG_ERR("RX CQE size %u must be 128", attr->rq_cq->devx_cq.cqe_size);
 			ret = -EINVAL;
 			goto reset_qp_umem;
 		}
@@ -617,7 +620,7 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 	}
 
 	devx_qp->devx.id = DEVX_GET(create_qp_out, out, qpn);
-	snap_debug("created devx qp 0x%x sq_size %u rq_size %u memsize %lu\n", devx_qp->devx.id,
+	SNAP_LIB_LOG_DBG("created devx qp 0x%x sq_size %u rq_size %u memsize %lu", devx_qp->devx.id,
 		   devx_qp->sq_size, devx_qp->rq_size, qp_buf_len + SNAP_MLX5_DBR_SIZE);
 	return 0;
 
@@ -660,7 +663,7 @@ static int devx_qp_to_hw_qp(struct snap_qp *qp, struct snap_hw_qp *hw_qp)
 	hw_qp->qp_num = devx_qp->devx.id;
 #if defined(__aarch64__)
 	if (!devx_qp->devx.uar->nc)
-		snap_warn("UAR has blueflame enabled. Not possible on DPU. Assuming a bug\n");
+		SNAP_LIB_LOG_WARN("UAR has blueflame enabled. Not possible on DPU. Assuming a bug");
 	/* we know for sure that DPU has no blueflame */
 	hw_qp->sq.tx_db_nc = 1;
 #else
@@ -704,7 +707,7 @@ static int verbs_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct sna
 	if (!qp->verbs_qp)
 		return -errno;
 
-	snap_debug("verbs_create qp: %p qpn 0x%x\n", qp->verbs_qp, qp->verbs_qp->qp_num);
+	SNAP_LIB_LOG_DBG("verbs_create qp: %p qpn 0x%x", qp->verbs_qp, qp->verbs_qp->qp_num);
 	return 0;
 }
 
@@ -739,7 +742,7 @@ static int verbs_qp_to_hw_qp(struct snap_qp *qp, struct snap_hw_qp *hw_qp)
 	if (ret)
 		return ret;
 
-	snap_debug("sq wqe_count = %d stride = %d, rq wqe_count = %d, stride = %d, bf.reg = %p, bf.size = %d\n",
+	SNAP_LIB_LOG_DBG("sq wqe_count = %d stride = %d, rq wqe_count = %d, stride = %d, bf.reg = %p, bf.size = %d",
 		   dv_qp.sq.wqe_cnt, dv_qp.sq.stride,
 		   dv_qp.rq.wqe_cnt, dv_qp.rq.stride,
 		   dv_qp.bf.reg, dv_qp.bf.size);
@@ -858,7 +861,7 @@ int snap_qp_to_hw_qp(struct snap_qp *qp, struct snap_hw_qp *hw_qp)
 	if (ret)
 		return ret;
 
-	snap_debug("qp: 0x%0x sq: 0x%0lx cnt %d, rq: 0x%0lx cnt %d, db: 0x%0lx, bf_reg: 0x%0lx\n",
+	SNAP_LIB_LOG_DBG("qp: 0x%0x sq: 0x%0lx cnt %d, rq: 0x%0lx cnt %d, db: 0x%0lx, bf_reg: 0x%0lx",
 		   hw_qp->qp_num, hw_qp->sq.addr, hw_qp->sq.wqe_cnt,
 		   hw_qp->rq.addr, hw_qp->rq.wqe_cnt,
 		   hw_qp->dbr_addr, hw_qp->sq.bf_addr);

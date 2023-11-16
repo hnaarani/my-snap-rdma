@@ -13,6 +13,9 @@
 #include "snap_virtio_net_ctrl.h"
 #include <linux/virtio_net.h>
 #include <linux/virtio_config.h>
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(VIRTIO_NET_CTRL)
 
 
 static struct snap_virtio_device_attr*
@@ -148,12 +151,12 @@ snap_virtio_net_ctrl_bar_dump_state(struct snap_virtio_ctrl *ctrl,
 	struct snap_virtio_net_ctrl *nctrl = to_net_ctrl(ctrl);
 
 	if (len < snap_virtio_net_ctrl_bar_get_state_size(ctrl)) {
-		snap_info(">>> net_config: state is truncated (%d < %lu)\n", len,
+		SNAP_LIB_LOG_INFO(">>> net_config: state is truncated (%d < %lu)", len,
 			  snap_virtio_net_ctrl_bar_get_state_size(ctrl));
 		return;
 	}
 	dev_cfg = buf;
-	snap_info(">>> mac: %02X:%02X:%02X:%02X:%02X:%02X status: 0x%x max_virtqueue_pairs: 0x%x mtu: 0x%x\n",
+	SNAP_LIB_LOG_INFO(">>> mac: %02X:%02X:%02X:%02X:%02X:%02X status: 0x%x max_virtqueue_pairs: 0x%x mtu: 0x%x",
 		  dev_cfg->mac[5], dev_cfg->mac[4], dev_cfg->mac[3], dev_cfg->mac[2], dev_cfg->mac[1], dev_cfg->mac[0],
 		  dev_cfg->status, dev_cfg->max_virtqueue_pairs, dev_cfg->mtu);
 
@@ -184,7 +187,7 @@ snap_virtio_net_ctrl_bar_set_state(struct snap_virtio_ctrl *ctrl,
 	for (i = 0; i < ctrl->max_queues; i++) {
 		vnbar->q_attrs[i].hw_available_index = queue_state[i].hw_available_index;
 		vnbar->q_attrs[i].hw_used_index = queue_state[i].hw_used_index;
-		snap_info("[%s %d]dev %s q 0x%x , restore avl ix:0x%x, used ix:0x%x\n",
+		SNAP_LIB_LOG_INFO("[%s %d]dev %s q 0x%x , restore avl ix:0x%x, used ix:0x%x",
 			  __func__, __LINE__, ctrl->sdev->pci->pci_number, i,
 			  queue_state[i].hw_available_index, queue_state[i].hw_used_index);
 	}
@@ -201,7 +204,7 @@ snap_virtio_net_ctrl_bar_set_state(struct snap_virtio_ctrl *ctrl,
 					    SNAP_VIRTIO_MOD_QUEUE_CFG,
 					    vnbar);
 	if (ret)
-		snap_error("Failed to restore virtio net device config\n");
+		SNAP_LIB_LOG_ERR("Failed to restore virtio net device config");
 
 	//restore internal state
 	nctrl->lm_cbs.set_internal_state(ctrl->cb_ctx, buf + sizeof(struct virtio_net_config),
@@ -265,13 +268,13 @@ static int snap_virtio_net_ctrl_queue_get_state(struct snap_virtio_ctrl_queue *v
 	int ret;
 
 	if (!vnq->virtq.virtq) {
-		snap_error("virtq obj not created yet for q %d\n", vq->index);
+		SNAP_LIB_LOG_ERR("virtq obj not created yet for q %d", vq->index);
 		return -1;
 	}
 
 	ret = snap_virtio_net_query_queue(vnq, &attr);
 	if (ret < 0) {
-		snap_error("failed to query net queue %d\n", vq->index);
+		SNAP_LIB_LOG_ERR("failed to query net queue %d", vq->index);
 		return ret;
 	}
 	state->hw_available_index = attr.hw_available_index;
@@ -282,7 +285,7 @@ static int snap_virtio_net_ctrl_queue_get_state(struct snap_virtio_ctrl_queue *v
 
 static void snap_virtio_net_ctrl_queue_suspend(struct snap_virtio_ctrl_queue *vq)
 {
-	snap_debug("queue %d: suspend\n", vq->index);
+	SNAP_LIB_LOG_DBG("queue %d: suspend", vq->index);
 }
 
 static int snap_virtio_net_ctrl_queue_resume(struct snap_virtio_ctrl_queue *vq)
@@ -294,7 +297,7 @@ static int snap_virtio_net_ctrl_queue_resume(struct snap_virtio_ctrl_queue *vq)
 	ctrl = vq->ctrl;
 	dev_attr = to_net_device_attr(ctrl->bar_curr);
 
-	snap_info("queue %d: pg_id %d RESUMED with hw_avail %u hw_used %u\n",
+	SNAP_LIB_LOG_INFO("queue %d: pg_id %d RESUMED with hw_avail %u hw_used %u",
 		  vq->index, vq->pg->id,
 		  dev_attr->q_attrs[index].hw_available_index,
 		  dev_attr->q_attrs[index].hw_used_index);

@@ -36,6 +36,9 @@
 #include "snap_dpa.h"
 #include "mlx5_ifc.h"
 #include "snap_dma.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(DPA)
 
 SNAP_STATIC_ASSERT(sizeof(struct snap_dpa_tcb) % SNAP_MLX5_L2_CACHE_SIZE == 0,
 		"Thread control block must be padded to the cache line");
@@ -134,7 +137,7 @@ struct snap_dpa_memh *snap_dpa_mem_alloc(struct snap_dpa_ctx *dctx, size_t size)
 
 	mem = calloc(1, sizeof(*mem));
 	if (!mem) {
-		snap_error("Failed to allocate dpa memory handle\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate dpa memory handle");
 		return 0;
 	}
 
@@ -142,7 +145,7 @@ struct snap_dpa_memh *snap_dpa_mem_alloc(struct snap_dpa_ctx *dctx, size_t size)
 	mem->size = size;
 	st = flexio_buf_dev_alloc(dctx->dpa_proc, size, &mem->va);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to allocate dpa memory with size 0x%lx\n", size);
+		SNAP_LIB_LOG_ERR("Failed to allocate dpa memory with size 0x%lx", size);
 		free(mem);
 		return 0;
 	}
@@ -193,21 +196,21 @@ struct snap_dpa_memh *snap_dpa_zalloc(struct snap_dpa_ctx *dpa_proc, size_t size
 
 	tmp_buf = calloc(1, size);
 	if (!tmp_buf) {
-		snap_error("failed to alloc tmp buf\n");
+		SNAP_LIB_LOG_ERR("failed to alloc tmp buf");
 		errno = -ENOMEM;
 		return NULL;
 	}
 
 	dpa_mem = snap_dpa_mem_alloc(dpa_proc, size);
 	if (!dpa_mem) {
-		snap_error("failed to alloc mem on DPA\n");
+		SNAP_LIB_LOG_ERR("failed to alloc mem on DPA");
 		errno = -ENOMEM;
 		goto free_tmp_buf;
 	}
 
 	ret = snap_dpa_memcpy(dpa_proc, snap_dpa_mem_addr(dpa_mem), tmp_buf, size);
 	if (ret) {
-		snap_error("failed to init qp buffer on DPA\n");
+		SNAP_LIB_LOG_ERR("failed to init qp buffer on DPA");
 		errno = ret;
 		goto free_dpa_mem;
 	}
@@ -247,7 +250,7 @@ struct snap_dpa_mkeyh *snap_dpa_mkey_alloc(struct snap_dpa_ctx *dctx, struct ibv
 
 	h = calloc(1, sizeof(*h));
 	if (!h) {
-		snap_error("Failed to allocate dpa memory key handle\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate dpa memory key handle");
 		return 0;
 	}
 
@@ -293,7 +296,7 @@ void snap_dpa_mkey_free(struct snap_dpa_mkeyh *h)
 
 static void dummy_rx_cb(struct snap_dma_q *q, const void *data, uint32_t data_len, uint32_t imm_data)
 {
-	snap_error("OOPS: rx cb called\n");
+	SNAP_LIB_LOG_ERR("OOPS: rx cb called");
 }
 
 static int dma_q_create(struct snap_dpa_ctx *ctx)
@@ -350,30 +353,30 @@ static int load_file(const char *file_name, void **buf, size_t *size)
 
 	fp = fopen(file_name, "r");
 	if (!fp) {
-		snap_error("Failed to open %s: %m", file_name);
+		SNAP_LIB_LOG_ERR("Failed to open %s: %m", file_name);
 		return -1;
 	}
 
 	ret = fstat(fileno(fp), &file_st);
 	if (ret < 0) {
-		snap_error("Failed to stat %s: %m\n", file_name);
+		SNAP_LIB_LOG_ERR("Failed to stat %s: %m", file_name);
 		goto close_file;
 	}
 
 	if (!S_ISREG(file_st.st_mode)) {
-		snap_error("%s is not a regular file\n", file_name);
+		SNAP_LIB_LOG_ERR("%s is not a regular file", file_name);
 		goto close_file;
 	}
 
 	fbuf_size = file_st.st_size;
 	ret = posix_memalign(&fbuf, 64, fbuf_size);
 	if (ret) {
-		snap_error("Failed to alloc memory for %s\n", file_name);
+		SNAP_LIB_LOG_ERR("Failed to alloc memory for %s", file_name);
 		goto close_file;
 	}
 
 	if (fread(fbuf, fbuf_size, 1, fp) != 1) {
-		snap_error("Failed to load file %s: %m\n", file_name);
+		SNAP_LIB_LOG_ERR("Failed to load file %s: %m", file_name);
 		goto free_buf;
 	}
 
@@ -416,17 +419,17 @@ static int snap_dpa_load_app_sig(struct snap_dpa_ctx *dpa_ctx, const char *app_n
 		ret = asprintf(&file_name, "%s/%s.sig", DPA_DEFAULT_APP_DIR, app_name);
 
 	if (ret < 0) {
-		snap_error("Failed to allocate memory\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate memory");
 		return -ENOMEM;
 	}
 
 	if (stat(file_name, &st)) {
-		snap_debug("App has no signature\n");
+		SNAP_LIB_LOG_DBG("App has no signature");
 		free(file_name);
 		return 0;
 	}
 
-	snap_info("%s is signed DPA application\n", app_name);
+	SNAP_LIB_LOG_INFO("%s is signed DPA application", app_name);
 	ret = load_file(file_name, &sig_buf, &sig_buf_size);
 	if (ret)
 		goto free_file;
@@ -460,7 +463,7 @@ static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 	/* TODO: support dpa app code embedding */
 
 	if (ret < 0) {
-		snap_error("Failed to allocate memory\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate memory");
 		return -ENOMEM;
 	}
 
@@ -474,14 +477,14 @@ static int snap_dpa_load_app(struct snap_dpa_ctx *dpa_ctx, const char *app_name)
 	/* load elf buffer */
 	st = flexio_app_create(&fattr, &dpa_ctx->dpa_app);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to create flexio app\n");
+		SNAP_LIB_LOG_ERR("Failed to create flexio app");
 		goto free_buf;
 	}
 
 	/* lookup entry point */
 	st = flexio_func_register(dpa_ctx->dpa_app, SNAP_DPA_THREAD_ENTRY_POINT, (flexio_func_t **)&dpa_ctx->dpa_app_entry_point);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to find entry point\n");
+		SNAP_LIB_LOG_ERR("Failed to find entry point");
 		goto free_app;
 	}
 
@@ -522,7 +525,7 @@ static uint64_t snap_dpa_get_mem_size(struct ibv_context *ctx)
 
 	block_size = DEVX_GET(query_hca_cap_out, out, capability.dpa_cap.dpa_mem_block_size);
 	log_mem_blocks = DEVX_GET(query_hca_cap_out, out, capability.dpa_cap.log_max_num_dpa_mem_blocks);
-	snap_debug("block size %u log %u\n", block_size, log_mem_blocks);
+	SNAP_LIB_LOG_DBG("block size %u log %u", block_size, log_mem_blocks);
 	return block_size * (1ULL << log_mem_blocks);
 }
 
@@ -551,7 +554,7 @@ static void hex_to_cpuset(cpu_set_t *cpu_set, int hex_digit, int order)
 
 		int core = i + (4 * order);
 
-		snap_debug("digit 0x%x adding core %d\n", hex_digit, core);
+		SNAP_LIB_LOG_DBG("digit 0x%x adding core %d", hex_digit, core);
 		CPU_SET(core, cpu_set);
 	}
 }
@@ -564,7 +567,7 @@ static int snap_dpa_cpu_set_init(struct snap_dpa_ctx *ctx, const char *app_name)
 
 	ret = asprintf(&app_core_mask_env, "%s_core_mask", app_name);
 	if (ret < 0) {
-		snap_error("%s: failed to init dpa core mask\n", app_name);
+		SNAP_LIB_LOG_ERR("%s: failed to init dpa core mask", app_name);
 		return -ENOMEM;
 	}
 
@@ -579,7 +582,7 @@ static int snap_dpa_cpu_set_init(struct snap_dpa_ctx *ctx, const char *app_name)
 		return 0;
 	}
 
-	snap_info("%s: core mask %s\n", app_name, mask);
+	SNAP_LIB_LOG_INFO("%s: core mask %s", app_name, mask);
 	for (n = 0, i = strlen(mask) - 1; i >= 0; i--, n++) {
 		char c = tolower(mask[i]);
 
@@ -591,7 +594,7 @@ static int snap_dpa_cpu_set_init(struct snap_dpa_ctx *ctx, const char *app_name)
 
 	/* convert mask into allowed cores */
 	if (CPU_COUNT(&ctx->dpa_cpu_set) == 0) {
-		snap_error("%s: has no valid cores to run\n", app_name);
+		SNAP_LIB_LOG_ERR("%s: has no valid cores to run", app_name);
 		return -EINVAL;
 	}
 	return 0;
@@ -621,7 +624,7 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 
 	dpa_ctx = calloc(1, sizeof(*dpa_ctx));
 	if (!dpa_ctx) {
-		snap_error("%s: Failed to allocate memory for DPA context\n", app_name);
+		SNAP_LIB_LOG_ERR("%s: Failed to allocate memory for DPA context", app_name);
 		return NULL;
 	}
 
@@ -640,14 +643,14 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 	dpa_ctx->pd = ibv_alloc_pd(ctx);
 	if (!dpa_ctx->pd) {
 		errno = -ENOMEM;
-		snap_error("%s: Failed to allocate pd for DPA context\n", app_name);
+		SNAP_LIB_LOG_ERR("%s: Failed to allocate pd for DPA context", app_name);
 		goto free_dpa_app;
 	}
 
 	proc_attr.pd = dpa_ctx->pd;
 	st = flexio_process_create(ctx, dpa_ctx->dpa_app, &proc_attr, &dpa_ctx->dpa_proc);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("%s: Failed to create DPA process\n", app_name);
+		SNAP_LIB_LOG_ERR("%s: Failed to create DPA process", app_name);
 		goto free_dpa_pd;
 	}
 
@@ -658,20 +661,20 @@ struct snap_dpa_ctx *snap_dpa_process_create(struct ibv_context *ctx, const char
 	outbox_attr.uar = dpa_ctx->flexio_uar;
 	st = flexio_outbox_create(dpa_ctx->dpa_proc, &outbox_attr, &dpa_ctx->dpa_uar);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("%s: Failed to create DPA outbox (uar)\n", app_name);
+		SNAP_LIB_LOG_ERR("%s: Failed to create DPA outbox (uar)", app_name);
 		goto free_dpa_proc;
 	}
 
 	st = flexio_window_create(dpa_ctx->dpa_proc, dpa_ctx->pd, &dpa_ctx->dpa_window);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to create DPA thread mailbox window\n");
+		SNAP_LIB_LOG_ERR("Failed to create DPA thread mailbox window");
 		goto free_dpa_outbox;
 	}
 
 	/* create a placeholder eq to attach cqs */
 	dpa_ctx->dpa_eq = snap_dpa_eq_create(dpa_ctx);
 	if (!dpa_ctx->dpa_eq) {
-		snap_error("%s: Failed to create DPA event queue\n", app_name);
+		SNAP_LIB_LOG_ERR("%s: Failed to create DPA event queue", app_name);
 		goto free_dpa_window;
 	}
 
@@ -850,14 +853,14 @@ static int set_hart_mask(struct snap_dpa_ctx *dctx, struct snap_dpa_thread_attr 
 		if (!CPU_ISSET(i, &dctx->dpa_cpu_set))
 			continue;
 
-		snap_info("%s: scheduling thread on core %d\n", dctx->app_name, i);
+		SNAP_LIB_LOG_INFO("%s: scheduling thread on core %d", dctx->app_name, i);
 		f_thr_attr->affinity.type = FLEXIO_AFFINITY_STRICT;
 		f_thr_attr->affinity.id = i;
 		return 0;
 	}
 
 	/* TODO: pretty print */
-	snap_error("%s: required core is not available\n", dctx->app_name);
+	SNAP_LIB_LOG_ERR("%s: required core is not available", dctx->app_name);
 	return -1;
 }
 
@@ -888,7 +891,7 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 
 	thr = calloc(1, sizeof(*thr));
 	if (!thr) {
-		snap_error("Failed to create DPA thread\n");
+		SNAP_LIB_LOG_ERR("Failed to create DPA thread");
 		return NULL;
 	}
 
@@ -902,7 +905,7 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 
 	ret = pthread_mutex_init(&thr->cmd_lock, NULL);
 	if (ret < 0) {
-		snap_error("Failed to init DPA thread mailbox lock\n");
+		SNAP_LIB_LOG_ERR("Failed to init DPA thread mailbox lock");
 		goto free_thread;
 	}
 
@@ -911,7 +914,7 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 			snap_dpa_log_size(SNAP_DPA_THREAD_N_LOG_ENTRIES), 64);
 	ret = posix_memalign(&thr->cmd_mbox, SNAP_DPA_THREAD_MBOX_ALIGN, mbox_size);
 	if (ret < 0) {
-		snap_error("Failed to allocate DPA thread mailbox\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate DPA thread mailbox");
 		goto free_mutex;
 	}
 
@@ -923,7 +926,7 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 	snap_dpa_log_init(thr->dpa_log, SNAP_DPA_THREAD_N_LOG_ENTRIES);
 	thr->cmd_mr = snap_reg_mr(thr->dctx->pd, thr->cmd_mbox, mbox_size);
 	if (!thr->cmd_mr) {
-		snap_error("Failed to allocate DPA thread mailbox mr\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate DPA thread mailbox mr");
 		goto free_mbox;
 	}
 
@@ -940,12 +943,12 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 	tcb.active_lkey = tcb.mbox_lkey;
 	tcb.user_flag = attr->user_flag;
 	tcb.user_arg = attr->user_arg;
-	snap_debug("tcb 0x%lx tcb_size %ld mailbox lkey 0x%x addr %p size(mbox+log) %lu mem_base at 0x%lx\n",
+	SNAP_LIB_LOG_DBG("tcb 0x%lx tcb_size %ld mailbox lkey 0x%x addr %p size(mbox+log) %lu mem_base at 0x%lx",
 			dpa_tcb_addr, sizeof(tcb), thr->cmd_mr->lkey, thr->cmd_mbox, mbox_size, tcb.data_address);
 
 	ret = snap_dpa_memcpy(dctx, dpa_tcb_addr, &tcb, sizeof(tcb));
 	if (ret) {
-		snap_error("Failed to prepare DPA thread control block: %d\n", ret);
+		SNAP_LIB_LOG_ERR("Failed to prepare DPA thread control block: %d", ret);
 		goto free_mem;
 	}
 
@@ -955,14 +958,14 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 
 	st = flexio_event_handler_create(thr->dctx->dpa_proc, &f_thr_attr, &thr->dpa_thread);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to create DPA thread: %d\n", st);
+		SNAP_LIB_LOG_ERR("Failed to create DPA thread: %d", st);
 		goto free_mem;
 	}
 
 	/* w/a flexio bug */
 	st = flexio_event_handler_run(thr->dpa_thread, 0 /*dpa_tcb_addr*/);
 	if (st != FLEXIO_STATUS_SUCCESS) {
-		snap_error("Failed to run DPA thread: %d\n", st);
+		SNAP_LIB_LOG_ERR("Failed to run DPA thread: %d", st);
 		goto destroy_thread;
 	}
 
@@ -972,14 +975,14 @@ struct snap_dpa_thread *snap_dpa_thread_create(struct snap_dpa_ctx *dctx,
 
 	cmd_start = (struct snap_dpa_cmd_start *)thr->cmd_mbox;
 	memcpy(&cmd_start->cmd_cq, &thr->trigger_q->sw_qp.dv_tx_cq, sizeof(cmd_start->cmd_cq));
-	snap_debug("Command cq  : 0x%x addr=0x%lx, cqe_cnt=%d cqe_size=%d\n",
+	SNAP_LIB_LOG_DBG("Command cq  : 0x%x addr=0x%lx, cqe_cnt=%d cqe_size=%d",
 			cmd_start->cmd_cq.cq_num, cmd_start->cmd_cq.cq_addr, cmd_start->cmd_cq.cqe_cnt, cmd_start->cmd_cq.cqe_size);
 	snap_dpa_cmd_send(thr, thr->cmd_mbox, SNAP_DPA_CMD_START);
 
 	/* wait for report back from the thread */
 	rsp = snap_dpa_rsp_wait(thr->cmd_mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK) {
-		snap_error("DPA thread failed to start\n");
+		SNAP_LIB_LOG_ERR("DPA thread failed to start");
 		snap_dpa_log_print(thr->dpa_log);
 		goto destroy_trigger;
 	}
@@ -1006,7 +1009,7 @@ free_thread:
 static void snap_dpa_thread_destroy_force(struct snap_dpa_thread *thr)
 {
 #if SIMX_BUILD
-	snap_debug("WA simx thread destroy bug: 1s sleep\n");
+	SNAP_LIB_LOG_DBG("WA simx thread destroy bug: 1s sleep");
 	sleep(1); /* WA over simx bug */
 #endif
 	trigger_q_destroy(thr);
@@ -1035,7 +1038,7 @@ void snap_dpa_thread_destroy(struct snap_dpa_thread *thr)
 	snap_dpa_cmd_send(thr, thr->cmd_mbox, SNAP_DPA_CMD_STOP);
 	rsp = snap_dpa_rsp_wait(thr->cmd_mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK) {
-		snap_warn("DPA thread was not properly stopped\n");
+		SNAP_LIB_LOG_WARN("DPA thread was not properly stopped");
 		snap_dpa_log_print(thr->dpa_log);
 	}
 
@@ -1139,7 +1142,7 @@ int snap_dpa_thread_mr_copy_sync(struct snap_dpa_thread *thr, uint64_t va, uint6
 
 	rsp = snap_dpa_rsp_wait(mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK) {
-		snap_error("Failed to copy MR: %d\n", rsp->status);
+		SNAP_LIB_LOG_ERR("Failed to copy MR: %d", rsp->status);
 		ret = -EINVAL;
 	}
 
@@ -1170,7 +1173,7 @@ int snap_dpa_thread_wakeup(struct snap_dpa_thread *thr)
 	 */
 	ret = snap_dma_q_flush_nowait(thr->trigger_q, &comp);
 	if (ret) {
-		snap_error("thr %p: Failed to arm trigger\n", thr);
+		SNAP_LIB_LOG_ERR("thr %p: Failed to arm trigger", thr);
 		return ret;
 	}
 
@@ -1180,7 +1183,7 @@ int snap_dpa_thread_wakeup(struct snap_dpa_thread *thr)
 	 */
 	thr->trigger_q->tx_available++;
 
-	snap_debug("thr %p: wakeup sent\n", thr);
+	SNAP_LIB_LOG_DBG("thr %p: wakeup sent", thr);
 	return ret;
 }
 
@@ -1477,7 +1480,7 @@ struct snap_dpa_rsp *snap_dpa_rsp_wait(void *mbox)
 	} while (1);
 done:
 	if (SNAP_DEBUG && n)
-		snap_debug("slow wait... %d ms total\n", n);
+		SNAP_LIB_LOG_DBG("slow wait... %d ms total", n);
 	return rsp;
 }
 

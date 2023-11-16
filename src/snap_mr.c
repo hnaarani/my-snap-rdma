@@ -18,6 +18,9 @@
 #include "mlx5_ifc.h"
 #include "snap_macros.h"
 #include "snap_mr.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(MR)
 
 int snap_get_pd_id(struct ibv_pd *pd, uint32_t *pd_id)
 {
@@ -60,7 +63,7 @@ struct ibv_mr *snap_reg_mr(struct ibv_pd *pd, void *addr, size_t length)
 					ro_caps.relaxed_ordering_read)
 			mr_access |= IBV_ACCESS_RELAXED_ORDERING;
 	} else
-		snap_warn("Failed to query relaxed ordering caps\n");
+		SNAP_LIB_LOG_WARN("Failed to query relaxed ordering caps");
 
 	mr = ibv_reg_mr(pd, addr, length, mr_access);
 
@@ -87,7 +90,7 @@ struct snap_cross_mkey *snap_create_cross_mkey_by_attr(struct ibv_pd *pd,
 
 	cmkey = calloc(1, sizeof(*cmkey));
 	if (!cmkey) {
-		snap_error("failed to alloc cross_mkey for pd: 0x%x\n, err: %m\n",
+		SNAP_LIB_LOG_ERR("failed to alloc cross_mkey for pd: 0x%x, err: %m",
 			   pd->handle);
 		return NULL;
 	}
@@ -191,7 +194,7 @@ snap_create_indirect_mkey(struct ibv_pd *pd,
 
 	cmkey = calloc(1, sizeof(*cmkey));
 	if (!cmkey) {
-		snap_error("failed to alloc cross_mkey\n");
+		SNAP_LIB_LOG_ERR("failed to alloc cross_mkey");
 		return NULL;
 	}
 
@@ -255,7 +258,7 @@ snap_create_indirect_mkey(struct ibv_pd *pd,
 	cmkey->devx_obj = mlx5dv_devx_obj_create(ctx, in, sizeof(in), out,
 						 sizeof(out));
 	if (!cmkey->devx_obj) {
-		snap_error("mlx5dv_devx_obj_create() failed to mkey, errno:%d\n", errno);
+		SNAP_LIB_LOG_ERR("mlx5dv_devx_obj_create() failed to mkey, errno:%d", errno);
 		goto out_err;
 	}
 
@@ -365,10 +368,10 @@ struct snap_uar *snap_uar_get(struct ibv_context *ctx)
 
 	if (uar->refcnt > 0) {
 		if (snap_ref_safe(&uar->refcnt)) {
-			snap_error("%s: uar refcnt overflow\n", snap_uar_name(uar));
+			SNAP_LIB_LOG_ERR("%s: uar refcnt overflow", snap_uar_name(uar));
 			goto uar_ref_fail;
 		}
-		snap_debug("%s: uar ref: %d\n", snap_uar_name(uar), uar->refcnt);
+		SNAP_LIB_LOG_DBG("%s: uar ref: %d", snap_uar_name(uar), uar->refcnt);
 		pthread_mutex_unlock(&snap_uar_list_lock);
 		return uar;
 	}
@@ -389,7 +392,7 @@ struct snap_uar *snap_uar_get(struct ibv_context *ctx)
 	uar->refcnt = 1;
 	uar->context = ctx;
 	LIST_INSERT_HEAD(&snap_uar_list, uar, entry);
-	snap_debug("%s: NEW UAR: ctx %p uar %p nc %d\n", snap_uar_name(uar), ctx,
+	SNAP_LIB_LOG_DBG("%s: NEW UAR: ctx %p uar %p nc %d", snap_uar_name(uar), ctx,
 		   uar->uar, uar->nc);
 	pthread_mutex_unlock(&snap_uar_list_lock);
 	return uar;
@@ -405,7 +408,7 @@ uar_calloc_fail:
 void snap_uar_put(struct snap_uar *uar)
 {
 	pthread_mutex_lock(&snap_uar_list_lock);
-	snap_debug("%s: FREE UAR ref: %d\n", snap_uar_name(uar), uar->refcnt);
+	SNAP_LIB_LOG_DBG("%s: FREE UAR ref: %d", snap_uar_name(uar), uar->refcnt);
 	if (--uar->refcnt > 0) {
 		pthread_mutex_unlock(&snap_uar_list_lock);
 		return;

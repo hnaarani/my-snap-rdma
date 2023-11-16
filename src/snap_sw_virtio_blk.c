@@ -13,6 +13,9 @@
 #include "snap.h"
 #include "snap_virtio_common.h"
 #include "snap_virtio_blk.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(SW_VIRTIO_BLK)
 
 enum sw_queue_prog_state {
 	READ_AVAILABLE_IDX,
@@ -64,13 +67,13 @@ snap_virtio_blk_create_sw_queue(struct snap_device *sdev,
 	swq->avail_mr = snap_reg_mr(attr->qp->pd,
 			&swq->avail_idx, sizeof(uint16_t));
 	if (!swq->avail_mr) {
-		snap_error("failed to register avail_mr\n");
+		SNAP_LIB_LOG_ERR("failed to register avail_mr");
 		goto rel_q;
 	}
 	swq->desc_head_mr = snap_reg_mr(attr->qp->pd,
 			&swq->desc_head_idx, sizeof(uint16_t));
 	if (!swq->desc_head_mr) {
-		snap_error("failed to register avail_mr\n");
+		SNAP_LIB_LOG_ERR("failed to register avail_mr");
 		goto dereg_avail;
 	}
 	swq->prev_avail = 0;
@@ -130,7 +133,7 @@ static int __attribute__((unused)) snap_virtio_blk_progress_sw_queue(struct snap
 		ret = snap_dma_q_read(sw_q->dma_q, &sw_q->avail_idx, sizeof(uint16_t),
 				sw_q->avail_mr->lkey, avail_idx_addr, sw_q->dma_mkey, &sw_q->avail_read);
 		if (snap_unlikely(ret)) {
-			snap_error("failed DMA read vring_available for drv: 0x%lx\n",
+			SNAP_LIB_LOG_ERR("failed DMA read vring_available for drv: 0x%lx",
 					sw_q->driver_addr);
 			return ret;
 		}
@@ -147,7 +150,7 @@ static int __attribute__((unused)) snap_virtio_blk_progress_sw_queue(struct snap
 				ret = snap_dma_q_read(sw_q->dma_q, &sw_q->desc_head_idx, sizeof(uint16_t),
 						sw_q->desc_head_mr->lkey, desc_hdr_idx_addr, sw_q->dma_mkey, &sw_q->avail_read);
 				if (snap_unlikely(ret)) {
-					snap_error("failed DMA read descriptor head idx for drv: 0x%lx\n",
+					SNAP_LIB_LOG_ERR("failed DMA read descriptor head idx for drv: 0x%lx",
 							sw_q->driver_addr);
 					return ret;
 				}

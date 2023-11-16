@@ -107,7 +107,7 @@ bool virtq_ctx_init(struct virtq_common_ctx *vq_ctx,
 					    ctxt_attr->rx_elem_size,
 					    ctxt_attr->cb);
 	if (!vq_priv->dma_q) {
-		snap_error("failed creating rdma qp loop\n");
+		SNAP_LIB_LOG_ERR("failed creating rdma qp loop");
 		goto destroy_attr;
 	}
 
@@ -117,7 +117,7 @@ bool virtq_ctx_init(struct virtq_common_ctx *vq_ctx,
 			goto destroy_dma_q;
 
 		if (flush_ret) {
-			snap_error("flush failed for used index (ctrl %p q# %d), ret %d\n", vq_priv->vbq->ctrl, vq_ctx->idx, flush_ret);
+			SNAP_LIB_LOG_ERR("flush failed for used index (ctrl %p q# %d), ret %d", vq_priv->vbq->ctrl, vq_ctx->idx, flush_ret);
 			flush_ret = 0;
 		}
 
@@ -150,7 +150,7 @@ destroy_attr:
 release_priv:
 	free(vq_priv);
 err:
-	snap_error("failed creating virtq %d\n", attr->idx);
+	SNAP_LIB_LOG_ERR("failed creating virtq %d", attr->idx);
 	return false;
 }
 
@@ -176,12 +176,12 @@ int virtq_cmd_progress(struct virtq_cmd *cmd,
 
 	while (repeat) {
 		repeat = false;
-		snap_debug("virtq cmd sm state: %d\n", cmd->state);
+		SNAP_LIB_LOG_DBG("virtq cmd sm state: %d", cmd->state);
 		sm = cmd->vq_priv->custom_sm;
 		if (snap_likely(cmd->state < VIRTQ_CMD_NUM_OF_STATES))
 			repeat = sm->sm_array[cmd->state].sm_handler(cmd, status);
 		else
-			snap_error("reached invalid state %d\n", cmd->state);
+			SNAP_LIB_LOG_ERR("reached invalid state %d", cmd->state);
 	}
 
 	return 0;
@@ -189,7 +189,7 @@ int virtq_cmd_progress(struct virtq_cmd *cmd,
 
 bool virtq_sm_idle(struct virtq_cmd *cmd, enum virtq_cmd_sm_op_status status)
 {
-	snap_error("command in invalid state %d\n",
+	SNAP_LIB_LOG_ERR("command in invalid state %d",
 					   VIRTQ_CMD_STATE_IDLE);
 	return false;
 }
@@ -220,7 +220,7 @@ static enum virtq_fetch_desc_status fetch_next_desc(struct virtq_cmd *cmd)
 		int i = 0, j = 0;
 
 		if (snap_unlikely(!descs_tmp)) {
-			ERR_ON_CMD(cmd, "failed to malloc data for cmd\n");
+			ERR_ON_CMD(cmd, "failed to malloc data for cmd");
 			return VIRTQ_FETCH_DESC_ERR;
 		}
 		for (; i < indirect_num; i++) {
@@ -296,14 +296,14 @@ bool virtq_sm_fetch_cmd_descs(struct virtq_cmd *cmd,
 
 	if (status != VIRTQ_CMD_SM_OP_OK) {
 		--cmd->num_desc;
-		ERR_ON_CMD(cmd, "failed to fetch commands descs - num_desc: %ld, dumping command without response\n",
+		ERR_ON_CMD(cmd, "failed to fetch commands descs - num_desc: %ld, dumping command without response",
 			   cmd->num_desc);
 		cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 		return true;
 	}
 	ret = fetch_next_desc(cmd);
 	if (ret == VIRTQ_FETCH_DESC_ERR) {
-		ERR_ON_CMD(cmd, "failed to RDMA READ desc from host\n");
+		ERR_ON_CMD(cmd, "failed to RDMA READ desc from host");
 		cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 		return true;
 	} else if (ret == VIRTQ_FETCH_DESC_DONE) {
@@ -387,7 +387,7 @@ inline void virtq_mark_dirty_mem(struct virtq_cmd *cmd, uint64_t pa,
 						start_pa,
 						snap_dp_bmap_get_mkey(vq->ctrl->dp_map));
 				if (rc < 0) {
-					ERR_ON_CMD(cmd, "rdma_write failed: %d\n", rc);
+					ERR_ON_CMD(cmd, "rdma_write failed: %d", rc);
 					goto done;
 				}
 				size -= to_write;
@@ -397,12 +397,12 @@ inline void virtq_mark_dirty_mem(struct virtq_cmd *cmd, uint64_t pa,
 		} while (total_size > 0);
 
 	} else {
-		ERR_ON_CMD(cmd, "dirty memory logging enabled but migration channel is not present\n");
+		ERR_ON_CMD(cmd, "dirty memory logging enabled but migration channel is not present");
 		return;
 	}
 done:
 	if (rc)
-		ERR_ON_CMD(cmd, "mark dirty page failed: pa 0x%lx len %u\n", pa, len);
+		ERR_ON_CMD(cmd, "mark dirty page failed: pa 0x%lx len %u", pa, len);
 }
 
 int virtq_blk_dpa_send_status(struct snap_virtio_queue *vq, void *data, int size, uint64_t raddr);
@@ -524,7 +524,7 @@ inline bool virtq_sm_send_completion(struct virtq_cmd *cmd,
 	bool unordered = false;
 
 	if (snap_unlikely(status != VIRTQ_CMD_SM_OP_OK)) {
-		snap_error("failed to write the request status field\n");
+		SNAP_LIB_LOG_ERR("failed to write the request status field");
 
 		/* TODO: if VIRTQ_CMD_STATE_FATAL_ERR could be recovered in the future,
 		 * handle case when cmd with VIRTQ_CMD_STATE_FATAL_ERR handled unordered.
@@ -552,7 +552,7 @@ inline bool virtq_sm_send_completion(struct virtq_cmd *cmd,
 	ret = cmd->vq_priv->ops->send_comp(cmd, cmd->vq_priv->dma_q);
 	if (snap_unlikely(ret)) {
 		/* TODO: pending queue */
-		ERR_ON_CMD(cmd, "failed to send completion ret %d\n", ret);
+		ERR_ON_CMD(cmd, "failed to send completion ret %d", ret);
 		cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 	} else {
 		virtq_mark_dirty_mem(cmd, 0, 0, true);
@@ -626,10 +626,10 @@ static void virtq_progress_suspend(struct virtq_common_ctx *q)
 	qattr.vattr.state = SNAP_VIRTQ_STATE_SUSPEND;
 	/* TODO: check with FLR/reset. I see modify fail where it should not */
 	if (priv->ops->progress_suspend(priv->snap_vbq, &qattr))
-		snap_error("ctrl %p queue %d: failed to move to the SUSPENDED state\n", priv->vbq->ctrl, q->idx);
+		SNAP_LIB_LOG_ERR("ctrl %p queue %d: failed to move to the SUSPENDED state", priv->vbq->ctrl, q->idx);
 
 	/* at this point QP is in the error state and cannot be used anymore */
-	snap_info("ctrl %p queue %d: moving to the SUSPENDED state (q_flush %d)\n", priv->vbq->ctrl, q->idx, n);
+	SNAP_LIB_LOG_INFO("ctrl %p queue %d: moving to the SUSPENDED state (q_flush %d)", priv->vbq->ctrl, q->idx, n);
 	priv->swq_state = SW_VIRTQ_SUSPENDED;
 }
 
@@ -738,17 +738,17 @@ int virtq_suspend(struct virtq_common_ctx *q)
 	struct virtq_priv *priv = q->priv;
 
 	if (priv->swq_state != SW_VIRTQ_RUNNING) {
-		snap_debug("queue %d: suspend was already requested\n", q->idx);
+		SNAP_LIB_LOG_DBG("queue %d: suspend was already requested", q->idx);
 		return -EBUSY;
 	}
 
-	snap_info("ctrl %p queue %d: SUSPENDING command(s) - in %d bdev %d host %d fatal %d\n",
+	SNAP_LIB_LOG_INFO("ctrl %p queue %d: SUSPENDING command(s) - in %d bdev %d host %d fatal %d",
 			priv->vbq->ctrl, q->idx,
 			priv->cmd_cntrs.outstanding_total, priv->cmd_cntrs.outstanding_in_bdev,
 			priv->cmd_cntrs.outstanding_to_host, priv->cmd_cntrs.fatal);
 
 	if (priv->vq_ctx->fatal_err)
-		snap_warn("ctrl %p queue %d: fatal error. Resuming or live migration will not be possible\n",
+		SNAP_LIB_LOG_WARN("ctrl %p queue %d: fatal error. Resuming or live migration will not be possible",
 			  priv->vbq->ctrl, q->idx);
 
 	priv->swq_state = SW_VIRTQ_FLUSHING;
@@ -876,6 +876,6 @@ void virtq_reg_mr_fail_log_error(const struct virtq_cmd *cmd)
 	struct snap_virtio_ctrl_queue *vq = cmd->vq_priv->vbq;
 
 	/* On failure, errno indicates the failure reason */
-	snap_error("failed to register mr: ctrl %p queue %d cmd %p cmd_idx %d - error %d (%s)\n",
+	SNAP_LIB_LOG_ERR("failed to register mr: ctrl %p queue %d cmd %p cmd_idx %d - error %d (%s)",
 		   vq->ctrl, cmd->vq_priv->vq_ctx->idx, cmd, cmd->idx, errno, strerror(errno));
 }

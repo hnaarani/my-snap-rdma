@@ -16,6 +16,9 @@
 #include "snap_env.h"
 #include "mlx5_ifc.h"
 #include "snap_sw_virtio_blk.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(VIRTIO_BLK)
 
 /**
  * snap_virtio_blk_query_device() - Query an Virtio block snap device
@@ -224,7 +227,7 @@ int snap_virtio_blk_init_device(struct snap_device *sdev)
 	}
 
 	if (!virtio_queue_counters_enabled)
-		snap_warn("Virtio queue counters are not supported and were not created.\n");
+		SNAP_LIB_LOG_WARN("Virtio queue counters are not supported and were not created.");
 
 	ret = snap_init_device(sdev);
 	if (ret)
@@ -311,7 +314,7 @@ snap_virtio_blk_create_hw_queue(struct snap_device *sdev,
 					&sdev->sctx->virtio_blk_caps,
 					&attr->vattr);
 	if (ret) {
-		snap_error("Failed to create hw queue, err(%d)\n", ret);
+		SNAP_LIB_LOG_ERR("Failed to create hw queue, err(%d)", ret);
 		return NULL;
 	}
 
@@ -495,7 +498,7 @@ void snap_virtio_blk_pci_functions_cleanup(struct snap_context *sctx)
 		sdev->pci = pfs[i];
 		sdev->mdev.device_emulation = snap_emulation_device_create(sdev, &sdev_attr);
 		if (!sdev->mdev.device_emulation) {
-			snap_error("Failed to create device emulation\n");
+			SNAP_LIB_LOG_ERR("Failed to create device emulation");
 			goto err;
 		}
 
@@ -512,7 +515,7 @@ void snap_virtio_blk_pci_functions_cleanup(struct snap_context *sctx)
 		else if (attr.vattr.pci_hotplug_state == MLX5_EMULATION_HOTPLUG_STATE_HOTUNPLUG_PREPARE)
 			pfs[i]->pci_hotunplug_state = snap_pci_needs_controller_hotunplug;
 
-		snap_debug("hotplug virtio_blk function pf id =%d bdf=%02x:%02x.%d with state %d.\n",
+		SNAP_LIB_LOG_DBG("hotplug virtio_blk function pf id =%d bdf=%02x:%02x.%d with state %d.",
 			  pfs[i]->id, pfs[i]->pci_bdf.bdf.bus, pfs[i]->pci_bdf.bdf.device,
 			  pfs[i]->pci_bdf.bdf.function, attr.vattr.pci_hotplug_state);
 	}

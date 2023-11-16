@@ -20,6 +20,9 @@
 #include "../src/snap_macros.h"
 #include "snap_virtio_adm_spec.h"
 #include "snap_dp_map.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(DP_MAP)
 
 KHASH_INIT(snap_dp_hash, uint64_t, char, 0, kh_int64_hash_func, kh_int64_hash_equal);
 
@@ -110,7 +113,7 @@ int snap_dp_map_serialize_sort(struct snap_dp_map *map, uint64_t pa, uint64_t le
 		//printf("Allocate a buffer of %u elements\n", i);
 		tmp_buf = calloc(i, sizeof(uint64_t));
 		if (!tmp_buf) {
-			snap_error("Can't allocate a buffer of %u elements\n", i);
+			SNAP_LIB_LOG_ERR("Can't allocate a buffer of %u elements", i);
 			goto err;
 		}
 		tmp_buf_p = tmp_buf;
@@ -246,7 +249,7 @@ uint32_t snap_dp_bmap_range_size(struct snap_dp_bmap *map, uint64_t pa, uint32_t
 
 static uint64_t snap_dp_bmap_size_to_len(struct snap_dp_bmap *map, uint32_t size)
 {
-	snap_debug("size2len: %d\n", size);
+	SNAP_LIB_LOG_DBG("size2len: %d", size);
 	return map->is_bytemap ? size : 8 * size;
 }
 /*
@@ -273,14 +276,14 @@ uint32_t snap_dp_bmap_get_start_pa(struct snap_dp_bmap *map, uint64_t pa, uint32
 	return 0;
 found:
 
-	snap_debug("range_pa: %ld, range_len %ld\n", range_pa, range_len);
+	SNAP_LIB_LOG_DBG("range_pa: %ld, range_len %ld", range_pa, range_len);
 	if (pa + length < range_pa + range_len) {
 		*size = snap_dp_bmap_range_size(map, pa, length);
 		ret_len = length;
 	} else {
 		*size = snap_dp_bmap_range_size(map, pa, range_len - pa);
 		ret_len = range_len;
-		snap_debug("returning %ld\n", ret_len);
+		SNAP_LIB_LOG_DBG("returning %ld", ret_len);
 	}
 
 	if (map->is_bytemap) {

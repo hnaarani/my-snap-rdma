@@ -12,6 +12,9 @@
 
 #include "snap.h"
 #include "mlx5_ifc.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(CRYPTO)
 
 int snap_query_crypto_caps(struct snap_context *sctx)
 {
@@ -26,7 +29,7 @@ int snap_query_crypto_caps(struct snap_context *sctx)
 	ret = mlx5dv_devx_general_cmd(context, in, sizeof(in),
 				      out, sizeof(out));
 	if (ret) {
-		snap_error("Query hca_cap failed, ret:%d\n", ret);
+		SNAP_LIB_LOG_ERR("Query hca_cap failed, ret:%d", ret);
 		return ret;
 	}
 
@@ -45,7 +48,7 @@ int snap_query_crypto_caps(struct snap_context *sctx)
 	ret = mlx5dv_devx_general_cmd(context, in, sizeof(in),
 				      out, sizeof(out));
 	if (ret) {
-		snap_error("Query crypto_cap failed, ret:%d\n", ret);
+		SNAP_LIB_LOG_ERR("Query crypto_cap failed, ret:%d", ret);
 		return ret;
 	}
 
@@ -85,7 +88,7 @@ snap_create_dek_obj(struct ibv_context *context,
 
 	if ((attr->key_size != SNAP_CRYPTO_DEK_KEY_SIZE_128)
 	    || (strlen((char *)attr->key) != SNAP_CRYPTO_DEK_SIZE)) {
-		snap_error("Only support 128bit key!\n");
+		SNAP_LIB_LOG_ERR("Only support 128bit key!");
 		goto out_err;
 	}
 
@@ -162,7 +165,7 @@ snap_create_crypto_login_obj(struct ibv_context *context,
 
 	if ((attr->credential_pointer & 0xff000000)
 	    || (attr->session_import_kek_ptr & 0xff000000)) {
-		snap_error(" credential_pointer or import_kek_ptr is invalid");
+		SNAP_LIB_LOG_ERR(" credential_pointer or import_kek_ptr is invalid");
 		goto out_err;
 	}
 
@@ -235,7 +238,7 @@ int snap_destroy_crypto_obj(struct snap_crypto_obj *obj)
 
 	ret = mlx5dv_devx_obj_destroy(obj->obj);
 	if (ret)
-		snap_error("Failed to destroy crypto obj:%p\n", obj);
+		SNAP_LIB_LOG_ERR("Failed to destroy crypto obj:%p", obj);
 
 	free(obj);
 

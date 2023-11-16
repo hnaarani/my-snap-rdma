@@ -20,6 +20,9 @@
 #include "snap_env.h"
 
 #include "mlx5_ifc.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(SNAP)
 
 #define SNAP_INITIALIZE_HCA_RETRY_CNT 100
 #define SNAP_TEARDOWN_HCA_RETRY_CNT 5
@@ -219,14 +222,14 @@ static int snap_query_vuid(struct snap_pci *pci, uint8_t *out, int outlen, bool 
 
 	ret = mlx5dv_devx_general_cmd(pci->sctx->context, in, sizeof(in), out, outlen);
 	if (ret) {
-		snap_warn("Query functions info failed, ret:%d\n", ret);
+		SNAP_LIB_LOG_WARN("Query functions info failed, ret:%d", ret);
 		return ret;
 	}
 
 	// Check if number of vuid entries in output matches expected num of vfs and pf
 	num_entries =  DEVX_GET(query_vuid_out, out, num_of_entries);
 	if ((query_vfs && pci->num_vfs + 1 != num_entries) || (!query_vfs && num_entries != 1)) {
-		snap_warn("Failed to set vuid.\n");
+		SNAP_LIB_LOG_WARN("Failed to set vuid.");
 		return -1;
 	}
 
@@ -243,7 +246,7 @@ static void snap_query_pci_vuid(struct snap_pci *pci)
 
 	out = calloc(1, output_size);
 	if (!out) {
-		snap_warn("Alloc memory for output structure failed\n");
+		SNAP_LIB_LOG_WARN("Alloc memory for output structure failed");
 		return;
 	}
 
@@ -1346,7 +1349,7 @@ static int snap_clone_qp(struct snap_device *sdev,
 	 */
 	ah = ibv_create_ah(qp->pd, &attr.ah_attr);
 	if (!ah) {
-		snap_error("ibv_create_ah() return failed with errno:%d\n", errno);
+		SNAP_LIB_LOG_ERR("ibv_create_ah() return failed with errno:%d", errno);
 		return -1;
 	}
 
@@ -2345,7 +2348,7 @@ static void snap_destroy_rdma_steering(struct snap_device *sdev)
 	 * SQs.
 	 */
 	if (ret)
-		snap_warn("failed to destroy RDMA_FT_RX - possible resource leak\n");
+		SNAP_LIB_LOG_WARN("failed to destroy RDMA_FT_RX - possible resource leak");
 }
 
 static int snap_create_rdma_steering(struct snap_device *sdev,
@@ -2919,20 +2922,20 @@ snap_create_virtio_net_device_emulation(struct snap_device *sdev,
 	    net_caps->emulated_dev_db_cq_map) {
 		DEVX_SET(virtio_net_device_emulation, device_emulation_in,
 			 emulated_dev_db_cq_map, 1);
-		snap_debug("Set db_cq_map feature\n");
+		SNAP_LIB_LOG_DBG("Set db_cq_map feature");
 	}
 	if ((attr->flags & SNAP_DEVICE_FLAGS_EQ_IN_SW) &&
 	    net_caps->emulated_dev_eq) {
 		DEVX_SET(virtio_net_device_emulation, device_emulation_in,
 				emulated_dev_eq, 1);
-		snap_debug("Set eq_in_sw feature\n");
+		SNAP_LIB_LOG_DBG("Set eq_in_sw feature");
 	}
 
 	if ((attr->flags & SNAP_DEVICE_FLAGS_VF_DYN_MSIX) &&
 	    (net_caps->max_num_vf_dynamic_msix != 0)) {
 		DEVX_SET(virtio_net_device_emulation, device_emulation_in,
 			 dynamic_vf_msix_control, 1);
-		snap_debug("Set dynamic_vf_msix_control for PF\n");
+		SNAP_LIB_LOG_DBG("Set dynamic_vf_msix_control for PF");
 	}
 
 	device_emulation->obj = mlx5dv_devx_obj_create(context, in, sizeof(in),
@@ -3156,14 +3159,14 @@ int snap_get_pf_list(struct snap_context *sctx, enum snap_emulation_type type,
 			DEVX_ST_SZ_BYTES(emulated_function_info) * (pfs_ctx->max_pfs);
 		out = calloc(1, output_size);
 		if (!out) {
-			snap_warn("alloc memory for output structure failed\n");
+			SNAP_LIB_LOG_WARN("alloc memory for output structure failed");
 			goto out;
 		}
 
 		ret = snap_query_functions_info(sctx, pfs_ctx->type,
 				SNAP_UNINITIALIZED_VHCA_ID, out, output_size);
 		if (ret) {
-			snap_warn("query functions info failed, ret:%d\n", ret);
+			SNAP_LIB_LOG_WARN("query functions info failed, ret:%d", ret);
 			goto free_out;
 		}
 
@@ -3171,7 +3174,7 @@ int snap_get_pf_list(struct snap_context *sctx, enum snap_emulation_type type,
 			if (pfs[i]->plugged && !pfs[i]->pci_bdf.raw) {
 				ret = snap_pf_get_pci_info(pfs[i], out);
 				if (ret) {
-					snap_warn("pf get pci info failed, ret:%d\n", ret);
+					SNAP_LIB_LOG_WARN("pf get pci info failed, ret:%d", ret);
 					goto free_out;
 				}
 			}
@@ -3368,7 +3371,7 @@ struct snap_pci *snap_hotplug_pf(struct snap_context *sctx,
 		pfs_ctx->dirty = true;
 		pthread_mutex_unlock(&sctx->hotplug_lock);
 	}
-	snap_debug("PCI enumeration done\n");
+	SNAP_LIB_LOG_DBG("PCI enumeration done");
 
 	free(out);
 
@@ -3493,7 +3496,7 @@ struct snap_device *snap_open_device(struct snap_context *sctx,
 	}
 
 	sdev->transitional_device = snap_virtio_is_transitional_device(sdev);
-	snap_info("pci:%s transitional_device:%d\n", sdev->pci->pci_number, sdev->transitional_device);
+	SNAP_LIB_LOG_INFO("pci:%s transitional_device:%d", sdev->pci->pci_number, sdev->transitional_device);
 
 	/* This should be done only for BF-1 */
 	if (need_tunnel) {
@@ -3619,7 +3622,7 @@ struct snap_context *snap_open(struct ibv_device *ibdev)
 
 	rc = snap_query_crypto_caps(sctx);
 	if (rc)
-		snap_warn("query crypto caps failed, ret:%d\n", rc);
+		SNAP_LIB_LOG_WARN("query crypto caps failed, ret:%d", rc);
 
 	rc = snap_alloc_functions(sctx);
 	if (rc) {
@@ -3688,7 +3691,7 @@ void snap_update_pci_bdf(struct snap_pci *spci, uint16_t pci_bdf)
 		snprintf(spci->pci_number, sizeof(spci->pci_number), "%02x:%02x.%d",
 			spci->pci_bdf.bdf.bus, spci->pci_bdf.bdf.device,
 			spci->pci_bdf.bdf.function);
-		snap_warn("sctx:%p pci function(%d) pci_bdf changed from:%s to:%s\n",
+		SNAP_LIB_LOG_WARN("sctx:%p pci function(%d) pci_bdf changed from:%s to:%s",
 			spci->sctx, spci->id, old_bdf, spci->pci_number);
 	}
 }
@@ -3746,11 +3749,11 @@ int snap_allow_other_vhca_access(struct ibv_context *context,
 	ret = mlx5dv_devx_general_cmd(context, in, sizeof(in),
 				      out, sizeof(out));
 	if (ret) {
-		snap_error("Failed to allow other vhca access\n");
+		SNAP_LIB_LOG_ERR("Failed to allow other vhca access");
 		return ret;
 	}
 
-	snap_debug("Other VHCA access is allowed for object 0x%x\n", obj_id);
+	SNAP_LIB_LOG_DBG("Other VHCA access is allowed for object 0x%x", obj_id);
 	return 0;
 }
 

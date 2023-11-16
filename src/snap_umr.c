@@ -220,7 +220,7 @@ static int snap_build_umr_wqe(struct snap_dma_q *q,
 
 	if ((attr->purpose & SNAP_UMR_MKEY_MODIFY_ATTACH_MTT)
 		&& (attr->klm_mtt == NULL || attr->klm_entries == 0)) {
-		snap_error("Provided MTT is not valid\n");
+		SNAP_LIB_LOG_ERR("Provided MTT is not valid");
 		return -EINVAL;
 	}
 
@@ -260,7 +260,7 @@ static int snap_build_umr_wqe(struct snap_dma_q *q,
 	 * case, use umr_wqe_n_bb + 1 to do the can_tx check.
 	 */
 	if (snap_unlikely(!qp_can_tx(q, *umr_wqe_n_bb + 1 + n_bb))) {
-		snap_error("Lack of tx_available resource!\n");
+		SNAP_LIB_LOG_ERR("Lack of tx_available resource!");
 		return -EAGAIN;
 	}
 
@@ -329,7 +329,7 @@ int snap_umr_post_wqe(struct snap_dma_q *q, struct snap_post_umr_attr *attr,
 
 	ret = snap_build_umr_wqe(q, ctrl, fm_ce_se, to_end, attr, &umr_wqe_n_bb, *n_bb);
 	if (ret) {
-		snap_error("Failed to build umr wqe for purpose:%s\n",
+		SNAP_LIB_LOG_ERR("Failed to build umr wqe for purpose:%s",
 			attr->purpose == SNAP_UMR_MKEY_MODIFY_ATTACH_MTT ? "attach_mtt" : "attach_bsf");
 		return ret;
 	}

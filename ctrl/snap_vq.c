@@ -22,6 +22,9 @@
 #include "snap_vq_prm.h"
 #include "snap_virtio_common_ctrl.h"
 #include "snap_virtio_net.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(VQ)
 
 
 #define SNAP_VQ_NO_MSIX (0xffff)
@@ -277,7 +280,7 @@ void snap_vq_cmd_fatal(struct snap_vq_cmd *cmd)
 	/* TODO add pending list handling */
 	TAILQ_REMOVE(&cmd->vq->inflight_cmds, cmd, entry);
 	TAILQ_INSERT_HEAD(&cmd->vq->fatal_cmds, cmd, entry);
-	snap_error("Request %p entered fatal state and cannot be completed\n",
+	SNAP_LIB_LOG_ERR("Request %p entered fatal state and cannot be completed",
 			cmd);
 }
 
@@ -406,7 +409,7 @@ static int snap_vq_hwq_modify_state(struct snap_vq *q, enum snap_virtq_state sta
 	if (!hw_q->mod_allowed_mask) {
 		ret = snap_virtio_get_mod_fields_queue(hw_q);
 		if (ret) {
-			snap_error("Failed to query queue mod fields\n");
+			SNAP_LIB_LOG_ERR("Failed to query queue mod fields");
 			return ret;
 		}
 	}
@@ -419,7 +422,7 @@ static int snap_vq_hwq_modify_state(struct snap_vq *q, enum snap_virtq_state sta
 	 */
 	ret = snap_virtio_modify_queue(hw_q, SNAP_VQ_HWQ_MOD_STATE, &attr.vattr);
 	if (ret) {
-		snap_error("Failed to modify snap_vq hw_q\n");
+		SNAP_LIB_LOG_ERR("Failed to modify snap_vq hw_q");
 		return ret;
 	}
 
@@ -528,7 +531,7 @@ int snap_vq_create(struct snap_vq *q, struct snap_vq_create_attr *attr,
 			goto destroy_dma_q;
 
 		if (flush_ret) {
-			snap_error("flush failed for used index (ctrl %p q# %d), ret %d\n", q->vctrl, q->index, flush_ret);
+			SNAP_LIB_LOG_ERR("flush failed for used index (ctrl %p q# %d), ret %d", q->vctrl, q->index, flush_ret);
 			flush_ret = 0;
 		}
 
@@ -611,14 +614,14 @@ int snap_vq_handle_events(struct snap_vq *q)
 
 	ret = ibv_get_cq_event(q->comp_channel, &cq, &cq_context);
 	if (ret) {
-		snap_info("Failed to get CQ event\n");
+		SNAP_LIB_LOG_INFO("Failed to get CQ event");
 		return -errno;
 	}
 
 	ibv_ack_cq_events(cq, 1);
 	ret = snap_dma_q_arm(q->dma_q);
 	if (ret) {
-		snap_error("Couldn't request CQ notification\n");
+		SNAP_LIB_LOG_ERR("Couldn't request CQ notification");
 		return -errno;
 	}
 
@@ -726,36 +729,36 @@ int snap_vq_get_debugstat(struct snap_vq *q,
 	ret = snap_virtio_get_used_index_from_host(q->dma_q, q->device_pa,
 						q->xmkey, &vru, &flush_ret);
 	if (ret) {
-		snap_error("failed to get vring used index from host memory for queue %d\n",
+		SNAP_LIB_LOG_ERR("failed to get vring used index from host memory for queue %d",
 			   q->index);
 		return ret;
 	}
 
 	if (flush_ret) {
-		snap_error("flush failed for used index (ctrl %p q# %d), ret %d\n", q->vctrl, q->index, flush_ret);
+		SNAP_LIB_LOG_ERR("flush failed for used index (ctrl %p q# %d), ret %d", q->vctrl, q->index, flush_ret);
 		flush_ret = 0;
 	}
 
 	ret = snap_virtio_get_avail_index_from_host(q->dma_q, q->driver_pa,
 						q->xmkey, &vra, &flush_ret);
 	if (ret) {
-		snap_error("failed to get vring avail index from host memory (ctrl %p q# %d)\n",
+		SNAP_LIB_LOG_ERR("failed to get vring avail index from host memory (ctrl %p q# %d)",
 			   q->vctrl, q->index);
 		return ret;
 	}
 
 	if (flush_ret)
-		snap_error("flush failed for avail index (ctrl %p q# %d), ret %d\n", q->vctrl, q->index, flush_ret);
+		SNAP_LIB_LOG_ERR("flush failed for avail index (ctrl %p q# %d), ret %d", q->vctrl, q->index, flush_ret);
 
 	ret = snap_virtio_query_queue(q->hw_q, &vq_attr);
 	if (ret) {
-		snap_error("failed query queue %d\n", q->index);
+		SNAP_LIB_LOG_ERR("failed query queue %d", q->index);
 		return ret;
 	}
 
 	ret = snap_virtio_query_queue_counters(q->hw_q->ctrs_obj, &vqc_attr);
 	if (ret) {
-		snap_error("failed query virtio_q_counters %d\n", q->index);
+		SNAP_LIB_LOG_ERR("failed query virtio_q_counters %d", q->index);
 		return ret;
 	}
 

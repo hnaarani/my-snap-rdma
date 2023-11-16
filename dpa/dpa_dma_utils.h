@@ -35,7 +35,7 @@ snap_dpa_dma_rb_write(struct snap_dma_q *q, void *src_buffer,
 			element_size * elements_reg, src_mkey,
 			dst_buffer + start_offset, dst_mkey, comp);
 	if (snap_unlikely(rc)) {
-		snap_debug("Ring buffer dma write failed with err %d\n", rc);
+		snap_debug("Ring buffer dma write failed with err %d", rc);
 		return rc;
 	}
 
@@ -45,7 +45,7 @@ snap_dpa_dma_rb_write(struct snap_dma_q *q, void *src_buffer,
 				element_size * elements_wrapped,
 				src_mkey, dst_buffer, dst_mkey, comp);
 		if (snap_unlikely(rc)) {
-			snap_debug("Ring buffer dma write failed with err %d\n", rc);
+			snap_debug("Ring buffer dma write failed with err %d", rc);
 			return rc;
 		}
 	}

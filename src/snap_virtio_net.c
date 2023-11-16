@@ -14,6 +14,9 @@
 #include "snap_virtio_net.h"
 #include "snap_internal.h"
 #include "mlx5_ifc.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(VIRTIO_NET)
 
 static void
 snap_virtio_net_get_queues_attr(struct snap_device *sdev,
@@ -290,7 +293,7 @@ int snap_virtio_net_teardown_device(struct snap_device *sdev)
 	for (i = 0; i < vndev->num_queues && vndev->virtqs[i].virtq.ctrs_obj; i++) {
 		ret = snap_devx_obj_destroy(vndev->virtqs[i].virtq.ctrs_obj);
 		if (ret)
-			snap_error("Failed to destroy net virtq counter obj\n");
+			SNAP_LIB_LOG_ERR("Failed to destroy net virtq counter obj");
 	}
 
 	free(vndev->virtqs);
@@ -370,7 +373,7 @@ snap_virtio_net_create_queue(struct snap_device *sdev,
 					&sdev->sctx->virtio_net_caps,
 					&attr->vattr);
 	if (ret) {
-		snap_error("Failed to create hw queue, err(%d)\n", ret);
+		SNAP_LIB_LOG_ERR("Failed to create hw queue, err(%d)", ret);
 		return NULL;
 	}
 
@@ -471,7 +474,7 @@ void snap_virtio_net_pci_functions_cleanup(struct snap_context *sctx)
 		sdev->pci = pfs[i];
 		sdev->mdev.device_emulation = snap_emulation_device_create(sdev, &sdev_attr);
 		if (!sdev->mdev.device_emulation) {
-			snap_error("Failed to create device emulation\n");
+			SNAP_LIB_LOG_ERR("Failed to create device emulation");
 			goto err;
 		}
 
@@ -485,7 +488,7 @@ void snap_virtio_net_pci_functions_cleanup(struct snap_context *sctx)
 			attr.vattr.pci_hotplug_state == MLX5_EMULATION_HOTPLUG_STATE_HOTUNPLUG_PREPARE)
 			snap_hotunplug_pf(pfs[i]);
 
-		snap_debug("hotplug virtio net function pf id =%d bdf=%02x:%02x.%d with state %d.\n",
+		SNAP_LIB_LOG_DBG("hotplug virtio net function pf id =%d bdf=%02x:%02x.%d with state %d.",
 			  pfs[i]->id, pfs[i]->pci_bdf.bdf.bus, pfs[i]->pci_bdf.bdf.device,
 			  pfs[i]->pci_bdf.bdf.function, attr.vattr.pci_hotplug_state);
 	}

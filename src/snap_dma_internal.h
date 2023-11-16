@@ -18,8 +18,15 @@
 
 #if __DPA
 #include "../dpa/dpa.h"
+#define SNAP_LIB_LOG_ERR snap_error
+#define SNAP_LIB_LOG_WARN snap_warn
+#define SNAP_LIB_LOG_INFO snap_info
+#define SNAP_LIB_LOG_DBG snap_debug
+#define SNAP_LIB_LOG_TRACE snap_debug
+#else
+#include "snap_lib_log.h"
+SNAP_LIB_LOG_REGISTER(DMA_INTERNAL_H)
 #endif
-
 
 #define SNAP_DMA_Q_RX_CQE_SIZE  128
 #define SNAP_DMA_Q_TX_CQE_SIZE  64
@@ -293,7 +300,7 @@ static inline struct mlx5_cqe64 *snap_dv_poll_cq(struct snap_hw_cq *dv_cq, int c
 
 	dv_cq->ci++;
 
-	snap_debug("cq: 0x%x ci: %d CQ opcode %d size %d wqe_counter %d scatter32 %d scatter64 %d\n",
+	SNAP_LIB_LOG_TRACE("cq: 0x%x ci: %d CQ opcode %d size %d wqe_counter %d scatter32 %d scatter64 %d",
 		   dv_cq->cq_num, dv_cq->ci,
 		   mlx5dv_get_cqe_opcode(cqe),
 		   be32toh(cqe->byte_cnt),
@@ -366,7 +373,7 @@ static inline int snap_dma_build_sgl(struct snap_dma_q_io_attr *io_attr, int *wr
 
 			sge_cnt++;
 			if (sge_cnt == SNAP_DMA_Q_MAX_SGE_NUM && len_to_handle > 0) {
-				snap_debug("sge cnt reach to max number(%d) supported, open a new WR(%d) for this iov[%d].\n",
+				SNAP_LIB_LOG_DBG("sge cnt reach to max number(%d) supported, open a new WR(%d) for this iov[%d].",
 					SNAP_DMA_Q_MAX_SGE_NUM, k + 1, i);
 
 				/* num_sge[k] is the sge cnt in l_sgl[k] for wr[k] */
@@ -380,7 +387,7 @@ static inline int snap_dma_build_sgl(struct snap_dma_q_io_attr *io_attr, int *wr
 
 				k++;
 				if (k >= SNAP_DMA_Q_MAX_WR_CNT) {
-					snap_error("wr cnt reach to max number(%d) supported.\n", SNAP_DMA_Q_MAX_WR_CNT);
+					SNAP_LIB_LOG_ERR("wr cnt reach to max number(%d) supported.", SNAP_DMA_Q_MAX_WR_CNT);
 					return -1;
 				}
 				wr_consumed_len += sge_total_len;
@@ -401,7 +408,7 @@ static inline int snap_dma_build_sgl(struct snap_dma_q_io_attr *io_attr, int *wr
 
 		k++;
 		if (k >= SNAP_DMA_Q_MAX_WR_CNT) {
-			snap_error("wr cnt reach to max number(%d) supported.\n", SNAP_DMA_Q_MAX_WR_CNT);
+			SNAP_LIB_LOG_ERR("wr cnt reach to max number(%d) supported.", SNAP_DMA_Q_MAX_WR_CNT);
 			return -1;
 		}
 	}

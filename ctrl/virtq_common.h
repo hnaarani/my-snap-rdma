@@ -19,9 +19,12 @@
 #include <sys/uio.h>
 #include "snap_virtio_common_ctrl.h"
 #include "snap_dma.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(VIRTQ_COMMON_H)
 
 #define ERR_ON_CMD(cmd, fmt, ...) \
-	snap_error("queue:%d cmd_idx:%d err: " fmt, \
+	SNAP_LIB_LOG_ERR("queue:%d cmd_idx:%d err: " fmt, \
 		   (cmd)->vq_priv->vq_ctx->idx, (cmd)->idx, ## __VA_ARGS__)
 
 /* uncomment to enable fast path debugging */

@@ -2,7 +2,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 lib_LTLIBRARIES = libsnap-env.la libsnap-mr.la libsnap-dma.la libsnap.la
 
-noinst_HEADERS = mlx5_ifc.h snap_queue.h snap_rdma_channel.h snap_internal.h \
+noinst_HEADERS = mlx5_ifc.h snap_queue.h snap_rdma_channel.h snap_internal.h snap_lib_log.h \
 		 snap_dpa.h snap_dpa_virtq.h snap_dpa_virtq_common.h snap_dpa_nvme_common.h snap_dma_internal.h \
 		 snap_sw_virtio_blk.h snap_dpa_p2p.h snap_dpa_rt.h snap_dpa_nvme_mp_common.h \
 		 khash.h
@@ -55,6 +55,7 @@ endif
 #snap lib
 libsnap_ladir = $(includedir)/
 libsnap_la_HEADERS = snap.h \
+		     snap_lib_log.h \
 		     snap_nvme.h \
 		     snap_virtio_common.h \
 		     snap_virtio_blk.h \
@@ -69,6 +70,7 @@ libsnap_la_HEADERS = snap.h \
 		     snap_mb.h
 
 libsnap_la_SOURCES = snap.c \
+		     snap_lib_log.c \
 		     snap_nvme.c \
 		     snap_virtio_blk.c \
 		     snap_virtio_fs.c \

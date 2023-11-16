@@ -131,7 +131,7 @@ inline int dpa_p2p_recv()
 	do {
 		n = snap_dpa_p2p_recv_msg(&rt_ctx->dpa_cmd_chan, msgs, 16);
 		if (n)
-			snap_debug("recv %d new messages\n", n);
+			snap_debug("recv %d new messages", n);
 		msix_count += n;
 	} while (n != 0);
 

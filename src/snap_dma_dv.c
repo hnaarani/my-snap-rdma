@@ -143,7 +143,7 @@ __attribute__((unused)) static inline int snap_iov_to_klm_mtt(struct iovec *iov,
 
 	/*TODO: dynamically expand klm_mtt array */
 	if (snap_unlikely(iov_cnt > SNAP_DMA_Q_MAX_IOV_CNT)) {
-		snap_error("iov_cnt:%d is larger than max supported(%d)\n",
+		SNAP_LIB_LOG_ERR("iov_cnt:%d is larger than max supported(%d)",
 			iov_cnt, SNAP_DMA_Q_MAX_IOV_CNT);
 		return -EINVAL;
 	}
@@ -195,7 +195,7 @@ static inline int snap_dma_q_iov2umr(struct snap_dma_q *q,
 
 	ret = snap_umr_post_wqe(q, &umr_attr, NULL, n_bb);
 	if (snap_unlikely(ret))
-		snap_error("dma_q:%p post umr wqe for local mkey failed, ret:%d\n", q, ret);
+		SNAP_LIB_LOG_ERR("dma_q:%p post umr wqe for local mkey failed, ret:%d", q, ret);
 
 	return ret;
 }
@@ -227,7 +227,7 @@ snap_prepare_crypto_ctx(struct snap_dma_q_crypto_ctx *crypto_ctx,
 			ret = snap_dma_q_iov2umr(q, io_attr->liov, io_attr->lkey, io_attr->liov_cnt,
 					crypto_ctx->l_klm_mkey, false, NULL, n_bb, &len);
 			if (snap_unlikely(ret)) {
-				snap_error("dma_q:%p post umr wqe for local mkey failed, ret:%d\n", q, ret);
+				SNAP_LIB_LOG_ERR("dma_q:%p post umr wqe for local mkey failed, ret:%d", q, ret);
 				return ret;
 			}
 		}
@@ -235,7 +235,7 @@ snap_prepare_crypto_ctx(struct snap_dma_q_crypto_ctx *crypto_ctx,
 		ret = snap_dma_q_iov2umr(q, io_attr->riov, io_attr->rkey, io_attr->riov_cnt,
 				crypto_ctx->r_klm_mkey, true, io_attr, n_bb, &io_attr->len);
 		if (snap_unlikely(ret)) {
-			snap_error("dma_q:%p post umr wqe for remote mkey failed, ret:%d\n", q, ret);
+			SNAP_LIB_LOG_ERR("dma_q:%p post umr wqe for remote mkey failed, ret:%d", q, ret);
 			return ret;
 		}
 
@@ -243,7 +243,7 @@ snap_prepare_crypto_ctx(struct snap_dma_q_crypto_ctx *crypto_ctx,
 		ret = snap_dma_q_iov2umr(q, io_attr->liov, io_attr->lkey, io_attr->liov_cnt,
 				crypto_ctx->l_klm_mkey, true, io_attr, n_bb, &io_attr->len);
 		if (ret) {
-			snap_error("dma_q:%p post umr wqe for local mkey failed, ret:%d\n", q, ret);
+			SNAP_LIB_LOG_ERR("dma_q:%p post umr wqe for local mkey failed, ret:%d", q, ret);
 			return ret;
 		}
 
@@ -251,7 +251,7 @@ snap_prepare_crypto_ctx(struct snap_dma_q_crypto_ctx *crypto_ctx,
 			ret = snap_dma_q_iov2umr(q, io_attr->riov, io_attr->rkey, io_attr->riov_cnt,
 					crypto_ctx->r_klm_mkey, false, io_attr, n_bb, &len);
 			if (ret) {
-				snap_error("dma_q:%p post umr wqe for remote mkey failed, ret:%d\n", q, ret);
+				SNAP_LIB_LOG_ERR("dma_q:%p post umr wqe for remote mkey failed, ret:%d", q, ret);
 				return ret;
 			}
 		}
@@ -275,13 +275,13 @@ static int snap_prepare_dma_crypto_xfer_ctx(struct snap_dma_q *q,
 
 	if (snap_unlikely(!(io_attr->io_type & SNAP_DMA_Q_IO_TYPE_ENCRYPTO) &&
 			  !(io_attr->io_type & SNAP_DMA_Q_IO_TYPE_IOV))) {
-		snap_error("expected iov+crypto combination\n");
+		SNAP_LIB_LOG_ERR("expected iov+crypto combination");
 		return -EINVAL;
 	}
 
 	crypto_ctx = snap_dma_q_crypto_ctx_alloc(q);
 	if (snap_unlikely(!crypto_ctx)) {
-		snap_debug("dma_q:%p Out of crypto_ctx from pool\n", q);
+		SNAP_LIB_LOG_DBG("dma_q:%p Out of crypto_ctx from pool", q);
 		return -EAGAIN;
 	}
 
@@ -444,7 +444,7 @@ static int dv_dma_q_writev2v(struct snap_dma_q *q,
 		return -EINVAL;
 
 	if (snap_unlikely(!qp_can_tx(q, *n_bb))) {
-		snap_error("%s: qp out of tx_available resource\n", __func__);
+		SNAP_LIB_LOG_ERR("%s: qp out of tx_available resource", __func__);
 		return -EAGAIN;
 	}
 
@@ -667,7 +667,7 @@ static void snap_dv_cqe_err(struct mlx5_cqe64 *cqe)
 	qp_num = be32toh(ecqe->s_wqe_opcode_qpn) & ((1<<24)-1);
 
 	if (ecqe->syndrome == MLX5_CQE_SYNDROME_WR_FLUSH_ERR) {
-		snap_debug("QP 0x%x wqe[%d] is flushed\n", qp_num, wqe_counter);
+		SNAP_LIB_LOG_DBG("QP 0x%x wqe[%d] is flushed", qp_num, wqe_counter);
 		return;
 	}
 
@@ -715,7 +715,7 @@ static void snap_dv_cqe_err(struct mlx5_cqe64 *cqe)
 		snprintf(info, sizeof(info), "Generic");
 		break;
 	}
-	snap_error("Error on QP 0x%x wqe[%03d]: %s (synd 0x%x vend 0x%x) opcode %s\n",
+	SNAP_LIB_LOG_ERR("Error on QP 0x%x wqe[%03d]: %s (synd 0x%x vend 0x%x) opcode %s",
 		   qp_num, wqe_counter, info, ecqe->syndrome, ecqe->vendor_err_synd,
 		   snap_dv_cqe_err_opcode(ecqe));
 }
@@ -1139,7 +1139,7 @@ int dv_worker_progress_rx(struct snap_dma_worker *wk)
 					pthread_mutex_unlock(&q->lock);
 					q->free_dma_q_resources_cb(q->uctx);
 				} else {
-					snap_debug("%s: DMA_Q:%p flushed completely before user could destroy the CQ\n",
+					SNAP_LIB_LOG_DBG("%s: DMA_Q:%p flushed completely before user could destroy the CQ",
 						__func__, q);
 					q->destroy_done = true;
 					pthread_mutex_unlock(&q->lock);
@@ -1162,7 +1162,7 @@ int dv_worker_progress_rx(struct snap_dma_worker *wk)
 		 * will be executed
 		 */
 		if (snap_unlikely(!wk->queues[dma_cqe_id])) {
-			snap_debug("%s: Queue %d is not valid, dropping CQE\n", __func__, dma_cqe_id);
+			SNAP_LIB_LOG_DBG("%s: Queue %d is not valid, dropping CQE", __func__, dma_cqe_id);
 			continue;
 		}
 
@@ -1188,7 +1188,7 @@ process_comps:
 
 	return n;
 #else
-	snap_error("worker poll is not implemented on DPA\n");
+	SNAP_LIB_LOG_ERR("worker poll is not implemented on DPA");
 	return 0;
 #endif
 }
@@ -1288,7 +1288,7 @@ int dv_worker_flush(struct snap_dma_worker *wk)
 		if (snap_unlikely(wk->queues[i]))
 			continue;
 		/* api is highly experimental and not in use at the moment */
-		snap_error("WORKER FLUSH NEEDS TO BE FIXED\n");
+		SNAP_LIB_LOG_ERR("WORKER FLUSH NEEDS TO BE FIXED");
 		tx_available = wk->queues[i]->sw_qp.dv_qp.hw_qp.sq.wqe_cnt;
 		while (wk->queues[i]->tx_available < tx_available)
 			n += dv_worker_progress_tx(wk);

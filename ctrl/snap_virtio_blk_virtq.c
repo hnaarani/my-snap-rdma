@@ -127,7 +127,7 @@ static void sm_dma_cb(struct snap_dma_completion *self, int status)
 	struct blk_virtq_cmd *cmd = container_of(vcmd, struct blk_virtq_cmd, common_cmd);
 
 	if (status != IBV_WC_SUCCESS) {
-		snap_error("error in dma for queue: %d cmd %p descs %ld state %d\n",
+		SNAP_LIB_LOG_ERR("error in dma for queue: %d cmd %p descs %ld state %d",
 			   cmd->common_cmd.vq_priv->vq_ctx->idx,
 			   cmd, vcmd->num_desc, vcmd->state);
 		op_status = VIRTQ_CMD_SM_OP_ERR;
@@ -154,7 +154,7 @@ static int alloc_aux(struct virtq_cmd *cmd, uint32_t seg_max)
 
 	cmd->aux = calloc(1, aux_size);
 	if (!cmd->aux) {
-		snap_error("failed to allocate aux memory (%ld bytes) for virtq %d cmd %d\n",
+		SNAP_LIB_LOG_ERR("failed to allocate aux memory (%ld bytes) for virtq %d cmd %d",
 			   aux_size, cmd->vq_priv->vq_ctx->idx, cmd->idx);
 		return -ENOMEM;
 	}
@@ -235,7 +235,7 @@ alloc_blk_virtq_cmd_arr(uint32_t size_max, uint32_t seg_max,
 
 	if (vq_priv->zcopy) {
 		if (req_size > VIRTIO_BLK_MAX_REQ_DATA) {
-			snap_error("reached max command data size (%zu/%d)\n",
+			SNAP_LIB_LOG_ERR("reached max command data size (%zu/%d)",
 				   req_size, VIRTIO_BLK_MAX_REQ_DATA);
 			goto out;
 		}
@@ -243,7 +243,7 @@ alloc_blk_virtq_cmd_arr(uint32_t size_max, uint32_t seg_max,
 
 	cmd_arr = calloc(num, sizeof(struct blk_virtq_cmd) + seg_max * sizeof(struct iovec));
 	if (!cmd_arr) {
-		snap_error("failed to allocate memory for blk_virtq commands\n");
+		SNAP_LIB_LOG_ERR("failed to allocate memory for blk_virtq commands");
 		goto out;
 	}
 
@@ -252,7 +252,7 @@ alloc_blk_virtq_cmd_arr(uint32_t size_max, uint32_t seg_max,
 		data_size += req_size;
 	vq_priv->data = to_blk_bdev_ops(&vq_priv->virtq_dev)->dma_malloc(data_size * num);
 	if (!vq_priv->data) {
-		snap_error("failed to allocate %ld bytes of memory for virtq %d\n",
+		SNAP_LIB_LOG_ERR("failed to allocate %ld bytes of memory for virtq %d",
 			data_size * num, vq_priv->vq_ctx->idx);
 			goto free_cmd_arr;
 	}
@@ -263,7 +263,7 @@ alloc_blk_virtq_cmd_arr(uint32_t size_max, uint32_t seg_max,
 						IBV_ACCESS_LOCAL_WRITE |
 						IBV_ACCESS_RELAXED_ORDERING);
 	if (!vq_priv->data_mr) {
-		snap_error("failed to register mr of %ld bytes for virtq %d\n",
+		SNAP_LIB_LOG_ERR("failed to register mr of %ld bytes for virtq %d",
 			   data_size * num, vq_priv->vq_ctx->idx);
 		goto free_data;
 	}
@@ -292,7 +292,7 @@ free_data:
 	to_blk_bdev_ops(&vq_priv->virtq_dev)->dma_free(vq_priv->data);
 free_cmd_arr:
 	free(cmd_arr);
-	snap_error("failed allocating commands for queue %d\n",
+	SNAP_LIB_LOG_ERR("failed allocating commands for queue %d",
 			  vq_priv->vq_ctx->idx);
 out:
 	return NULL;
@@ -312,7 +312,7 @@ static int virtq_alloc_desc_buf(struct virtq_cmd *cmd, size_t old_len, size_t le
 	struct blk_virtq_cmd_aux *new_aux  = calloc(1, aux_size);
 
 	if (!new_aux) {
-		snap_error("failed to dynamically allocate %lu bytes for command %d request\n",
+		SNAP_LIB_LOG_ERR("failed to dynamically allocate %lu bytes for command %d request",
 				len, cmd->idx);
 		goto err;
 	}
@@ -349,7 +349,7 @@ static void bdev_io_comp_cb(enum snap_bdev_op_status status, void *done_arg)
 	enum virtq_cmd_sm_op_status op_status = VIRTQ_CMD_SM_OP_OK;
 
 	if (snap_unlikely(status != SNAP_BDEV_OP_SUCCESS)) {
-		snap_error("Failed iov completion!\n");
+		SNAP_LIB_LOG_ERR("Failed iov completion!");
 		to_blk_cmd_ftr(cmd->common_cmd.ftr)->status = VIRTIO_BLK_S_IOERR;
 		cmd->common_cmd.state = VIRTQ_CMD_STATE_WRITE_STATUS;
 		cmd->common_cmd.io_cmd_stat->fail++;
@@ -366,7 +366,7 @@ static inline int virtq_descs_to_iovec(struct blk_virtq_cmd *cmd)
 	int i;
 
 	if (cmd->common_cmd.num_desc - NUM_HDR_FTR_DESCS > cmd->max_iov_cnt) {
-		snap_warn("num_desc(%lu) from cmd is bigger than seg_max(%d) supported\n",
+		SNAP_LIB_LOG_WARN("num_desc(%lu) from cmd is bigger than seg_max(%d) supported",
 				cmd->common_cmd.num_desc - NUM_HDR_FTR_DESCS, cmd->max_iov_cnt);
 		return -1;
 	}
@@ -528,7 +528,7 @@ static void blk_virtq_proc_desc(struct virtq_cmd *cmd)
 
 
 	if (cmd->num_desc < NUM_HDR_FTR_DESCS) {
-		ERR_ON_CMD(cmd, "failed to process descriptors - num_desc: %ld, dumping command without response\n",
+		ERR_ON_CMD(cmd, "failed to process descriptors - num_desc: %ld, dumping command without response",
 			   cmd->num_desc);
 		cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 		return;
@@ -542,7 +542,7 @@ static int virtq_alloc_req_dbuf(struct blk_virtq_cmd *cmd, size_t len)
 {
 	cmd->common_cmd.req_buf = to_blk_bdev_ops(&cmd->common_cmd.vq_priv->virtq_dev)->dma_malloc(len);
 	if (!cmd->common_cmd.req_buf) {
-		snap_error("failed to dynamically allocate %lu bytes for command %d request\n",
+		SNAP_LIB_LOG_ERR("failed to dynamically allocate %lu bytes for command %d request",
 			   len, cmd->common_cmd.idx);
 		goto err;
 	}
@@ -592,7 +592,7 @@ static bool blk_virtq_sm_read_header(struct virtq_cmd *cmd,
 
 	if (ret) {
 		/* print qp number */
-		ERR_ON_CMD(cmd, "failed to read header, ret %d qpn 0x%x\n", ret, snap_qp_get_qpnum(priv->dma_q->sw_qp.qp));
+		ERR_ON_CMD(cmd, "failed to read header, ret %d qpn 0x%x", ret, snap_qp_get_qpnum(priv->dma_q->sw_qp.qp));
 		cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 		return true;
 	}
@@ -627,7 +627,7 @@ static bool blk_virtq_sm_parse_header(struct virtq_cmd *cmd,
 
 	blk_cmd = to_blk_virtq_cmd(cmd);
 	if (status != VIRTQ_CMD_SM_OP_OK) {
-		ERR_ON_CMD(cmd, "failed to get header data, returning failure\n");
+		ERR_ON_CMD(cmd, "failed to get header data, returning failure");
 		to_blk_cmd_ftr(cmd->ftr)->status = VIRTIO_BLK_S_IOERR;
 		cmd->state = VIRTQ_CMD_STATE_WRITE_STATUS;
 		return true;
@@ -665,7 +665,7 @@ static bool blk_virtq_sm_parse_header(struct virtq_cmd *cmd,
 					req_len, &to_blk_virtq_cmd(cmd)->dma_pool_ctx);
 
 		if (rc) {
-			ERR_ON_CMD(cmd, "failed to allocate memory, returning failure\n");
+			ERR_ON_CMD(cmd, "failed to allocate memory, returning failure");
 			to_blk_cmd_ftr(cmd->ftr)->status = VIRTIO_BLK_S_IOERR;
 			cmd->state = VIRTQ_CMD_STATE_WRITE_STATUS;
 			return true;
@@ -735,7 +735,7 @@ static bool blk_virtq_sm_read_data(struct virtq_cmd *cmd,
 				to_blk_cmd_aux(cmd->aux)->descs[i].len, cmd->req_mr->lkey, to_blk_cmd_aux(cmd->aux)->descs[i].addr,
 				priv->vattr->dma_mkey, &cmd->dma_comp);
 		if (ret) {
-			ERR_ON_CMD(cmd, "failed to read data, ret %d\n", ret);
+			ERR_ON_CMD(cmd, "failed to read data, ret %d", ret);
 			cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 			return true;
 		}
@@ -768,7 +768,7 @@ static bool blk_virtq_sm_handle_req(struct virtq_cmd *cmd,
 	uint32_t cmd_type = to_blk_cmd_aux(cmd->aux)->header.type;
 
 	if (status != VIRTQ_CMD_SM_OP_OK) {
-		ERR_ON_CMD(cmd, "failed to get request data, returning failure\n");
+		ERR_ON_CMD(cmd, "failed to get request data, returning failure");
 		to_blk_cmd_ftr(cmd->ftr)->status = VIRTIO_BLK_S_IOERR;
 		cmd->state = VIRTQ_CMD_STATE_WRITE_STATUS;
 		return true;
@@ -778,7 +778,7 @@ static bool blk_virtq_sm_handle_req(struct virtq_cmd *cmd,
 	if (to_blk_ctrl(cmd->vq_priv->vbq->ctrl)->pending_bdev_detach) {
 		/* Mark new commands sent during bdev detach */
 		to_blk_virtq_cmd(cmd)->in_bdev_detach = true;
-		snap_debug("Started to detach bdev - failing all incoming commands\n");
+		SNAP_LIB_LOG_DBG("Started to detach bdev - failing all incoming commands");
 		goto err;
 	} else
 		to_blk_virtq_cmd(cmd)->in_bdev_detach = false;
@@ -826,7 +826,7 @@ static bool blk_virtq_sm_handle_req(struct virtq_cmd *cmd,
 	case VIRTIO_BLK_T_FLUSH:
 		cmd->io_cmd_stat = &(to_blk_virtq_ctx(cmd->vq_priv->vq_ctx)->io_stat.flush);
 		if (to_blk_cmd_aux(cmd->aux)->header.sector != 0) {
-			ERR_ON_CMD(cmd, "sector must be zero for flush command\n");
+			ERR_ON_CMD(cmd, "sector must be zero for flush command");
 			ret = -1;
 		} else {
 			cmd->state = VIRTQ_CMD_STATE_WRITE_STATUS;
@@ -843,7 +843,7 @@ static bool blk_virtq_sm_handle_req(struct virtq_cmd *cmd,
 		ret = snprintf((char *)cmd->req_buf, cmd->req_size, "%s",
 			       dev_name);
 		if (ret < 0) {
-			snap_error("failed to read block id\n");
+			SNAP_LIB_LOG_ERR("failed to read block id");
 			to_blk_cmd_ftr(cmd->ftr)->status = VIRTIO_BLK_S_UNSUPP;
 			return true;
 		}
@@ -862,7 +862,7 @@ static bool blk_virtq_sm_handle_req(struct virtq_cmd *cmd,
 		virtq_mark_dirty_mem(cmd, to_blk_cmd_aux(cmd->aux)->descs[1].addr, len, false);
 		break;
 	default:
-		ERR_ON_CMD(cmd, "invalid command - requested command type 0x%x is not implemented\n",
+		ERR_ON_CMD(cmd, "invalid command - requested command type 0x%x is not implemented",
 			   to_blk_cmd_aux(cmd->aux)->header.type);
 		cmd->state = VIRTQ_CMD_STATE_WRITE_STATUS;
 		to_blk_cmd_ftr(cmd->ftr)->status = VIRTIO_BLK_S_UNSUPP;
@@ -894,7 +894,7 @@ static bool blk_virtq_sm_handle_req(struct virtq_cmd *cmd,
 	return false;
 
 err:
-		ERR_ON_CMD(cmd, "failed while executing command %d\n",
+		ERR_ON_CMD(cmd, "failed while executing command %d",
 			to_blk_cmd_aux(cmd->aux)->header.type);
 		to_blk_cmd_ftr(cmd->ftr)->status = VIRTIO_BLK_S_IOERR;
 		cmd->state = VIRTQ_CMD_STATE_WRITE_STATUS;
@@ -917,7 +917,7 @@ static bool blk_virtq_sm_handle_in_iov_done(struct virtq_cmd *cmd,
 	size_t offset = 0;
 
 	if (status != VIRTQ_CMD_SM_OP_OK) {
-		ERR_ON_CMD(cmd, "failed to read from block device, send ioerr to host\n");
+		ERR_ON_CMD(cmd, "failed to read from block device, send ioerr to host");
 		to_blk_cmd_ftr(cmd->ftr)->status = VIRTIO_BLK_S_IOERR;
 		cmd->state = VIRTQ_CMD_STATE_WRITE_STATUS;
 		return true;
@@ -974,7 +974,7 @@ static bool virtq_rel_req_desc(struct virtq_cmd *cmd)
 	free(cmd->aux);
 	if (cmd->vq_priv->use_mem_pool) {
 		if (alloc_aux(cmd, cmd->vq_priv->seg_max)) {
-			ERR_ON_CMD(cmd, "failed to allocate memory for extra segments %d\n",
+			ERR_ON_CMD(cmd, "failed to allocate memory for extra segments %d",
 				   cmd->vq_priv->seg_max);
 			cmd->state = VIRTQ_CMD_STATE_FATAL_ERR;
 			//alloc fail, move to error state
@@ -1142,26 +1142,26 @@ struct blk_virtq_ctx *blk_virtq_create(struct snap_virtio_blk_ctrl_queue *vbq,
 	vq_priv->cmd_arr = (struct virtq_cmd *) alloc_blk_virtq_cmd_arr(attr->size_max,
 						   attr->seg_max, vq_priv);
 	if (!vq_priv->cmd_arr) {
-		snap_error("failed allocating cmd list for queue %d\n",
+		SNAP_LIB_LOG_ERR("failed allocating cmd list for queue %d",
 			   attr->idx);
 		goto release_priv;
 	}
 	snap_vbq = snap_virtio_blk_create_queue(snap_dev, to_common_queue_attr(vq_priv->vattr));
 	if (!snap_vbq) {
-		snap_error("failed creating VIRTQ fw element\n");
+		SNAP_LIB_LOG_ERR("failed creating VIRTQ fw element");
 		goto dealloc_cmd_arr;
 	}
 	vq_priv->snap_vbq = &snap_vbq->virtq;
 
 	if (snap_virtio_blk_query_queue(snap_vbq, to_common_queue_attr(vq_priv->vattr))) {
-		snap_error("failed query created snap virtio blk queue\n");
+		SNAP_LIB_LOG_ERR("failed query created snap virtio blk queue");
 		goto destroy_virtio_blk_queue;
 	}
 	qattr.vattr.state = SNAP_VIRTQ_STATE_RDY;
 	if (snap_virtio_blk_modify_queue(snap_vbq,
 					 SNAP_VIRTIO_BLK_QUEUE_MOD_STATE,
 					 &qattr)) {
-		snap_error("failed to change virtq to READY state\n");
+		SNAP_LIB_LOG_ERR("failed to change virtq to READY state");
 		goto destroy_virtio_blk_queue;
 	}
 	if (to_common_queue_attr(vq_priv->vattr)->q_provider == SNAP_SW_Q_PROVIDER)
@@ -1172,7 +1172,7 @@ struct blk_virtq_ctx *blk_virtq_create(struct snap_virtio_blk_ctrl_queue *vbq,
 		blk_impl_ops.send_status = virtq_blk_dpa_send_status;
 	}
 
-	snap_debug("created VIRTQ %d successfully in_order %d q_provider %d\n", attr->idx,
+	SNAP_LIB_LOG_DBG("created VIRTQ %d successfully in_order %d q_provider %d", attr->idx,
 		   attr->force_in_order, to_common_queue_attr(vq_priv->vattr)->q_provider);
 	return vq_ctx;
 
@@ -1185,7 +1185,7 @@ release_priv:
 release_ctx:
 	free(vq_ctx);
 err:
-	snap_error("failed creating blk_virtq %d\n", attr->idx);
+	SNAP_LIB_LOG_ERR("failed creating blk_virtq %d", attr->idx);
 	return NULL;
 }
 
@@ -1202,18 +1202,18 @@ void blk_virtq_destroy(struct blk_virtq_ctx *q)
 {
 	struct virtq_priv *vq_priv = q->common_ctx.priv;
 
-	snap_debug("destroying queue %d\n", q->common_ctx.idx);
+	SNAP_LIB_LOG_DBG("destroying queue %d", q->common_ctx.idx);
 
 	if (vq_priv->swq_state != SW_VIRTQ_SUSPENDED && vq_priv->cmd_cntrs.outstanding_total)
-		snap_warn("queue %d: destroying while not in the SUSPENDED state, %d commands outstanding\n",
+		SNAP_LIB_LOG_WARN("queue %d: destroying while not in the SUSPENDED state, %d commands outstanding",
 			  q->common_ctx.idx, vq_priv->cmd_cntrs.outstanding_total);
 
 	if (vq_priv->cmd_cntrs.fatal)
-		snap_warn("queue %d: destroying while %d command(s) completed with fatal error\n",
+		SNAP_LIB_LOG_WARN("queue %d: destroying while %d command(s) completed with fatal error",
 			  q->common_ctx.idx, vq_priv->cmd_cntrs.fatal);
 
 	if (snap_virtio_blk_destroy_queue(to_blk_queue(vq_priv->snap_vbq)))
-		snap_error("queue %d: error destroying blk_virtq\n", q->common_ctx.idx);
+		SNAP_LIB_LOG_ERR("queue %d: error destroying blk_virtq", q->common_ctx.idx);
 
 	free_blk_virtq_cmd_arr(vq_priv);
 	virtq_ctx_destroy(vq_priv);
@@ -1236,20 +1236,20 @@ int blk_virtq_get_debugstat(struct blk_virtq_ctx *q,
 						      vq_priv->vattr->dma_mkey,
 						      &vra, &vru);
 	if (ret) {
-		snap_error("failed to get vring indexes from host memory for queue %d\n",
+		SNAP_LIB_LOG_ERR("failed to get vring indexes from host memory for queue %d",
 			   q->common_ctx.idx);
 		return ret;
 	}
 
 	ret = snap_virtio_blk_query_queue(to_blk_queue(vq_priv->snap_vbq), &virtq_attr);
 	if (ret) {
-		snap_error("failed query queue %d debugstat\n", q->common_ctx.idx);
+		SNAP_LIB_LOG_ERR("failed query queue %d debugstat", q->common_ctx.idx);
 		return ret;
 	}
 
 	ret = snap_virtio_query_queue_counters(to_blk_queue(vq_priv->snap_vbq)->virtq.ctrs_obj, &vqc_attr);
 	if (ret) {
-		snap_error("failed query virtio_q_counters %d debugstat\n", q->common_ctx.idx);
+		SNAP_LIB_LOG_ERR("failed query virtio_q_counters %d debugstat", q->common_ctx.idx);
 		return ret;
 	}
 
@@ -1272,17 +1272,17 @@ int blk_virtq_query_error_state(struct blk_virtq_ctx *q,
 
 	ret = snap_virtio_blk_query_queue(to_blk_queue(vq_priv->snap_vbq), attr);
 	if (ret) {
-		snap_error("failed query queue %d (update)\n", q->common_ctx.idx);
+		SNAP_LIB_LOG_ERR("failed query queue %d (update)", q->common_ctx.idx);
 		return ret;
 	}
 
 	if (attr->vattr.state == SNAP_VIRTQ_STATE_ERR &&
 		attr->vattr.error_type == SNAP_VIRTQ_ERROR_TYPE_NO_ERROR)
-		snap_warn("queue %d state is in error but error type is 0\n", q->common_ctx.idx);
+		SNAP_LIB_LOG_WARN("queue %d state is in error but error type is 0", q->common_ctx.idx);
 
 	if (attr->vattr.state != SNAP_VIRTQ_STATE_ERR &&
 		attr->vattr.error_type != SNAP_VIRTQ_ERROR_TYPE_NO_ERROR) {
-		snap_warn("queue %d state is not in error but with error type %d\n",
+		SNAP_LIB_LOG_WARN("queue %d state is not in error but with error type %d",
 					q->common_ctx.idx, attr->vattr.error_type);
 	}
 
@@ -1314,7 +1314,7 @@ int blk_virtq_get_state(struct blk_virtq_ctx *q,
 
 	ret = snap_virtio_blk_query_queue(to_blk_queue(priv->snap_vbq), &attr);
 	if (ret < 0) {
-		snap_error("failed to query blk queue %d\n", q->common_ctx.idx);
+		SNAP_LIB_LOG_ERR("failed to query blk queue %d", q->common_ctx.idx);
 		return ret;
 	}
 

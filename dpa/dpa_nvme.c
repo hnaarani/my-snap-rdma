@@ -74,7 +74,7 @@ int dpa_nvme_sq_create(struct snap_dpa_cmd *cmd)
 	/* TODO_Doron: input validation/sanity check */
 	TAILQ_INSERT_TAIL(&cq->sqs, sq, entry);
 
-	snap_debug("sq create: id %d, state:%d\n", sq->sqid, sq->state);
+	snap_debug("sq create: id %d, state:%d", sq->sqid, sq->state);
 
 	return SNAP_DPA_RSP_OK;
 }

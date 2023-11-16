@@ -18,16 +18,15 @@
 #include "snap_dpa_p2p.h"
 #include "snap_dpa_virtq.h"
 #include "snap_dpa_rt.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(DPA_VIRTQ);
 
 #if HAVE_FLEXIO
 #include "snap_dpa.h"
 #include "snap_dpa_virtq.h"
 
 #include "mlx5_ifc.h"
-
-#include "snap_lib_log.h"
-
-SNAP_LIB_LOG_REGISTER(DPA_VIRTQ);
 
 #define SNAP_DPA_VIRTQ_BBUF_ALIGN 4096
 
@@ -65,7 +64,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	struct snap_dpa_duar_attr duar_attr;
 	int ret;
 
-	snap_debug("create dpa virtq\n");
+	SNAP_LIB_LOG_DBG("create dpa virtq");
 
 	vq = calloc(1, sizeof(*vq));
 	if (!vq)
@@ -94,14 +93,14 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	vq->common.device = vq_attr->vattr.device;
 	vq->common.msix_vector = vq_attr->vattr.event_qpn_or_msix;
 	vq->common.dev_emu_id = snap_get_dev_emu_id(sdev);
-	snap_info("Got ev_mode 0x%x msix 0x%x\n", vq_attr->vattr.ev_mode, vq_attr->vattr.event_qpn_or_msix);
+	SNAP_LIB_LOG_INFO("Got ev_mode 0x%x msix 0x%x", vq_attr->vattr.ev_mode, vq_attr->vattr.event_qpn_or_msix);
 
 	/* register mr for the avail staging buffer */
 	desc_shadow_size = vq->common.size * sizeof(struct virtq_desc);
 
 	ret = posix_memalign((void **)&vq->desc_shadow, SNAP_DPA_VIRTQ_DESC_SHADOW_ALIGN, desc_shadow_size);
 	if (ret) {
-		snap_error("Failed to allocate virtq dpa window buffer: %d\n", ret);
+		SNAP_LIB_LOG_ERR("Failed to allocate virtq dpa window buffer: %d", ret);
 		goto release_mbox;
 	}
 
@@ -110,7 +109,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	/* TODO: rename to descr staging buffer */
 	vq->desc_shadow_mr = snap_reg_mr(vq->rt->dpa_proc->pd, vq->desc_shadow, desc_shadow_size);
 	if (!vq->desc_shadow_mr) {
-		snap_error("Failed to allocate virtq dpa window mr: %m\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate virtq dpa window mr: %m");
 		goto free_dpa_window;
 	}
 
@@ -134,12 +133,12 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	vq->duar = snap_dpa_duar_create(dev->dev_emu.context, &duar_attr);
 
 	if (!vq->duar) {
-		snap_error("Failed to create virt duar mapping: dev_emu_id %d queue_id %d cq_num 0x%x\n",
+		SNAP_LIB_LOG_ERR("Failed to create virt duar mapping: dev_emu_id %d queue_id %d cq_num 0x%x",
 				snap_get_dev_emu_id(sdev), vq_attr->vattr.idx, db_hw_cq.cq_num);
 		goto free_dpa_window_mr;
 	}
 
-	snap_debug("virtq duar 0x%x mapping: dev_emu_id %d queue_id %d cq_num 0x%x\n",
+	SNAP_LIB_LOG_DBG("virtq duar 0x%x mapping: dev_emu_id %d queue_id %d cq_num 0x%x",
 			snap_dpa_duar_id(vq->duar), snap_get_dev_emu_id(sdev),
 			vq_attr->vattr.idx, db_hw_cq.cq_num);
 	//printf("duar mapping created\n");getchar();
@@ -151,7 +150,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 		vq->msix_eq = snap_dpa_msix_eq_create(sdev->sctx->context, snap_get_dev_emu_id(sdev),
 				vq->common.msix_vector, MLX5_HOTPLUG_DEVICE_TYPE_VIRTIO_BLK);
 		if (!vq->msix_eq) {
-			snap_error("Failed to create MSIX_EQ\n");
+			SNAP_LIB_LOG_ERR("Failed to create MSIX_EQ");
 			goto free_dpa_duar;
 		}
 
@@ -167,7 +166,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 
 	vq->cross_mkey = snap_create_cross_mkey(vq->rt->dpa_proc->pd, sdev);
 	if (!vq->cross_mkey) {
-		snap_error("Failed to create virtq cross mkey\n");
+		SNAP_LIB_LOG_ERR("Failed to create virtq cross mkey");
 		goto remove_msix_vector;
 	}
 
@@ -183,7 +182,7 @@ static struct snap_dpa_virtq *snap_dpa_virtq_create(struct snap_device *sdev,
 	rsp = snap_dpa_rsp_wait(mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK) {
 		snap_dpa_log_print(vq->rt_thr->thread->dpa_log);
-		snap_error("Failed to create DPA virtio queue: %d\n", rsp->status);
+		SNAP_LIB_LOG_ERR("Failed to create DPA virtio queue: %d", rsp->status);
 		goto free_cross_mkey;
 	}
 
@@ -221,7 +220,7 @@ static void snap_dpa_virtq_destroy(struct snap_dpa_virtq *vq)
 	struct dpa_virtq_cmd *cmd;
 	struct snap_dpa_rsp *rsp;
 
-	snap_info("destroy dpa virtq: 0x%x:%d io_completed: %d comp_updates: %d used_updates: %d\n",
+	SNAP_LIB_LOG_INFO("destroy dpa virtq: 0x%x:%d io_completed: %d comp_updates: %d used_updates: %d",
 			vq->common.dev_emu_id, vq->common.idx,
 			vq->stats.n_io_completed, vq->stats.n_compl_updates, vq->stats.n_used_updates);
 	snap_dpa_log_print(vq->rt_thr->thread->dpa_log);
@@ -233,7 +232,7 @@ static void snap_dpa_virtq_destroy(struct snap_dpa_virtq *vq)
 
 	rsp = snap_dpa_rsp_wait(mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK)
-		snap_error("Failed to destroy DPA virtio queue: %d\n", rsp->status);
+		SNAP_LIB_LOG_ERR("Failed to destroy DPA virtio queue: %d", rsp->status);
 
 	snap_dpa_thread_mbox_release(vq->rt_thr->thread);
 	snap_dpa_log_print(vq->rt_thr->thread->dpa_log);
@@ -297,11 +296,11 @@ static int snap_dpa_virtq_query(struct snap_dpa_virtq *vq,
 
 	rsp = (struct dpa_virtq_rsp *)snap_dpa_rsp_wait(mbox);
 	if (rsp->base.status != SNAP_DPA_RSP_OK) {
-		snap_error("Failed to query DPA virtio queue: %d\n", rsp->base.status);
+		SNAP_LIB_LOG_ERR("Failed to query DPA virtio queue: %d", rsp->base.status);
 		snap_dpa_log_print(vq->rt_thr->thread->dpa_log);
 	}
 
-	snap_info("DPA query: vq_state %d avail %d used %d\n", rsp->vq_state.state,
+	SNAP_LIB_LOG_INFO("DPA query: vq_state %d avail %d used %d", rsp->vq_state.state,
 			rsp->vq_state.hw_available_index,
 			vq->hw_used_index);
 
@@ -319,7 +318,7 @@ static int snap_dpa_virtq_modify(struct snap_dpa_virtq *vq,
 	struct dpa_virtq_cmd *cmd;
 	struct snap_dpa_rsp *rsp;
 
-	snap_info("DPA modify to state %d\n", attr->vattr.state);
+	SNAP_LIB_LOG_INFO("DPA modify to state %d", attr->vattr.state);
 	mbox = snap_dpa_thread_mbox_acquire(vq->rt_thr->thread);
 
 	cmd = (struct dpa_virtq_cmd *)snap_dpa_mbox_to_cmd(mbox);
@@ -328,7 +327,7 @@ static int snap_dpa_virtq_modify(struct snap_dpa_virtq *vq,
 
 	rsp = snap_dpa_rsp_wait(mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK) {
-		snap_error("Failed to modify DPA virtio queue: %d\n", rsp->status);
+		SNAP_LIB_LOG_ERR("Failed to modify DPA virtio queue: %d", rsp->status);
 		snap_dpa_log_print(vq->rt_thr->thread->dpa_log);
 	}
 
@@ -424,7 +423,7 @@ static int virtq_blk_dpa_poll(struct snap_virtio_queue *vq, struct virtq_split_t
 		return n;
 
 	if (msg->descr_head_count >= num_reqs) {
-		snap_error("oops, too many requests (%d > %d)\n", n, num_reqs);
+		SNAP_LIB_LOG_ERR("oops, too many requests (%d > %d)", n, num_reqs);
 		return -ENOMEM;
 	}
 
@@ -432,24 +431,24 @@ static int virtq_blk_dpa_poll(struct snap_virtio_queue *vq, struct virtq_split_t
 		snap_dpa_log_print(dpa_q->rt_thr->thread->dpa_log);
 
 	if (msg->base.type == SNAP_DPA_P2P_MSG_VQ_HEADS) {
-		snap_debug("vq heads message %d heads\n", msg->descr_head_count);
+		SNAP_LIB_LOG_TRACE("vq heads message %d heads", msg->descr_head_count);
 		for (i = 0; i < msg->descr_head_count; i++) {
 			reqs[i].hdr.num_desc = 0;
 			reqs[i].hdr.descr_head_idx = msg->descr_heads[i];
 			reqs[i].hdr.dpa_vq_table_flag = 0;
-			snap_debug("vq head idx: %d\n", reqs[i].hdr.descr_head_idx);
+			SNAP_LIB_LOG_TRACE("vq head idx: %d", reqs[i].hdr.descr_head_idx);
 		}
 	} else if (msg->base.type == SNAP_DPA_P2P_MSG_VQ_TABLE || msg->base.type == SNAP_DPA_P2P_MSG_VQ_TABLE_CONT) {
-		snap_debug("vq table message %d heads\n", msg->descr_head_count);
+		SNAP_LIB_LOG_TRACE("vq table message %d heads", msg->descr_head_count);
 		for (i = 0; i < msg->descr_head_count; i++) {
 			reqs[i].hdr.num_desc = 0;
 			reqs[i].hdr.descr_head_idx = msg->descr_heads[i];
 			reqs[i].hdr.dpa_vq_table_flag = VQ_TABLE_REC;
 			reqs[i].tunnel_descs = dpa_q->desc_shadow;
-			snap_debug("vq head idx: %d\n", reqs[i].hdr.descr_head_idx);
+			SNAP_LIB_LOG_TRACE("vq head idx: %d", reqs[i].hdr.descr_head_idx);
 		}
 	} else {
-		snap_error("oops unknown p2p msg type\n");
+		SNAP_LIB_LOG_ERR("oops unknown p2p msg type");
 		return -ENOTSUP;
 	}
 
@@ -469,7 +468,7 @@ static inline int flush_completions(struct snap_dpa_virtq *dpa_q)
 			sizeof(struct vring_used_elem) * dpa_q->num_pending_comps, used_elem_addr,
 			dpa_q->cross_mkey->mkey);
 	if (snap_unlikely(ret)) {
-		snap_info("failed to send completion - %d\n", ret);
+		SNAP_LIB_LOG_INFO("failed to send completion - %d", ret);
 		return ret;
 	}
 
@@ -519,7 +518,7 @@ int virtq_blk_dpa_send_completions(struct snap_virtio_queue *vq)
 	}
 
 	if (dpa_q->host_used_index != dpa_q->hw_used_index)
-		snap_error("Missing completions!!!\n");
+		SNAP_LIB_LOG_ERR("Missing completions!!!");
 
 	if (dpa_q->last_hw_used_index == dpa_q->hw_used_index)
 		return 0;
@@ -528,7 +527,7 @@ int virtq_blk_dpa_send_completions(struct snap_virtio_queue *vq)
 	ret = snap_dma_q_write_short(dpa_q->rt_thr->dpu_cmd_chan.dma_q, &dpa_q->hw_used_index, sizeof(uint16_t),
 			used_idx_addr, dpa_q->cross_mkey->mkey);
 	if (ret) {
-		snap_info("failed to send hw_used - %d\n", ret);
+		SNAP_LIB_LOG_INFO("failed to send hw_used - %d", ret);
 		return ret;
 	}
 	/* if msix enabled, send also msix message */
@@ -538,7 +537,7 @@ int virtq_blk_dpa_send_completions(struct snap_virtio_queue *vq)
 	if (dpa_q->msix_eq) {
 		ret = snap_dpa_p2p_send_msix(&dpa_q->rt_thr->dpu_cmd_chan, 0);
 		if (ret)
-			snap_info("failed to send msix msg at used %d ret %d\n", dpa_q->last_hw_used_index, ret);
+			SNAP_LIB_LOG_INFO("failed to send msix msg at used %d ret %d", dpa_q->last_hw_used_index, ret);
 	}
 
 	/* kick off completions */

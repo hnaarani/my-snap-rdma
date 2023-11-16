@@ -13,6 +13,16 @@
 
 #include "snap_dma.h"
 #include "snap_dpa_p2p.h"
+#if __DPA
+#define SNAP_LIB_LOG_ERR snap_error
+#define SNAP_LIB_LOG_WARN snap_warn
+#define SNAP_LIB_LOG_INFO snap_info
+#define SNAP_LIB_LOG_DBG snap_debug
+#define SNAP_LIB_LOG_TRACE snap_debug
+#else
+#include "snap_lib_log.h"
+SNAP_LIB_LOG_REGISTER(DPA_P2P)
+#endif
 
 /**
  * snap_dpa_p2p_send_msg() - send p2p message
@@ -249,7 +259,7 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 			SNAP_DPA_NVME_SQE_SIZE * sqes_to_write, driver_mkey,
 			shadow_sqes + sqe_offset, shadow_sqes_mkey, NULL);
 	if (snap_unlikely(rc)) {
-		snap_debug("send sq tail error: %d\n", rc);
+		SNAP_LIB_LOG_DBG("send sq tail error: %d", rc);
 		return rc;
 	}
 
@@ -261,7 +271,7 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 			SNAP_DPA_NVME_SQE_SIZE * sqes_to_write, driver_mkey, shadow_sqes,
 			shadow_sqes_mkey, NULL);
 		if (snap_unlikely(rc)) {
-			snap_debug("send sq tail error: %d\n", rc);
+			SNAP_LIB_LOG_DBG("send sq tail error: %d", rc);
 			return rc;
 		}
 	}

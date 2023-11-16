@@ -80,7 +80,7 @@ static int fill_roce_caps(struct ibv_context *context,
 	roce_caps->r_roce_min_src_udp_port = DEVX_GET(query_hca_cap_out,
 			out, capability.roce_cap.r_roce_min_src_udp_port);
 out:
-	snap_debug("RoCE Caps: enabled %d ver %d fl allowed %d\n",
+	SNAP_LIB_LOG_DBG("RoCE Caps: enabled %d ver %d fl allowed %d",
 		   roce_caps->roce_enabled, roce_caps->roce_version,
 		   roce_caps->roce_enabled ? roce_caps->fl_when_roce_enabled :
 		   roce_caps->fl_when_roce_disabled);
@@ -106,7 +106,7 @@ static int check_port(struct ibv_context *ctx, int port_num, bool *roce_en,
 	if (port_attr.link_layer == IBV_LINK_LAYER_INFINIBAND) {
 		/* we only support local IB addressing for now */
 		if (port_attr.flags & IBV_QPF_GRH_REQUIRED) {
-			snap_error("IB enabled and GRH addressing is required but only local addressing is supported\n");
+			SNAP_LIB_LOG_ERR("IB enabled and GRH addressing is required but only local addressing is supported");
 			return -1;
 		}
 		*mtu = port_attr.active_mtu;
@@ -123,7 +123,7 @@ static int check_port(struct ibv_context *ctx, int port_num, bool *roce_en,
 	ret = mlx5dv_devx_general_cmd(ctx, in, sizeof(in), out,
 				      sizeof(out));
 	if (ret) {
-		snap_error("Failed to get VPORT context - assuming ROCE is disabled\n");
+		SNAP_LIB_LOG_ERR("Failed to get VPORT context - assuming ROCE is disabled");
 		return ret;
 	}
 	devx_v = DEVX_GET(query_nic_vport_context_out, out,
@@ -274,7 +274,7 @@ static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_crea
 		}
 		break;
 	default:
-		snap_error("unsupported dpa mode %d\n", dma_q_attr->dpa_mode);
+		SNAP_LIB_LOG_ERR("unsupported dpa mode %d", dma_q_attr->dpa_mode);
 		return -EINVAL;
 	}
 
@@ -344,11 +344,11 @@ static int snap_create_qp_helper(struct ibv_pd *pd, const struct snap_dma_q_crea
 
 	if (!qp->dv_qp.hw_qp.sq.tx_db_nc) {
 #if defined(__aarch64__)
-		snap_error("DB record must be in the non-cacheable memory on BF\n");
+		SNAP_LIB_LOG_ERR("DB record must be in the non-cacheable memory on BF");
 		goto free_comps;
 #else
-		snap_warn("DB record is not in the non-cacheable memory. Performance may be reduced\n"
-			  "Try setting MLX5_SHUT_UP_BF environment variable\n");
+		SNAP_LIB_LOG_WARN("DB record is not in the non-cacheable memory. Performance may be reduced\n"
+			  "Try setting MLX5_SHUT_UP_BF environment variable");
 #endif
 	}
 
@@ -598,7 +598,7 @@ static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 		q->ops = &gga_ops;
 		break;
 	default:
-		snap_error("Invalid SNAP_DMA_Q_OPMODE %d\n", attr->mode);
+		SNAP_LIB_LOG_ERR("Invalid SNAP_DMA_Q_OPMODE %d", attr->mode);
 		return -EINVAL;
 	}
 
@@ -619,7 +619,7 @@ static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 		q->custom_ops->progress_tx = dummy_progress_tx;
 	}
 
-	snap_debug("Opening dma_q of type %d dpa_mode %d\n", attr->mode, attr->dpa_mode);
+	SNAP_LIB_LOG_DBG("Opening dma_q of type %d dpa_mode %d", attr->mode, attr->dpa_mode);
 	if (attr->dpa_mode != SNAP_DMA_Q_DPA_MODE_NONE) {
 		if (snap_dpa_enabled(pd->context)) {
 			if (q->ops->mode != SNAP_DMA_Q_MODE_DV)
@@ -757,7 +757,7 @@ static int snap_create_fw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 
 	q->fw_qp = calloc(1, sizeof(*q->fw_qp));
 	if (!q->fw_qp) {
-		snap_error("allocate fw_qp for dma_q failed.\n");
+		SNAP_LIB_LOG_ERR("allocate fw_qp for dma_q failed.");
 		return -ENOMEM;
 	}
 
@@ -782,7 +782,7 @@ static int snap_create_fw_qp(struct snap_dma_q *q, struct ibv_pd *pd,
 	rc = snap_create_qp_helper(pd, &fw_dma_q_attr, &qp_init_attr, &q->fw_qp->fw_qp,
 			fw_dma_q_attr.mode, attr->fw_use_devx);
 	if (rc) {
-		snap_error("create fw_qp failed, rc:%d\n", rc);
+		SNAP_LIB_LOG_ERR("create fw_qp failed, rc:%d", rc);
 		goto free_fw_qp;
 	}
 
@@ -818,7 +818,7 @@ static int snap_modify_lb_qp_init2init(struct snap_qp *qp)
 
 	ret = snap_qp_modify(qp, in, sizeof(in), out, sizeof(out));
 	if (ret)
-		snap_error("failed to modify qp to init with errno = %d\n", ret);
+		SNAP_LIB_LOG_ERR("failed to modify qp to init with errno = %d", ret);
 
 	return ret;
 }
@@ -852,7 +852,7 @@ static int snap_modify_lb_qp_rst2init(struct snap_qp *qp,
 
 	ret = snap_qp_modify(qp, in, sizeof(in), out, sizeof(out));
 	if (ret)
-		snap_error("failed to modify qp to init with errno = %d\n", ret);
+		SNAP_LIB_LOG_ERR("failed to modify qp to init with errno = %d", ret);
 	return ret;
 }
 
@@ -896,7 +896,7 @@ static int snap_modify_lb_qp_init2rtr(struct snap_qp *qp,
 
 	ret = snap_qp_modify(qp, in, sizeof(in), out, sizeof(out));
 	if (ret)
-		snap_error("failed to modify qp to rtr with errno = %d\n", ret);
+		SNAP_LIB_LOG_ERR("failed to modify qp to rtr with errno = %d", ret);
 	return ret;
 }
 
@@ -926,7 +926,7 @@ static int snap_modify_lb_qp_rtr2rts(struct snap_qp *qp,
 
 	ret = snap_qp_modify(qp, in, sizeof(in), out, sizeof(out));
 	if (ret)
-		snap_error("failed to modify qp to rts with errno = %d\n", ret);
+		SNAP_LIB_LOG_ERR("failed to modify qp to rts with errno = %d", ret);
 	return ret;
 }
 
@@ -949,7 +949,7 @@ static int ibv_query_gid_ex(struct ibv_context *context, uint32_t port_num,
 			    uint32_t gid_index, struct ibv_gid_entry *entry,
 			    uint32_t flags)
 {
-	snap_error("%s is not implemented\n", __func__);
+	SNAP_LIB_LOG_ERR("%s is not implemented", __func__);
 	return -1;
 }
 #endif
@@ -972,12 +972,12 @@ static int snap_activate_loop_2_qp(struct snap_dma_ibv_qp *qp1, struct snap_dma_
 
 	rc = snap_modify_lb_qp_rst2init(qp1->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify SW QP to INIT errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify SW QP to INIT errno=%d", rc);
 		return rc;
 	} else if (qp1->mode == SNAP_DMA_Q_MODE_GGA) {
 		rc = snap_modify_lb_qp_init2init(qp1->qp);
 		if (rc) {
-			snap_error("failed to modify SW QP in INIT2INIT errno=%d\n",
+			SNAP_LIB_LOG_ERR("failed to modify SW QP in INIT2INIT errno=%d",
 				   rc);
 			return rc;
 		}
@@ -985,7 +985,7 @@ static int snap_activate_loop_2_qp(struct snap_dma_ibv_qp *qp1, struct snap_dma_
 
 	rc = snap_modify_lb_qp_rst2init(qp2->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify FW QP to INIT errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify FW QP to INIT errno=%d", rc);
 		return rc;
 	}
 
@@ -1009,14 +1009,14 @@ static int snap_activate_loop_2_qp(struct snap_dma_ibv_qp *qp1, struct snap_dma_
 	attr.dest_qp_num = snap_qp_get_qpnum(qp2->qp);
 	rc = snap_modify_lb_qp_init2rtr(qp1->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify SW QP to RTR errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify SW QP to RTR errno=%d", rc);
 		return rc;
 	}
 
 	attr.dest_qp_num = snap_qp_get_qpnum(qp1->qp);
 	rc = snap_modify_lb_qp_init2rtr(qp2->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify FW QP to RTR errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify FW QP to RTR errno=%d", rc);
 		return rc;
 	}
 
@@ -1039,13 +1039,13 @@ static int snap_activate_loop_2_qp(struct snap_dma_ibv_qp *qp1, struct snap_dma_
 	 **/
 	rc = snap_modify_lb_qp_rtr2rts(qp1->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify SW QP to RTS errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify SW QP to RTS errno=%d", rc);
 		return rc;
 	}
 
 	rc = snap_modify_lb_qp_rtr2rts(qp2->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify FW QP to RTS errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify FW QP to RTS errno=%d", rc);
 		return rc;
 	}
 
@@ -1070,12 +1070,12 @@ static int snap_activate_qp_to_remote_qpn(struct snap_dma_ibv_qp *qp1,
 
 	rc = snap_modify_lb_qp_rst2init(qp1->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify SW QP to INIT errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify SW QP to INIT errno=%d", rc);
 		return rc;
 	} else if (qp1->mode == SNAP_DMA_Q_MODE_GGA) {
 		rc = snap_modify_lb_qp_init2init(qp1->qp);
 		if (rc) {
-			snap_error("failed to modify SW QP in INIT2INIT errno=%d\n",
+			SNAP_LIB_LOG_ERR("failed to modify SW QP in INIT2INIT errno=%d",
 					rc);
 			return rc;
 		}
@@ -1102,7 +1102,7 @@ static int snap_activate_qp_to_remote_qpn(struct snap_dma_ibv_qp *qp1,
 
 	rc = snap_modify_lb_qp_init2rtr(qp1->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify SW QP to RTR errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify SW QP to RTR errno=%d", rc);
 		return rc;
 	}
 
@@ -1125,7 +1125,7 @@ static int snap_activate_qp_to_remote_qpn(struct snap_dma_ibv_qp *qp1,
 	 */
 	rc = snap_modify_lb_qp_rtr2rts(qp1->qp, &attr, flags_mask);
 	if (rc) {
-		snap_error("failed to modify SW QP to RTS errno=%d\n", rc);
+		SNAP_LIB_LOG_ERR("failed to modify SW QP to RTS errno=%d", rc);
 		return rc;
 	}
 
@@ -1163,7 +1163,7 @@ static int snap_dma_ep_connect_helper(struct snap_dma_ibv_qp *qp1,
 		 */
 		mtu = IBV_MTU_4096;
 	} else {
-		snap_error("Force-loopback QP is not supported. Cannot create queue.\n");
+		SNAP_LIB_LOG_ERR("Force-loopback QP is not supported. Cannot create queue.");
 		return -ENOTSUP;
 	}
 
@@ -1186,7 +1186,7 @@ static int snap_dma_ep_connect_qpn_helper(struct snap_dma_ibv_qp *qp1,
 		return rc;
 
 	if (ib_en) {
-		snap_error("IB mode not supported. Cannot create queue\n");
+		SNAP_LIB_LOG_ERR("IB mode not supported. Cannot create queue");
 		return -ENOTSUP;
 	}
 
@@ -1200,7 +1200,7 @@ static int snap_dma_ep_connect_qpn_helper(struct snap_dma_ibv_qp *qp1,
 			 (!roce_caps.roce_enabled && roce_caps.fl_when_roce_disabled))) {
 		force_loopback = true;
 	} else {
-		snap_error("Force-loopback option is not supported. Cannot create queue\n");
+		SNAP_LIB_LOG_ERR("Force-loopback option is not supported. Cannot create queue");
 		return -ENOTSUP;
 	}
 
@@ -1217,7 +1217,7 @@ static int snap_alloc_iov_ctx(struct snap_dma_q *q)
 	ret = posix_memalign((void **)&iov_ctx, SNAP_DMA_BUF_ALIGN,
 			io_ctx_cnt * sizeof(struct snap_dma_q_iov_ctx));
 	if (ret) {
-		snap_error("alloc dma_q iov_ctx array failed");
+		SNAP_LIB_LOG_ERR("alloc dma_q iov_ctx array failed");
 		return -ENOMEM;
 	}
 
@@ -1267,13 +1267,13 @@ static int snap_alloc_crypto_ctx(struct snap_dma_q *q, struct ibv_pd *pd, const 
 	ret = posix_memalign((void **)&crypto_ctx, SNAP_DMA_BUF_ALIGN,
 			io_ctx_cnt * sizeof(struct snap_dma_q_crypto_ctx));
 	if (ret) {
-		snap_error("alloc dma_q crypto_ctx array failed");
+		SNAP_LIB_LOG_ERR("alloc dma_q crypto_ctx array failed");
 		return -ENOMEM;
 	}
 
 	ret = snap_query_relaxed_ordering_caps(pd->context, &caps);
 	if (ret) {
-		snap_error("query relaxed_ordering_caps failed, ret:%d\n", ret);
+		SNAP_LIB_LOG_ERR("query relaxed_ordering_caps failed, ret:%d", ret);
 		goto free_crypto_ctx;
 	}
 
@@ -1299,7 +1299,7 @@ static int snap_alloc_crypto_ctx(struct snap_dma_q *q, struct ibv_pd *pd, const 
 		}
 		crypto_ctx[i].r_klm_mkey = snap_create_indirect_mkey(pd, &mkey_attr);
 		if (!crypto_ctx[i].r_klm_mkey) {
-			snap_error("create remote klm mkey for crypto_ctx[%d] failed\n", i);
+			SNAP_LIB_LOG_ERR("create remote klm mkey for crypto_ctx[%d] failed", i);
 			goto destroy_mkeys;
 		}
 
@@ -1313,7 +1313,7 @@ static int snap_alloc_crypto_ctx(struct snap_dma_q *q, struct ibv_pd *pd, const 
 		}
 		crypto_ctx[i].l_klm_mkey = snap_create_indirect_mkey(pd, &mkey_attr);
 		if (!crypto_ctx[i].l_klm_mkey) {
-			snap_error("create local klm mkey for crypto_ctx[%d] failed\n", i);
+			SNAP_LIB_LOG_ERR("create local klm mkey for crypto_ctx[%d] failed", i);
 			snap_destroy_indirect_mkey(crypto_ctx[i].r_klm_mkey);
 			goto destroy_mkeys;
 		}
@@ -1370,7 +1370,7 @@ static int snap_alloc_ir_ctx(struct snap_dma_q *q, struct ibv_pd *pd)
 	ret = posix_memalign((void **)&ir_ctx, SNAP_DMA_BUF_ALIGN,
 			io_ctx_cnt * sizeof(struct snap_dma_q_ir_ctx));
 	if (ret) {
-		snap_error("alloc dma_q ir_ctx array failed");
+		SNAP_LIB_LOG_ERR("alloc dma_q ir_ctx array failed");
 		return -ENOMEM;
 	}
 
@@ -1379,7 +1379,7 @@ static int snap_alloc_ir_ctx(struct snap_dma_q *q, struct ibv_pd *pd)
 	ret = posix_memalign((void **)&q->ir_buf, SNAP_DMA_BUF_ALIGN,
 			io_ctx_cnt * 32);
 	if (ret) {
-		snap_error("alloc dma_q inline recv buffer failed");
+		SNAP_LIB_LOG_ERR("alloc dma_q inline recv buffer failed");
 		goto free_ir_ctx;
 	}
 
@@ -1388,7 +1388,7 @@ static int snap_alloc_ir_ctx(struct snap_dma_q *q, struct ibv_pd *pd)
 					IBV_ACCESS_REMOTE_WRITE |
 					IBV_ACCESS_REMOTE_READ);
 	if (!q->ir_mr) {
-		snap_error("register ir_mr failed");
+		SNAP_LIB_LOG_ERR("register ir_mr failed");
 		ret = -errno;
 		goto free_ir_buf;
 	}
@@ -1445,7 +1445,7 @@ static int snap_create_io_ctx(struct snap_dma_q *q, struct ibv_pd *pd,
 		if (q->sw_qp.mode == SNAP_DMA_Q_MODE_VERBS) {
 			ret = snap_alloc_iov_ctx(q);
 			if (ret) {
-				snap_error("Allocate iov_ctx failed\n");
+				SNAP_LIB_LOG_ERR("Allocate iov_ctx failed");
 				goto out;
 			}
 		}
@@ -1455,13 +1455,13 @@ static int snap_create_io_ctx(struct snap_dma_q *q, struct ibv_pd *pd,
 	if (attr->crypto_enable) {
 
 		if (q->sw_qp.mode != SNAP_DMA_Q_MODE_DV) {
-			snap_error("failed to enable crypto: dma q must be in DV mode\n");
+			SNAP_LIB_LOG_ERR("failed to enable crypto: dma q must be in DV mode");
 			goto out;
 		}
 
 		ret = snap_alloc_crypto_ctx(q, pd, &attr->crypto_attr);
 		if (ret) {
-			snap_error("Allocate crypto_ctx failed\n");
+			SNAP_LIB_LOG_ERR("Allocate crypto_ctx failed");
 			goto free_iov_ctx;
 		}
 
@@ -1471,7 +1471,7 @@ static int snap_create_io_ctx(struct snap_dma_q *q, struct ibv_pd *pd,
 	if (q->sw_qp.mode == SNAP_DMA_Q_MODE_VERBS) {
 		ret = snap_alloc_ir_ctx(q, pd);
 		if (ret) {
-			snap_error("Allocate ir_ctx failed\n");
+			SNAP_LIB_LOG_ERR("Allocate ir_ctx failed");
 			goto free_iov_ctx;
 		}
 	}
@@ -1727,7 +1727,7 @@ int snap_dma_q_modify_to_err_state(struct snap_dma_q *q)
 
 	ret = snap_qp_modify(q->sw_qp.qp, in, sizeof(in), out, sizeof(out));
 	if (ret)
-		snap_error("failed to modify qp to err with errno = %d\n", ret);
+		SNAP_LIB_LOG_ERR("failed to modify qp to err with errno = %d", ret);
 
 	return ret;
 }
@@ -1792,7 +1792,7 @@ int snap_dma_ep_dpa_copy_sync(struct snap_dpa_thread *thr, struct snap_dma_q *q)
 
 	rsp = snap_dpa_rsp_wait(mbox);
 	if (rsp->status != SNAP_DPA_RSP_OK) {
-		snap_error("Failed to copy DMA queue: %d\n", rsp->status);
+		SNAP_LIB_LOG_ERR("Failed to copy DMA queue: %d", rsp->status);
 		ret = -EIO;
 	}
 

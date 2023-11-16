@@ -54,7 +54,7 @@ int SnapDmaTest::snap_dma_q_fw_send(struct snap_dma_q *q, void *src_buf,
 
 	rc = ibv_post_send(qp, &send_wr, &bad_wr);
 	if (rc) {
-		snap_error("DMA queue %p: FW failed to post send: %m\n", q);
+		snap_error("DMA queue %p: FW failed to post send: %m", q);
 		return rc;
 	}
 

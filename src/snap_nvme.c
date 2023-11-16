@@ -14,6 +14,9 @@
 #include "snap_queue.h"
 #include "snap_internal.h"
 #include "mlx5_ifc.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(NVME)
 
 /* doorbell stride as specified in the NVMe CAP register, stride in
  * bytes is 2^(2 + NVME_DB_STRIDE)
@@ -47,7 +50,7 @@ bool snap_nvme_sq_is_fe_only(struct snap_nvme_sq *sq)
 	struct snap_nvme_sq_attr sq_attr = {};
 
 	if (snap_nvme_query_sq(sq, &sq_attr)) {
-		snap_warn("Failed to query provided SQ\n");
+		SNAP_LIB_LOG_WARN("Failed to query provided SQ");
 		return false;
 	}
 
@@ -189,7 +192,7 @@ int snap_nvme_modify_device(struct snap_device *sdev, uint64_t mask,
 
 	/* we'll modify only allowed fields */
 	if (mask & ~sdev->mod_allowed_mask) {
-		snap_error("failed modify NVMe sdev 0x%p mask=0x%lx allowed_mask=0x%lx\n",
+		SNAP_LIB_LOG_ERR("failed modify NVMe sdev 0x%p mask=0x%lx allowed_mask=0x%lx",
 			   sdev, mask, sdev->mod_allowed_mask);
 		return -EINVAL;
 	}
@@ -602,7 +605,7 @@ int snap_nvme_modify_sq(struct snap_nvme_sq *sq, uint64_t mask,
 		return -EINVAL;
 
 	if (snap_nvme_sq_is_fe_only(sq)) {
-		snap_error("Cannot modify fe_only SQ\n");
+		SNAP_LIB_LOG_ERR("Cannot modify fe_only SQ");
 		return -ENOTSUP;
 	}
 
@@ -724,7 +727,7 @@ static int snap_nvme_init_sq_legacy_mode(struct snap_device *sdev,
 					 const struct snap_nvme_sq_attr *attr)
 {
 	if (!sdev->mdev.vtunnel) {
-		snap_warn("Tried to start legacy mode on modern HW. ignoring\n");
+		SNAP_LIB_LOG_WARN("Tried to start legacy mode on modern HW. ignoring");
 		return 0;
 	}
 
@@ -799,19 +802,19 @@ snap_nvme_create_sq_be(struct snap_device *sdev,
 	uint8_t access_key[SNAP_ACCESS_KEY_LENGTH] = {0};
 
 	if (!attr->sq) {
-		snap_error("snap SQ must be provided\n");
+		SNAP_LIB_LOG_ERR("snap SQ must be provided");
 		errno = EINVAL;
 		goto err;
 	}
 
 	if (!attr->qp) {
-		snap_error("ibv QP must be provided\n");
+		SNAP_LIB_LOG_ERR("ibv QP must be provided");
 		errno = EINVAL;
 		goto err;
 	}
 
 	if (!snap_nvme_sq_is_fe_only(attr->sq)) {
-		snap_error("Cannot create SQ backend for non-fe_only SQ\n");
+		SNAP_LIB_LOG_ERR("Cannot create SQ backend for non-fe_only SQ");
 		errno = ENOTSUP;
 		goto err;
 	}
@@ -829,7 +832,7 @@ snap_nvme_create_sq_be(struct snap_device *sdev,
 		 *  - Use alias SQ obj_id for SQ backend instead of
 		 *    the original SQ.
 		 */
-		snap_debug("Attach QP from RDMA context (vhca_id 0x%x) different than of emu_manager (vhca_id 0x%x)\n",
+		SNAP_LIB_LOG_DBG("Attach QP from RDMA context (vhca_id 0x%x) different than of emu_manager (vhca_id 0x%x)",
 			   snap_get_dev_vhca_id(attr->qp->context),
 			   snap_get_dev_vhca_id(sdev->sctx->context));
 
@@ -841,7 +844,7 @@ snap_nvme_create_sq_be(struct snap_device *sdev,
 						 MLX5_OBJ_TYPE_NVME_SQ,
 						 attr->sq->sq->obj_id,
 						 access_key)) {
-			snap_error("Failed to allow cross vhca access\n");
+			SNAP_LIB_LOG_ERR("Failed to allow cross vhca access");
 			goto err;
 		}
 
@@ -851,7 +854,7 @@ snap_nvme_create_sq_be(struct snap_device *sdev,
 						    attr->sq->sq->obj_id,
 						    access_key);
 		if (!sq_alias) {
-			snap_error("Failed to create SQ alias\n");
+			SNAP_LIB_LOG_ERR("Failed to create SQ alias");
 			goto err;
 		}
 
@@ -860,7 +863,7 @@ snap_nvme_create_sq_be(struct snap_device *sdev,
 
 	sq_be = calloc(1, sizeof(*sq_be));
 	if (!sq_be) {
-		snap_error("Failed to allocate sq_be object\n");
+		SNAP_LIB_LOG_ERR("Failed to allocate sq_be object");
 		errno = ENOMEM;
 		goto delete_alias;
 	}
@@ -875,7 +878,7 @@ snap_nvme_create_sq_be(struct snap_device *sdev,
 	sq_be->obj = mlx5dv_devx_obj_create(attr->qp->context, in, sizeof(in), out,
 					    sizeof(out));
 	if (!sq_be->obj) {
-		snap_error("Failed to create nvme_sq_be object\n");
+		SNAP_LIB_LOG_ERR("Failed to create nvme_sq_be object");
 		goto free_sq_be;
 	}
 
@@ -884,7 +887,7 @@ snap_nvme_create_sq_be(struct snap_device *sdev,
 	sq_be->sq = attr->sq;
 	sq_be->sq->sq_be = sq_be;
 	sq_be->qp = attr->qp;
-	snap_debug("backend SQ obj_id 0x%x created for SQ 0x%x and QP 0x%x\n",
+	SNAP_LIB_LOG_DBG("backend SQ obj_id 0x%x created for SQ 0x%x and QP 0x%x",
 		   sq_be->obj_id, sq_be->sq->sq->obj_id, attr->qp->qp_num);
 
 	return sq_be;
@@ -967,7 +970,7 @@ snap_nvme_create_sq(struct snap_device *sdev, struct snap_nvme_sq_attr *attr)
 	if (attr->counter_set_id)
 		DEVX_SET(nvme_sq, sq_in, counter_set_id, attr->counter_set_id);
 	if (attr->fe_only && sdev->mdev.vtunnel) {
-		snap_debug("fe_only flag is ignored for Bluefield-1\n");
+		SNAP_LIB_LOG_DBG("fe_only flag is ignored for Bluefield-1");
 		attr->fe_only = false;
 	}
 	DEVX_SET(nvme_sq, sq_in, fe_only, attr->fe_only);
@@ -979,7 +982,7 @@ snap_nvme_create_sq(struct snap_device *sdev, struct snap_nvme_sq_attr *attr)
 		if (!attr->fe_only)
 			DEVX_SET(nvme_sq, sq_in, qpn, attr->qp->qp_num);
 		else
-			snap_warn("set qpn is not valid when fe_only=1\n");
+			SNAP_LIB_LOG_WARN("set qpn is not valid when fe_only=1");
 	}
 	DEVX_SET64(nvme_sq, sq_in, nvme_base_addr, attr->base_addr);
 	DEVX_SET(nvme_sq, sq_in, nvme_log_entry_size,
@@ -1033,7 +1036,7 @@ int snap_nvme_destroy_sq(struct snap_nvme_sq *sq)
 	int ret = 0;
 
 	if (sq->sq_be) {
-		snap_error("Cannot destroy SQ with attached sq_be object\n");
+		SNAP_LIB_LOG_ERR("Cannot destroy SQ with attached sq_be object");
 		return -EBUSY;
 	}
 
@@ -1285,7 +1288,7 @@ void snap_nvme_pci_functions_cleanup(struct snap_context *sctx)
 		sdev->pci = pfs[i];
 		sdev->mdev.device_emulation = snap_emulation_device_create(sdev, &sdev_attr);
 		if (!sdev->mdev.device_emulation) {
-			snap_error("Failed to create device emulation\n");
+			SNAP_LIB_LOG_ERR("Failed to create device emulation");
 			goto err;
 		}
 
@@ -1299,7 +1302,7 @@ void snap_nvme_pci_functions_cleanup(struct snap_context *sctx)
 			nvme_attr.pci_hotplug_state == MLX5_EMULATION_HOTPLUG_STATE_HOTUNPLUG_PREPARE)
 			snap_hotunplug_pf(pfs[i]);
 
-		snap_debug("hotplug nvme function pf id =%d bdf=%02x:%02x.%d with state %d.\n",
+		SNAP_LIB_LOG_DBG("hotplug nvme function pf id =%d bdf=%02x:%02x.%d with state %d.",
 			  pfs[i]->id, pfs[i]->pci_bdf.bdf.bus, pfs[i]->pci_bdf.bdf.device,
 			  pfs[i]->pci_bdf.bdf.function, nvme_attr.pci_hotplug_state);
 	}

@@ -110,13 +110,12 @@
 #else
 #define snap_debug(fmt, ...) \
 	do { if (SNAP_DEBUG) \
-		printf("%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__); \
+		printf("%s:%d " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
 	} while (0)
-
 // TODO: Add formal logger
-#define snap_error printf
-#define snap_warn  printf
-#define snap_info  printf
+#define snap_error(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
+#define snap_warn(fmt, ...)  printf(fmt "\n", ##__VA_ARGS__)
+#define snap_info(fmt, ...)  printf(fmt "\n", ##__VA_ARGS__)
 #endif
 
 static inline int snap_ref_safe(int *refcnt)

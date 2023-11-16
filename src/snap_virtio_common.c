@@ -24,6 +24,9 @@
 #include "snap_virtio_common.h"
 #include "snap_sw_virtio_blk.h"
 #include "snap_dpa_virtq.h"
+#include "snap_lib_log.h"
+
+SNAP_LIB_LOG_REGISTER(VIRTIO_COMMON)
 
 SNAP_ENV_REG_ENV_VARIABLE(SNAP_QUEUE_PROVIDER, 0);
 
@@ -163,9 +166,9 @@ static void snap_virtio_net_modify_queues(void *in, struct snap_virtio_device_at
 	int i;
 	void *q;
 
-	snap_info("modify queues, %d queues\n", attr->max_queues);
+	SNAP_LIB_LOG_INFO("modify queues, %d queues", attr->max_queues);
 	for (i = 0; i < attr->max_queues; i++) {
-		snap_debug("size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx\n",
+		SNAP_LIB_LOG_DBG("size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx",
 			   nattr->q_attrs[i].vattr.size,
 			   nattr->q_attrs[i].vattr.msix_vector,
 			   nattr->q_attrs[i].vattr.enable,
@@ -175,7 +178,7 @@ static void snap_virtio_net_modify_queues(void *in, struct snap_virtio_device_at
 			   nattr->q_attrs[i].vattr.device);
 		q = DEVX_ADDR_OF(virtio_net_device_emulation, in, virtio_q_configuration[i]);
 
-		snap_debug("offset %ld\n", q - in);
+		SNAP_LIB_LOG_DBG("offset %ld", q - in);
 		DEVX_SET(virtio_q_layout, q, queue_size,
 			 nattr->q_attrs[i].vattr.size);
 		DEVX_SET(virtio_q_layout, q, queue_msix_vector,
@@ -204,7 +207,7 @@ snap_virtio_net_queue_config_fill(void *in, uint64_t mask,
 
 	q = DEVX_ADDR_OF(virtio_q_layout_v2, in, queue_configuration);
 
-	snap_debug("offset %ld\n", q - in);
+	SNAP_LIB_LOG_DBG("offset %ld", q - in);
 	if (mask & SNAP_VIRTIO_MOD_VQ_CFG_Q_SIZE) {
 		*fields_to_modify |= MLX5_VIRTIO_DEVICE_MODIFY_VQ_CFG_Q_SIZE;
 		DEVX_SET(virtio_q_layout, q, queue_size,
@@ -276,9 +279,9 @@ snap_virtio_net_queue_configs_v2_fill(void *in, uint64_t mask,
 	int i, idx = 0;
 	void *q;
 
-	snap_debug("modify queues v2\n");
+	SNAP_LIB_LOG_DBG("modify queues v2");
 	for (i = 0; i < attr->max_queues; i++) {
-		snap_debug("q: %u size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx reset %u\n",
+		SNAP_LIB_LOG_DBG("q: %u size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx reset %u",
 			   nattr->q_attrs[i].vattr.idx,
 			   nattr->q_attrs[i].vattr.size,
 			   nattr->q_attrs[i].vattr.msix_vector,
@@ -291,7 +294,7 @@ snap_virtio_net_queue_configs_v2_fill(void *in, uint64_t mask,
 		q = DEVX_ADDR_OF(virtio_net_device_emulation, in,
 				 virtio_q_configuration_v2[idx++]);
 
-		snap_debug("offset %ld\n", q - in);
+		SNAP_LIB_LOG_DBG("offset %ld", q - in);
 		DEVX_SET(virtio_q_layout_v2, q, queue_index,
 			 nattr->q_attrs[i].vattr.idx);
 		snap_virtio_net_queue_config_fill(q, mask, attr, i,
@@ -307,9 +310,9 @@ static void snap_virtio_blk_modify_queues(void *in, struct snap_virtio_device_at
 	int i;
 	void *q;
 
-	snap_debug("modify queues, %d queues\n", attr->max_queues);
+	SNAP_LIB_LOG_DBG("modify queues, %d queues", attr->max_queues);
 	for (i = 0; i < attr->max_queues; i++) {
-		snap_debug("size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx\n",
+		SNAP_LIB_LOG_DBG("size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx",
 			   battr->q_attrs[i].vattr.size,
 			   battr->q_attrs[i].vattr.msix_vector,
 			   battr->q_attrs[i].vattr.enable,
@@ -319,7 +322,7 @@ static void snap_virtio_blk_modify_queues(void *in, struct snap_virtio_device_at
 			   battr->q_attrs[i].vattr.device);
 
 		q = DEVX_ADDR_OF(virtio_blk_device_emulation, in, virtio_q_configuration[i]);
-		snap_debug("offset %ld\n", q - in);
+		SNAP_LIB_LOG_DBG("offset %ld", q - in);
 
 		DEVX_SET(virtio_q_layout, q, queue_size,
 			 battr->q_attrs[i].vattr.size);
@@ -345,9 +348,9 @@ static void snap_virtio_fs_modify_queues(void *in, struct snap_virtio_device_att
 	int i;
 	void *q;
 
-	snap_debug("modify queues, %d queues\n", attr->max_queues);
+	SNAP_LIB_LOG_DBG("modify queues, %d queues", attr->max_queues);
 	for (i = 0; i < attr->max_queues; i++) {
-		snap_debug("size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx\n",
+		SNAP_LIB_LOG_DBG("size: %u msix %u enable %u notify %u desc 0x%lx avail 0x%lx used 0x%lx",
 			   fs_attr->q_attrs[i].vattr.size,
 			   fs_attr->q_attrs[i].vattr.msix_vector,
 			   fs_attr->q_attrs[i].vattr.enable,
@@ -357,7 +360,7 @@ static void snap_virtio_fs_modify_queues(void *in, struct snap_virtio_device_att
 			   fs_attr->q_attrs[i].vattr.device);
 
 		q = DEVX_ADDR_OF(virtio_fs_device_emulation, in, virtio_q_configuration[i]);
-		snap_debug("offset %ld\n", q - in);
+		SNAP_LIB_LOG_DBG("offset %ld", q - in);
 
 		DEVX_SET(virtio_q_layout, q, queue_size,
 			 fs_attr->q_attrs[i].vattr.size);
@@ -489,7 +492,7 @@ int snap_virtio_modify_device(struct snap_device *sdev,
 		return -EINVAL;
 
 	//we'll modify only allowed fields
-	snap_debug("mask 0x%0lx vs allowed 0x%0lx\n", mask, sdev->mod_allowed_mask);
+	SNAP_LIB_LOG_DBG("mask 0x%0lx vs allowed 0x%0lx", mask, sdev->mod_allowed_mask);
 	if (mask & ~sdev->mod_allowed_mask)
 		return -EINVAL;
 
@@ -612,13 +615,13 @@ int snap_virtio_modify_device(struct snap_device *sdev,
 			fields_to_modify |= MLX5_VIRTIO_DEVICE_MODIFY_DYN_VF_MSIX_RESET;
 			DEVX_SET(virtio_net_device_emulation, device_emulation_in,
 				 dynamic_vf_msix_reset, attr->dynamic_vf_msix_reset);
-			snap_debug("Setting SNAP_VIRTIO_MOD_DYN_MSIX_RESET on PF\n");
+			SNAP_LIB_LOG_DBG("Setting SNAP_VIRTIO_MOD_DYN_MSIX_RESET on PF");
 		}
 		if (mask & (SNAP_VIRTIO_MOD_PCI_HOTPLUG_STATE | SNAP_VIRTIO_MOD_ALL)) {
 			fields_to_modify |= MLX5_VIRTIO_DEVICE_MODIFY_PCI_HOTPLUG_STATE;
 			DEVX_SET(virtio_net_device_emulation, device_emulation_in,
 				 pci_hotplug_state, attr->pci_hotplug_state);
-			snap_debug("Setting SNAP_VIRTIO_MOD_PCI_HOTPLUG_STATE to %d\n",
+			SNAP_LIB_LOG_DBG("Setting SNAP_VIRTIO_MOD_PCI_HOTPLUG_STATE to %d",
 				   attr->pci_hotplug_state);
 		}
 		if (mask & (SNAP_VIRTIO_MOD_NUM_MSIX | SNAP_VIRTIO_MOD_ALL)) {
@@ -628,7 +631,7 @@ int snap_virtio_modify_device(struct snap_device *sdev,
 			pci_params = DEVX_ADDR_OF(virtio_net_device_emulation, device_emulation_in,
 						  pci_params);
 			DEVX_SET(device_pci_parameters, pci_params, num_msix, attr->num_msix);
-			snap_debug("Setting SNAP_VIRTIO_MOD_NUM_MSIX, msix number: %d\n",
+			SNAP_LIB_LOG_DBG("Setting SNAP_VIRTIO_MOD_NUM_MSIX, msix number: %d",
 				   attr->num_msix);
 		}
 
@@ -734,7 +737,7 @@ int snap_virtio_modify_device(struct snap_device *sdev,
 	ret = snap_devx_obj_modify(sdev->mdev.device_emulation, in, inlen,
 				   out, sizeof(out));
 
-	snap_debug("ret %d in %p inlen %d modify 0x%0lx\n", ret, in, inlen, fields_to_modify);
+	SNAP_LIB_LOG_DBG("ret %d in %p inlen %d modify 0x%0lx", ret, in, inlen, fields_to_modify);
 	free(in);
 	return ret;
 }
@@ -757,7 +760,7 @@ snap_virtio_create_queue_counters(struct snap_device *sdev)
 					DEVX_ST_SZ_BYTES(general_obj_in_cmd_hdr),
 					DEVX_ST_SZ_BYTES(general_obj_out_cmd_hdr));
 	if (!counters) {
-		snap_error("Failed to create VirtIO counters devx object\n");
+		SNAP_LIB_LOG_ERR("Failed to create VirtIO counters devx object");
 		errno = ENODEV;
 		goto out;
 	}
@@ -1374,7 +1377,7 @@ int snap_virtio_get_mod_fields_queue(struct snap_virtio_queue *virtq)
 	case SNAP_VIRTIO_NET_VF:
 		ret = snap_virtio_query_queue(virtq, &nattr.vattr);
 		if (ret) {
-			snap_error("Failed to query snap_vq hw_q\n");
+			SNAP_LIB_LOG_ERR("Failed to query snap_vq hw_q");
 			return ret;
 		}
 		virtq->mod_allowed_mask = nattr.modifiable_fields;
@@ -1382,7 +1385,7 @@ int snap_virtio_get_mod_fields_queue(struct snap_virtio_queue *virtq)
 	default:
 		ret = snap_virtio_query_queue(virtq, &cattr.vattr);
 		if (ret) {
-			snap_error("Failed to query snap_vq hw_q\n");
+			SNAP_LIB_LOG_ERR("Failed to query snap_vq hw_q");
 			return ret;
 		}
 		virtq->mod_allowed_mask = cattr.modifiable_fields;
@@ -1439,7 +1442,7 @@ static void snap_virtio_teardown_virtq_umem(struct snap_virtio_queue *virtq)
 static void get_vring_rx_cb(struct snap_dma_q *q, const void *data, uint32_t data_len,
 			    uint32_t imm_data)
 {
-	snap_error("Got unexpected completion on DMA queue %p data_len %u\n",
+	SNAP_LIB_LOG_ERR("Got unexpected completion on DMA queue %p data_len %u",
 		   q, data_len);
 }
 
@@ -1452,7 +1455,7 @@ int snap_virtio_get_avail_index_from_host(struct snap_dma_q *dma_q,
 	ret = snap_dma_q_read_short(dma_q, &vra, sizeof(struct vring_avail),
 			      drv_addr, dma_mkey, NULL);
 	if (ret) {
-		snap_error("failed DMA read vring_avail for drv: 0x%lx\n", drv_addr);
+		SNAP_LIB_LOG_ERR("failed DMA read vring_avail for drv: 0x%lx", drv_addr);
 		return ret;
 	}
 
@@ -1474,7 +1477,7 @@ int snap_virtio_get_used_index_from_host(struct snap_dma_q *dma_q,
 	ret = snap_dma_q_read_short(dma_q, &vru, sizeof(struct vring_used),
 			      dev_addr, dma_mkey, NULL);
 	if (ret) {
-		snap_error("failed DMA read vring_used for dev: 0x%lx\n", dev_addr);
+		SNAP_LIB_LOG_ERR("failed DMA read vring_used for dev: 0x%lx", dev_addr);
 		return ret;
 	}
 
@@ -1523,7 +1526,7 @@ int snap_virtio_get_vring_indexes_from_host(struct ibv_pd *pd, uint64_t drv_addr
 
 	dma_q = snap_dma_q_create(pd, &dma_q_attr);
 	if (!dma_q) {
-		snap_error("failed to create dma_q for drv: 0x%lx dev: 0x%lx\n",
+		SNAP_LIB_LOG_ERR("failed to create dma_q for drv: 0x%lx dev: 0x%lx",
 			   drv_addr, dev_addr);
 		return -EINVAL;
 	}
@@ -1531,7 +1534,7 @@ int snap_virtio_get_vring_indexes_from_host(struct ibv_pd *pd, uint64_t drv_addr
 	ret = snap_dma_q_read_short(dma_q, vra, sizeof(struct vring_avail),
 				drv_addr, dma_mkey, NULL);
 	if (ret) {
-		snap_error("failed DMA read vring_used for drv: 0x%lx dev: 0x%lx\n",
+		SNAP_LIB_LOG_ERR("failed DMA read vring_used for drv: 0x%lx dev: 0x%lx",
 			   drv_addr, dev_addr);
 		goto err;
 	}
@@ -1539,14 +1542,14 @@ int snap_virtio_get_vring_indexes_from_host(struct ibv_pd *pd, uint64_t drv_addr
 	ret = snap_dma_q_read_short(dma_q, vru, sizeof(struct vring_used),
 			      dev_addr, dma_mkey, NULL);
 	if (ret) {
-		snap_error("failed DMA read vring_used for drv: 0x%lx dev: 0x%lx\n",
+		SNAP_LIB_LOG_ERR("failed DMA read vring_used for drv: 0x%lx dev: 0x%lx",
 			   drv_addr, dev_addr);
 		goto err;
 	}
 
 	ret = snap_dma_q_flush(dma_q);
 	if (ret != 2)
-		snap_error("failed flush drv: 0x%lx dev: 0x%lx, ret %d\n",
+		SNAP_LIB_LOG_ERR("failed flush drv: 0x%lx dev: 0x%lx, ret %d",
 			   drv_addr, dev_addr, ret);
 
 	ret = 0;
@@ -1564,7 +1567,7 @@ int snap_virtio_common_queue_config(struct snap_virtio_common_queue_attr *common
 	common_attr->hw_used_index = hw_used_index;
 	common_attr->qp = snap_dma_q_get_fw_qp(dma_q);
 	if (!common_attr->qp) {
-		snap_error("no fw qp exist when trying to create virtq\n");
+		SNAP_LIB_LOG_ERR("no fw qp exist when trying to create virtq");
 		return -1;
 	}
 	common_attr->dma_q = dma_q;
@@ -1588,7 +1591,7 @@ struct virtq_q_ops *snap_virtio_queue_provider(void)
 		queue_provider_ops = get_dpa_queue_ops();
 		break;
 	default:
-		snap_error("Invalid Queue provider received %d\n", q_provider);
+		SNAP_LIB_LOG_ERR("Invalid Queue provider received %d", q_provider);
 		queue_provider_ops = NULL;
 		break;
 	}

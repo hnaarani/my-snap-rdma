@@ -96,10 +96,10 @@ struct snap_dpa_rt *snap_dpa_rt_get(struct ibv_context *ctx, const char *name,
 	rt = rt_lookup(name);
 	if (rt) {
 		if (snap_ref_safe(&rt->refcount)) {
-			snap_error("%s: dpa_rt refcnt overflow\n", name);
+			SNAP_LIB_LOG_ERR("%s: dpa_rt refcnt overflow", name);
 			goto rt_ref_err;
 		}
-		snap_debug("%s: dpa_rt ref: %d\n", name, rt->refcount);
+		SNAP_LIB_LOG_DBG("%s: dpa_rt ref: %d", name, rt->refcount);
 		pthread_mutex_unlock(&dpa_rt_list_lock);
 		return rt;
 	}
@@ -111,7 +111,7 @@ struct snap_dpa_rt *snap_dpa_rt_get(struct ibv_context *ctx, const char *name,
 	LIST_INSERT_HEAD(&dpa_rt_list, rt, entry);
 	pthread_mutex_unlock(&dpa_rt_list_lock);
 
-	snap_debug("%s: NEW DPA runtime environment\n", rt->name);
+	SNAP_LIB_LOG_DBG("%s: NEW DPA runtime environment", rt->name);
 	return rt;
 
 rt_ref_err:
@@ -130,7 +130,7 @@ rt_create_err:
 void snap_dpa_rt_put(struct snap_dpa_rt *rt)
 {
 	pthread_mutex_lock(&dpa_rt_list_lock);
-	snap_debug("%s: FREE DPA RT ref: %d\n", rt->name, rt->refcount);
+	SNAP_LIB_LOG_DBG("%s: FREE DPA RT ref: %d", rt->name, rt->refcount);
 	if (--rt->refcount > 0) {
 		pthread_mutex_unlock(&dpa_rt_list_lock);
 		return;
@@ -169,7 +169,7 @@ void snap_dpa_rt_polling_core_put(struct snap_dpa_rt *rt, int i)
 {
 	pthread_mutex_lock(&rt->lock);
 	if (!CPU_ISSET(i, &rt->polling_cores))
-		snap_error("core %d is already free\n", i);
+		SNAP_LIB_LOG_ERR("core %d is already free", i);
 	CPU_CLR(i, &rt->polling_cores);
 	pthread_mutex_unlock(&rt->lock);
 }
@@ -213,7 +213,7 @@ void snap_dpa_rt_worker_destroy(struct snap_dpa_rt_worker *w)
 
 void dummy_rx_cb(struct snap_dma_q *q, const void *data, uint32_t data_len, uint32_t imm_data)
 {
-	snap_error("OOPS: rx cb called\n");
+	SNAP_LIB_LOG_ERR("OOPS: rx cb called");
 }
 
 int snap_dpa_rt_p2p_queue_create(struct snap_dpa_rt_thread *rt_thr,

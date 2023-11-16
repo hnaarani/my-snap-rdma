@@ -24,7 +24,7 @@ static inline int do_verbs_dma_xfer(struct snap_dma_q *q,
 
 	rc = ibv_post_send(qp, wr, &bad_wr);
 	if (snap_unlikely(rc))
-		snap_error("DMA queue: %p failed to post opcode 0x%x\n",
+		SNAP_LIB_LOG_ERR("DMA queue: %p failed to post opcode 0x%x",
 			   q, bad_wr ? bad_wr->opcode : 0);
 
 	return rc;
@@ -57,7 +57,7 @@ verbs_prepare_iov_ctx(struct snap_dma_q *q, int n_bb,
 	iov_ctx = TAILQ_FIRST(&q->free_iov_ctx);
 	if (!iov_ctx) {
 		errno = -ENOMEM;
-		snap_error("dma_q:%p Out of iov_ctx from pool\n", q);
+		SNAP_LIB_LOG_ERR("dma_q:%p Out of iov_ctx from pool", q);
 		return NULL;
 	}
 
@@ -142,7 +142,7 @@ static inline int verbs_dma_q_writev2v(struct snap_dma_q *q,
 		return -EINVAL;
 
 	if (snap_unlikely(!qp_can_tx(q, *n_bb))) {
-		snap_error("%s: qp out of tx_available resource\n", __func__);
+		SNAP_LIB_LOG_ERR("%s: qp out of tx_available resource", __func__);
 		return -EAGAIN;
 	}
 
@@ -242,7 +242,7 @@ static int verbs_dma_q_read_short(struct snap_dma_q *q, void *dst_buf,
 
 	ir_ctx = TAILQ_FIRST(&q->free_ir_ctx);
 	if (!ir_ctx) {
-		snap_error("dma_q:%p Out of ir_ctx from pool\n", q);
+		SNAP_LIB_LOG_ERR("dma_q:%p Out of ir_ctx from pool", q);
 		return -EAGAIN;
 	}
 
@@ -283,7 +283,7 @@ static inline int verbs_dma_q_send_completion(struct snap_dma_q *q, void *src_bu
 
 	rc = ibv_post_send(qp, &send_wr, &bad_wr);
 	if (snap_unlikely(rc))
-		snap_error("DMA queue %p: failed to post send: %m\n", q);
+		SNAP_LIB_LOG_ERR("DMA queue %p: failed to post send: %m", q);
 
 	return rc;
 }
@@ -305,16 +305,16 @@ static inline int verbs_dma_q_progress_rx(struct snap_dma_q *q)
 		return 0;
 
 	if (snap_unlikely(n < 0)) {
-		snap_error("dma queue %p: failed to poll rx cq: errno=%d\n", q, n);
+		SNAP_LIB_LOG_ERR("dma queue %p: failed to poll rx cq: errno=%d", q, n);
 		return 0;
 	}
 
 	for (i = 0; i < n; i++) {
 		if (snap_unlikely(wcs[i].status != IBV_WC_SUCCESS)) {
 			if (wcs[i].status == IBV_WC_WR_FLUSH_ERR) {
-				snap_debug("dma queue %p: got FLUSH_ERROR\n", q);
+				SNAP_LIB_LOG_DBG("dma queue %p: got FLUSH_ERROR", q);
 			} else {
-				snap_error("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x\n",
+				SNAP_LIB_LOG_ERR("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x",
 					   q, wcs[i].status, wcs[i].opcode);
 			}
 			return n;
@@ -335,7 +335,7 @@ static inline int verbs_dma_q_progress_rx(struct snap_dma_q *q)
 	rx_wr[i - 1].next = NULL;
 	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->sw_qp.qp), rx_wr, &bad_wr);
 	if (snap_unlikely(rc))
-		snap_error("dma queue %p: failed to post recv: errno=%d\n",
+		SNAP_LIB_LOG_ERR("dma queue %p: failed to post recv: errno=%d",
 				q, rc);
 	return n;
 }
@@ -356,7 +356,7 @@ static inline int verbs_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 		return 0;
 
 	if (snap_unlikely(n < 0)) {
-		snap_error("dma queue %p: failed to poll tx cq: errno=%d\n",
+		SNAP_LIB_LOG_ERR("dma queue %p: failed to poll tx cq: errno=%d",
 				q, n);
 		return 0;
 	}
@@ -365,7 +365,7 @@ static inline int verbs_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 
 	for (i = 0; i < n; i++) {
 		if (snap_unlikely(wcs[i].status != IBV_WC_SUCCESS))
-			snap_error("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x\n",
+			SNAP_LIB_LOG_ERR("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x",
 				   q, wcs[i].status, wcs[i].opcode);
 		/* wr_id, status, qp_num and vendor_err are still valid in
 		 * case of error
@@ -400,16 +400,16 @@ static inline int verbs_dma_q_poll_rx(struct snap_dma_q *q,
 		return 0;
 
 	if (snap_unlikely(n < 0)) {
-		snap_error("dma queue %p: failed to poll rx cq: errno=%d\n", q, n);
+		SNAP_LIB_LOG_ERR("dma queue %p: failed to poll rx cq: errno=%d", q, n);
 		return 0;
 	}
 
 	for (i = 0; i < n && i < max_completions; i++) {
 		if (snap_unlikely(wcs[i].status != IBV_WC_SUCCESS)) {
 			if (wcs[i].status == IBV_WC_WR_FLUSH_ERR) {
-				snap_debug("dma queue %p: got FLUSH_ERROR\n", q);
+				SNAP_LIB_LOG_DBG("dma queue %p: got FLUSH_ERROR", q);
 			} else {
-				snap_error("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x\n",
+				SNAP_LIB_LOG_ERR("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x",
 					   q, wcs[i].status, wcs[i].opcode);
 			}
 			return n;
@@ -432,7 +432,7 @@ static inline int verbs_dma_q_poll_rx(struct snap_dma_q *q,
 	rx_wr[i - 1].next = NULL;
 	rc = ibv_post_recv(snap_qp_to_verbs_qp(q->sw_qp.qp), rx_wr, &bad_wr);
 	if (snap_unlikely(rc))
-		snap_error("dma queue %p: failed to post recv: errno=%d\n",
+		SNAP_LIB_LOG_ERR("dma queue %p: failed to post recv: errno=%d",
 				q, rc);
 	return n;
 }
@@ -453,7 +453,7 @@ static inline int verbs_dma_q_poll_tx(struct snap_dma_q *q, struct snap_dma_comp
 		return 0;
 
 	if (snap_unlikely(n < 0)) {
-		snap_error("dma queue %p: failed to poll tx cq: errno=%d\n",
+		SNAP_LIB_LOG_ERR("dma queue %p: failed to poll tx cq: errno=%d",
 				q, n);
 		return 0;
 	}
@@ -462,7 +462,7 @@ static inline int verbs_dma_q_poll_tx(struct snap_dma_q *q, struct snap_dma_comp
 
 	for (i = 0; i < n && i < max_completions; i++) {
 		if (snap_unlikely(wcs[i].status != IBV_WC_SUCCESS))
-			snap_error("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x\n",
+			SNAP_LIB_LOG_ERR("dma queue %p: got unexpected completion status 0x%x, opcode 0x%x",
 				   q, wcs[i].status, wcs[i].opcode);
 		/* wr_id, status, qp_num and vendor_err are still valid in
 		 * case of error
