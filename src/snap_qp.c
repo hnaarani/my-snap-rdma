@@ -185,6 +185,11 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 	/* always ignore overrun */
 	DEVX_SET(cqc, cqctx, oi, 1);
 	DEVX_SET(cqc, cqctx, log_cq_size, snap_u32log2(devx_cq->cqe_cnt));
+	/* one entry cq should always be collapsed */
+	if (devx_cq->cqe_cnt == 1) {
+		snap_debug("CQ IS COLLAPSED\n");
+		DEVX_SET(cqc, cqctx, cc, 1);
+	}
 
 	if (log_page_size > MLX5_ADAPTER_PAGE_SHIFT)
 		DEVX_SET(cqc, cqctx, log_page_size, log_page_size - MLX5_ADAPTER_PAGE_SHIFT);

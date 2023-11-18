@@ -99,6 +99,27 @@ TEST_P(SnapQpTest, create_cq) {
 	}
 }
 
+TEST_F(SnapQpTest, create_cq_collapsed) {
+
+	struct snap_cq_attr cq_attr = {
+		.cq_type = SNAP_OBJ_DEVX,
+		.cqe_cnt = 1,
+		.cqe_size = 64
+	};
+	struct snap_cq *cq;
+	struct snap_hw_cq hw_cq;
+	int ret;
+
+	cq = snap_cq_create(m_pd->context, &cq_attr);
+	ASSERT_TRUE(cq);
+
+	ret = snap_cq_to_hw_cq(cq, &hw_cq);
+	ASSERT_EQ(0, ret);
+	EXPECT_EQ(cq_attr.cqe_size, hw_cq.cqe_size);
+	EXPECT_EQ(cq_attr.cqe_cnt, hw_cq.cqe_cnt);
+	snap_cq_destroy(cq);
+}
+
 TEST_P(SnapQpTest, create_qp) {
 	struct snap_cq_attr cq_attr = {0};
 	struct snap_qp_attr qp_attr = {0};
