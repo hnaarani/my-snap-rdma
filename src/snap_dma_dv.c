@@ -431,6 +431,33 @@ static int do_dv_dma_xfer_v2v(struct snap_dma_q *q,
 	return 0;
 }
 
+static int dv_dma_q_readv2v(struct snap_dma_q *q,
+			    struct snap_dma_q_io_attr *io_attr,
+			    struct snap_dma_completion *comp, int *n_bb)
+{
+	int wr_cnt;
+	int num_sge[SNAP_DMA_Q_MAX_WR_CNT];
+	struct ibv_sge r_sgl[SNAP_DMA_Q_MAX_WR_CNT];
+	struct ibv_sge l_sgl[SNAP_DMA_Q_MAX_WR_CNT][SNAP_DMA_Q_MAX_SGE_NUM];
+
+	if (snap_dma_build_sgl(io_attr, &wr_cnt, n_bb, num_sge, l_sgl, r_sgl))
+		return -EINVAL;
+
+	if (snap_unlikely(!qp_can_tx(q, *n_bb))) {
+		SNAP_LIB_LOG_DBG("%s: qp out of tx_available resource", __func__);
+		return -EAGAIN;
+	}
+
+	/*
+	 * Post RDMA read with V2V is broken when TX Scatter-to-CQE is enabled,
+	 * so as a WA post RDMA write and replace at the caller between source
+	 * and destination.
+	 */
+	return do_dv_dma_xfer_v2v(q, wr_cnt,
+				MLX5_OPCODE_RDMA_WRITE, num_sge,
+				l_sgl, r_sgl, comp, n_bb);
+}
+
 static int dv_dma_q_writev2v(struct snap_dma_q *q,
 				struct snap_dma_q_io_attr *io_attr,
 				struct snap_dma_completion *comp, int *n_bb)
@@ -990,6 +1017,7 @@ const struct snap_dma_q_ops dv_ops = {
 	.writec          = dv_dma_q_writec,
 	.write_short     = dv_dma_q_write_short,
 	.read            = dv_dma_q_read,
+	.readv2v         = dv_dma_q_readv2v,
 	.readc           = dv_dma_q_readc,
 	.read_short      = dv_dma_q_read_short,
 	.send_completion = dv_dma_q_send_completion,
@@ -1097,6 +1125,7 @@ const struct snap_dma_q_ops gga_ops = {
 	.writec          = gga_dma_q_writec,
 	.write_short     = dv_dma_q_write_short,
 	.read            = gga_dma_q_read,
+	.readv2v         = dv_dma_q_readv2v,
 	.readc           = gga_dma_q_readc,
 	.read_short      = dv_dma_q_read_short,
 	.send_completion = dv_dma_q_send_completion,

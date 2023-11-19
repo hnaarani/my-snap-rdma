@@ -514,13 +514,50 @@ int snap_dma_q_read(struct snap_dma_q *q, void *dst_buf, size_t len,
  * < 0
  *     some other error has occurred. Return value is -errno
  */
-int snap_dma_q_readv2v(struct snap_dma_q *q,
-				uint32_t *dst_mkey, struct iovec *dst_iov, int dst_iovcnt,
-				uint32_t *src_mkey, struct iovec *src_iov, int src_iovcnt,
-				bool share_dst_mkey, bool share_src_mkey,
-				struct snap_dma_completion *comp)
+int snap_dma_q_readv2v(struct snap_dma_q *q, uint32_t *dst_mkey,
+		struct iovec *dst_iov, int dst_iovcnt, uint32_t *src_mkey,
+		struct iovec *src_iov, int src_iovcnt, bool share_dst_mkey,
+		bool share_src_mkey, struct snap_dma_completion *comp)
 {
-	return -ENOTSUP;
+	int i, rc, n_bb = 0;
+	uint32_t lkey[src_iovcnt];
+	uint32_t rkey[dst_iovcnt];
+	struct snap_dma_q_io_attr io_attr = {0};
+
+	if (share_src_mkey) {
+		for (i = 0; i < src_iovcnt; i++)
+			lkey[i] = *src_mkey;
+		io_attr.lkey = lkey;
+	} else {
+		io_attr.lkey = src_mkey;
+	}
+
+	if (share_dst_mkey) {
+		for (i = 0; i < dst_iovcnt; i++)
+			rkey[i] = *dst_mkey;
+		io_attr.rkey = rkey;
+	} else {
+		io_attr.rkey = dst_mkey;
+	}
+
+	io_attr.io_type = SNAP_DMA_Q_IO_TYPE_IOV;
+	io_attr.riov = dst_iov;
+	io_attr.riov_cnt = dst_iovcnt;
+	io_attr.liov = src_iov;
+	io_attr.liov_cnt = src_iovcnt;
+
+	/*
+	 * Post RDMA read with V2V is broken when TX Scatter-to-CQE is enabled,
+	 * so as a WA post RDMA write and replace here between source and
+	 * destination.
+	 */
+	rc = q->ops->readv2v(q, &io_attr, comp, &n_bb);
+	if (snap_unlikely(rc))
+		return rc;
+
+	q->tx_available -= n_bb;
+
+	return 0;
 }
 
 /**
