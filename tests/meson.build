@@ -15,6 +15,8 @@ if not get_option('enable-gtest')
 	subdir_done()
 endif
 
+add_languages('cpp', native : true)
+
 cpp_args = [
 	'-std=c++11', '-fpermissive'
 ]
@@ -25,7 +27,8 @@ gtest = dependency('gtest_main',
 		not_found_message :
 		'gtest is not found. Check that PKG_CONFIG_PATH is set. Ex: ' +
 		'PKG_CONFIG_PATH=/usr/local/gtest/lib64/pkgconfig/',
-		native : true
+		native : true,
+		version : '1.10.0'
 		)
 
 gtest_snap_dma_srcs = [
