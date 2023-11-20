@@ -32,11 +32,21 @@
 		(type *)((char *)__mptr - offsetof(type, member)); })
 #endif
 
+#ifndef snap_min
 #define snap_min(a, b) (((a) < (b)) ? (a) : (b))
-#define snap_max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
 
+#ifndef snap_max
+#define snap_max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef snap_likely
 #define snap_likely(x) __builtin_expect(!!(x), 1)
+#endif
+
+#ifndef snap_unlikely
 #define snap_unlikely(x) __builtin_expect(!!(x), 0)
+#endif
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(n) (sizeof(n) / sizeof(*n))
@@ -73,10 +83,12 @@
  * TODO: older C compilers may have static_assert macro instead of
  * _Static_assert keyword.
  */
+#ifndef SNAP_STATIC_ASSERT
 #if !defined(__cplusplus)
 #define SNAP_STATIC_ASSERT(_expr, _msg) _Static_assert((_expr), _msg)
 #else
 #define SNAP_STATIC_ASSERT(_expr, _msg)
+#endif
 #endif
 
 #define SNAP_PACKED __attribute__((packed))
