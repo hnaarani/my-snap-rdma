@@ -13,17 +13,17 @@
 #include "snap_dma.h"
 
 /**
- * @brief Transfer data using DMA from one ring buffer to another, handling wraparounds.
+ * @brief Transfer data using DMA from one cyclic buffer to another, handling wraparounds.
  *
- * This function copies data from one ring buffer to another using DMA, taking into account
- * potential wraparounds in both ring buffers.
+ * This function copies data from one cyclic buffer to another using DMA, taking into account
+ * potential wraparounds in both cyclic buffers.
  *
  * @return The number of DMA operations initiated.
  *
  * @note The 'comp->count' field is not updated by this function.
  */
 static inline int
-snap_dpa_dma_rb_write(struct snap_dma_q *q, void *src_buffer,
+snap_dpa_dma_cyclic_buffer_write(struct snap_dma_q *q, void *src_buffer,
 		uint32_t src_mkey, uint64_t dst_buffer, uint32_t dst_mkey,
 		uint32_t src_idx, uint32_t dst_idx, uint16_t num_elements,
 		uint32_t element_size, uint32_t q_depth, struct snap_dma_completion *comp)

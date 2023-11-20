@@ -52,6 +52,12 @@ enum dpa_nvme_mp_state {
 
 TAILQ_HEAD(dpa_nvme_mp_sq_list, dpa_nvme_mp_sq);
 
+struct NVME_MP_PACKED dpa_nvme_mp_completion {
+	uint32_t result;
+	uint16_t cid;
+	uint16_t status;
+};
+
 struct dpa_nvme_mp_cq {
 	struct dpa_nvme_mp_sq_list sqs;
 	enum dpa_nvme_mp_state state;
@@ -59,14 +65,14 @@ struct dpa_nvme_mp_cq {
 	struct snap_dpa_p2p_q p2p_queues[SNAP_DPA_NVME_MP_MAX_NUM_QPS];
 	uint32_t num_p2p_queues;
 	uint32_t cq_head_duar_id;
-	uint32_t host_cq_head;
 	uint32_t msix_cqnum;
+	uint16_t host_cq_head;
+	uint16_t cq_tail;
 
 	struct snap_dma_completion comp;
+	struct nvme_cqe *shadow_cq;
 	uint64_t host_cq_addr;
 	uint32_t host_mkey;
-	uint16_t cq_tail;
-	uint16_t cq_head;
 	uint16_t queue_depth;
 	bool msix_required;
 	bool phase;
@@ -88,12 +94,10 @@ struct dpa_nvme_mp_ns {
 struct dpa_nvme_mp_sq {
 	struct dpa_nvme_mp_ns *namespaces[SNAP_DPA_NVME_MP_MAX_NSID + 1];
 	uint32_t sqid;
-	uint32_t dpu_sqe_shadow_mkey;
-	uint64_t dpu_sqe_shadow_addr;
 	uint64_t host_sq_addr;
 	uint16_t queue_depth;
 	uint32_t duar_id;
-	uint32_t dpu_mkey;
+	uint32_t host_mkey;
 	enum dpa_nvme_mp_state state;
 
 	uint32_t sq_head;
