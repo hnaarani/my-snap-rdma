@@ -310,3 +310,12 @@ int snap_dpa_p2p_send_msix(struct snap_dpa_p2p_q *q, int credit)
 
 	return snap_dpa_p2p_send_msg(q, (struct snap_dpa_p2p_msg *) &msg);
 }
+
+int snap_dpa_p2p_send_flush(struct snap_dpa_p2p_q *q)
+{
+	struct snap_dpa_p2p_msg msg = {
+		.base.type = SNAP_DPA_P2P_MSG_P2P_Q_FLUSH,
+	};
+
+	return snap_dpa_p2p_send_msg(q, (struct snap_dpa_p2p_msg *) &msg);
+}

@@ -366,12 +366,10 @@ struct snap_dma_q {
 	bool                  no_events;
 	int                   rx_qsize;
 
-#if !defined(__DPA)
-	pthread_mutex_t lock;
-	bool destroy_done;
+	/* flush with shared rx cq */
 	int flush_count;
-	free_dma_q_resources free_dma_q_resources_cb;
-#endif
+	bool destroy_done;
+
 	struct snap_dma_fw_qp *fw_qp;
 	int n_crypto_ctx;
 	int crypto_place;

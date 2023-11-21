@@ -1635,7 +1635,6 @@ struct snap_dma_q *snap_dma_ep_create(struct ibv_pd *pd,
 		return NULL;
 
 	q->worker = attr->wk;
-	pthread_mutex_init(&q->lock, NULL);
 
 	rc = snap_create_sw_qp(q, pd, attr);
 	if (rc)
@@ -1741,7 +1740,6 @@ void snap_dma_ep_destroy(struct snap_dma_q *q)
 {
 	snap_destroy_io_ctx(q);
 	snap_destroy_sw_qp(q);
-	pthread_mutex_destroy(&q->lock);
 	if (q->worker)
 		snap_dma_worker_queue_put(q);
 	else

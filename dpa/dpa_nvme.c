@@ -156,7 +156,13 @@ int dpa_nvme_cq_query(struct snap_dpa_cmd *cmd)
 int dpa_nvme_cq_destroy(struct snap_dpa_cmd *cmd)
 {
 	struct dpa_nvme_cq *cq = get_nvme_cq();
+	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
+	struct snap_dpa_p2p_q *p2p_q = &rt_ctx->dpa_cmd_chan;
 
+	snap_dpa_p2p_send_flush(p2p_q);
+	p2p_q->dma_q->ops->progress_tx(p2p_q->dma_q, -1);
+
+	/* Once cq is in error state, there won't be any tx on the p2p queue */
 	cq->state = DPA_NVME_STATE_ERR;
 	return SNAP_DPA_RSP_OK;
 }

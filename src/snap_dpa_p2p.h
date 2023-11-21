@@ -59,6 +59,7 @@
  */
 enum {
 	SNAP_DPA_P2P_MSG_CR_UPDATE = 1,
+	SNAP_DPA_P2P_MSG_P2P_Q_FLUSH = 2,
 	/* VirtIO specific messages */
 	/* DPA->DPU */
 	SNAP_DPA_P2P_MSG_VQ_HEADS = 20,
@@ -173,4 +174,6 @@ int snap_dpa_p2p_send_sq_tail(struct snap_dpa_p2p_q *q, uint16_t sqid, uint16_t 
 		uint32_t shadow_sqes_mkey, uint32_t old_sq_tail, uint32_t depth);
 int snap_dpa_p2p_send_cq_head(struct snap_dpa_p2p_q *q, uint16_t cq_head);
 int snap_dpa_p2p_send_msix(struct snap_dpa_p2p_q *q, int credit);
+int snap_dpa_p2p_send_flush(struct snap_dpa_p2p_q *q);
+
 #endif
