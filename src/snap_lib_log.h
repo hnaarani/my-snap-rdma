@@ -42,8 +42,14 @@ void snap_lib_log(uint32_t level, uint32_t source, int line, const char *format,
 #define SNAP_LIB_LOG_ERR(format...) SNAP_LIB_LOG(ERROR, format)
 #define SNAP_LIB_LOG_WARN(format...) SNAP_LIB_LOG(WARNING, format)
 #define SNAP_LIB_LOG_INFO(format...) SNAP_LIB_LOG(INFO, format)
-#define SNAP_LIB_LOG_DBG(format...) SNAP_LIB_LOG(DEBUG, format)
-#define SNAP_LIB_LOG_TRACE(format...) SNAP_LIB_LOG(TRACE, format)
+#define SNAP_LIB_LOG_DBG(format...) \
+	do { if (SNAP_DEBUG) \
+		SNAP_LIB_LOG(DEBUG, format); \
+	} while (0)
+#define SNAP_LIB_LOG_TRACE(format...) \
+	do { if (SNAP_DEBUG) \
+		SNAP_LIB_LOG(TRACE, format); \
+	} while (0)
 
 void snap_lib_log_register(struct log_register_info_t *info);
 
