@@ -35,6 +35,11 @@
     } \
 } while (0)
 
+enum NVME_MP_PACKED nvme_status_code {
+	NVME_SC_CMD_ABORT_MISSING_FUSE = 0x000a,
+	NVME_SC_INVALID_NSID = 0x000b,
+};
+
 struct NVME_MP_PACKED nvme_cqe {
 	uint32_t	result;
 	uint32_t	rsvd;
@@ -68,6 +73,46 @@ static void dpa_write_rsp(enum dpa_nvme_mp_state state, uint32_t db_value)
 }
 
 static inline void
+nvme_mp_completion_msg_handle(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq, void *data)
+{
+	/* Copying the mp completion message (heap) to stack, constructing the
+	 * NVMe CQE on stack and then copying it to the shadow cq (heap) proved to
+	 * be 30% faster (on NVMe local single queue) than direct heap->heap copies.
+	 */
+	struct dpa_nvme_mp_completion mp_comp;
+
+	U64_ALIGNED_COPY(&mp_comp, data, sizeof(struct dpa_nvme_mp_completion));
+	/* Assumes that our CQ has 1 SQ */
+	sq->sq_head = (sq->sq_head + 1) % sq->queue_depth;
+
+	struct nvme_cqe cqe  = {
+		.result = mp_comp.result,
+		.sq_head = sq->sq_head,
+		.sq_id = sq->sqid,
+		.cid = mp_comp.cid,
+		.status = mp_comp.status | (cq->phase & 1),
+	};
+
+	U64_ALIGNED_COPY(&cq->shadow_cq[cq->cq_tail], &cqe, sizeof(struct nvme_cqe));
+
+	cq->cq_tail = (cq->cq_tail + 1) % cq->queue_depth;
+	cq->phase = cq->phase ^ (!cq->cq_tail);
+}
+
+static inline void
+dpa_nvme_mp_error_cqe_send(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq,
+		uint32_t sqe_idx, enum nvme_status_code sc)
+{
+	struct dpa_nvme_mp_completion mp_comp = {
+		.cid = sq->sqe_buffer[sqe_idx].cid,
+		.status = sc,
+		.result = 0,
+	};
+
+	nvme_mp_completion_msg_handle(cq, sq, &mp_comp);
+}
+
+static inline void
 dpa_nvme_mp_ns_next_rb_get(struct dpa_nvme_mp_ns *ns, uint32_t num_p2p_queues)
 {
 	do
@@ -87,8 +132,9 @@ dpa_nvme_mp_sqes_send(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq,
 	struct dpa_nvme_mp_rb *rb;
 	uint16_t num_elements;
 
-	if (!ns || ns->active_rb >= cq->num_p2p_queues) {
-		printf("TODO: Handle NVMe cmds with wrong nsid\n");
+	if (snap_unlikely(!ns || ns->active_rb >= cq->num_p2p_queues)) {
+		for (size_t i = start_idx; i != end_idx; i = (i + 1) % sq->queue_depth)
+			dpa_nvme_mp_error_cqe_send(cq, sq, i, NVME_SC_INVALID_NSID);
 		return;
 	}
 
@@ -125,6 +171,7 @@ dpa_nvme_mp_io_host2dpa_done(struct snap_dma_completion *comp, int status)
 	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
 	uint32_t prev_nsid, curr_nsid, i;
 
+	/* Split the sqe batch into sub-batches, where all sqes within a sub-batch share the same nsid. */
 	prev_nsid = sq->sqe_buffer[sq->arm_sq_tail].nsid;
 	for (i = sq->arm_sq_tail; i != sq->last_read_sq_tail; i = (i + 1) % sq->queue_depth) {
 		/* Recovery mark should go here */
@@ -473,33 +520,6 @@ static inline int process_commands(int *done)
 	return do_command(done);
 }
 
-static inline void
-nvme_mp_completion_msg_handle(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq, void *data)
-{
-	/* Copying the mp completion message (heap) to stack, constructing the
-	 * NVMe CQE on stack and then copying it to the shadow cq (heap) proved to
-	 * be 30% faster (on NVMe local single queue) than direct heap->heap copies.
-	 */
-	struct dpa_nvme_mp_completion mp_comp;
-
-	U64_ALIGNED_COPY(&mp_comp, data, sizeof(struct dpa_nvme_mp_completion));
-	/* Assumes that our CQ has 1 SQ */
-	sq->sq_head = (sq->sq_head + 1) & (sq->queue_depth - 1);
-
-	struct nvme_cqe cqe  = {
-		.result = mp_comp.result,
-		.sq_head = sq->sq_head,
-		.sq_id = sq->sqid,
-		.cid = mp_comp.cid,
-		.status = mp_comp.status | (cq->phase & 1),
-	};
-
-	U64_ALIGNED_COPY(&cq->shadow_cq[cq->cq_tail], &cqe, sizeof(struct nvme_cqe));
-
-	cq->cq_tail = (cq->cq_tail + 1) & (cq->queue_depth - 1);
-	cq->phase = cq->phase ^ (!cq->cq_tail);
-}
-
 static inline int
 nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq, struct snap_dma_q *q)
 {
@@ -521,15 +541,56 @@ nvme_mp_completions_poll(struct dpa_nvme_mp_cq *cq, struct dpa_nvme_mp_sq *sq, s
 	return count;
 }
 
-static inline void nvme_mp_progress()
+static inline void
+nvme_mp_cqes_handle(struct dpa_rt_context *rt_ctx, struct dpa_nvme_mp_cq *cq,
+		struct dpa_nvme_mp_sq *sq, struct snap_dma_q *dma_q)
 {
-	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
-	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
-	struct snap_dma_q *dma_q = cq->p2p_queues[0].dma_q;
-	struct dpa_nvme_mp_sq *sq;
-	uint64_t sq_tail;
 	int num_comps = 0;
 	uint16_t old_cq_tail;
+
+	dpa_duar_arm(cq->cq_head_duar_id, rt_ctx->db_cq.cq_num);
+	cq->host_cq_head = dpa_ctx_read(cq->cq_head_duar_id);
+	old_cq_tail = cq->cq_tail;
+
+	/* TODO_Itay: to be replaced by shared rx cq */
+	for (int i = 0; i < cq->num_p2p_queues; i++)
+		num_comps += nvme_mp_completions_poll(cq, sq, cq->p2p_queues[i].dma_q);
+
+	if (num_comps) {
+		cq->comp.count += snap_dpa_dma_cyclic_buffer_write(dma_q, cq->shadow_cq,
+				snap_dma_q_dpa_mkey(dma_q), cq->host_cq_addr, cq->host_mkey,
+				old_cq_tail, old_cq_tail, num_comps, sizeof(struct nvme_cqe),
+				cq->queue_depth, &cq->comp);
+		dma_q->ops->complete_tx(dma_q);
+	}
+}
+
+static inline void
+nvme_mp_sqes_handle(struct dpa_rt_context *rt_ctx, struct dpa_nvme_mp_cq *cq,
+		struct dpa_nvme_mp_sq *sq, struct snap_dma_q *dma_q)
+{
+	uint64_t sq_tail;
+
+	dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
+	sq_tail = dpa_ctx_read(sq->duar_id);
+
+	if (sq_tail != sq->last_read_sq_tail) {
+		sq->host2dpa_comp.count += snap_dpa_dma_cyclic_buffer_write(dma_q,
+				(void *) sq->host_sq_addr, sq->host_mkey, (uint64_t) sq->sqe_buffer,
+				snap_dma_q_dpa_mkey(dma_q), sq->last_read_sq_tail, sq->last_read_sq_tail,
+				(sq_tail - sq->last_read_sq_tail) % sq->queue_depth,
+				SNAP_DPA_NVME_SQE_SIZE, sq->queue_depth, &sq->host2dpa_comp);
+		sq->last_read_sq_tail = sq_tail;
+		dma_q->ops->complete_tx(dma_q);
+	}
+}
+
+static inline void nvme_mp_progress()
+{
+	struct dpa_rt_context *rt_ctx = dpa_rt_ctx();
+	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
+	struct snap_dma_q *dma_q = cq->p2p_queues[0].dma_q;
+	struct dpa_nvme_mp_sq *sq;
 
 	if (snap_unlikely(cq->state != DPA_NVME_MP_STATE_RDY))
 		return;
@@ -539,32 +600,8 @@ static inline void nvme_mp_progress()
 			continue;
 
 		dma_q->ops->progress_tx(dma_q, -1);
-
-		dpa_duar_arm(cq->cq_head_duar_id, rt_ctx->db_cq.cq_num);
-		cq->host_cq_head = dpa_ctx_read(cq->cq_head_duar_id);
-		old_cq_tail = cq->cq_tail;
-
-		/* TODO_Itay: to be replaced by shared rx cq */
-		for (int i = 0; i < cq->num_p2p_queues; i++)
-			num_comps += nvme_mp_completions_poll(cq, sq, cq->p2p_queues[i].dma_q);
-
-		if (num_comps) {
-			cq->comp.count += snap_dpa_dma_cyclic_buffer_write(dma_q, cq->shadow_cq, snap_dma_q_dpa_mkey(dma_q),
-					cq->host_cq_addr, cq->host_mkey, old_cq_tail, old_cq_tail,
-					num_comps, sizeof(struct nvme_cqe), cq->queue_depth, &cq->comp);
-			dma_q->ops->complete_tx(dma_q);
-		}
-
-		dpa_duar_arm(sq->duar_id, rt_ctx->db_cq.cq_num);
-		sq_tail = dpa_ctx_read(sq->duar_id);
-		if (sq_tail != sq->last_read_sq_tail) {
-			sq->host2dpa_comp.count += snap_dpa_dma_cyclic_buffer_write(dma_q, (void *) sq->host_sq_addr,
-					sq->host_mkey, (uint64_t) sq->sqe_buffer, snap_dma_q_dpa_mkey(dma_q), sq->last_read_sq_tail,
-					sq->last_read_sq_tail, (sq_tail - sq->last_read_sq_tail) & (sq->queue_depth - 1),
-					SNAP_DPA_NVME_SQE_SIZE, sq->queue_depth, &sq->host2dpa_comp);
-			sq->last_read_sq_tail = sq_tail;
-			dma_q->ops->complete_tx(dma_q);
-		}
+		nvme_mp_cqes_handle(rt_ctx, cq, sq, dma_q);
+		nvme_mp_sqes_handle(rt_ctx, cq, sq, dma_q);
 	}
 }
 
