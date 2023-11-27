@@ -437,7 +437,7 @@ static int snap_virtio_ctrl_change_status(struct snap_virtio_ctrl *ctrl)
 		 * Be more graceful and try to recover for 1 second.
 		 */
 
-		/* TODO: do this part asynchrounously */
+		/* TODO: do this part asynchronously */
 		for (i = 0; i < 100; i++) {
 			usleep(10000);
 			ctrl->sdev = snap_open_device(sctx, &ctrl->sdev_attr);
@@ -945,7 +945,7 @@ void snap_virtio_ctrl_progress_unlock(struct snap_virtio_ctrl *ctrl)
  * The function does not progress io.
  *
  * snap_virtio_ctrl_pg_io_progress() or snap_virtio_ctrl_io_progress() should
- * be called to progress virtio queueus.
+ * be called to progress virtio queues.
  */
 void snap_virtio_ctrl_progress(struct snap_virtio_ctrl *ctrl)
 {
@@ -953,7 +953,7 @@ void snap_virtio_ctrl_progress(struct snap_virtio_ctrl *ctrl)
 
 	snap_virtio_ctrl_progress_lock(ctrl);
 
-	/* TODO: do flr asynchrounously, in order not to block progress
+	/* TODO: do flr asynchronously, in order not to block progress
 	 * when we have many VFs
 	 *
 	 * If flr was not finished we can only:
@@ -2312,7 +2312,7 @@ static struct snap_migration_ops snap_virtio_ctrl_migration_ops = {
 };
 
 /**
- * snap_virtio_ctrl_lm_enable() - enable virtio controlelr live migration
+ * snap_virtio_ctrl_lm_enable() - enable virtio controller live migration
  * @ctrl:   virtio controller
  * @name:   live migration channel name
  *

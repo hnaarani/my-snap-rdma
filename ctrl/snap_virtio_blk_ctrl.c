@@ -1021,7 +1021,7 @@ static void snap_virtio_blk_adm_cmd_process(struct snap_virtio_ctrl *vctrl,
 {
 	struct snap_virtio_adm_cmd_hdr_v1_2 hdr = snap_vaq_cmd_layout_get(cmd)->hdr.hdr_v1_2;
 
-	SNAP_LIB_LOG_DBG("Proceessing adm cmd class %d cmd %d", hdr.cmd_class, hdr.command);
+	SNAP_LIB_LOG_DBG("Processing adm cmd class %d cmd %d", hdr.cmd_class, hdr.command);
 	switch (hdr.cmd_class) {
 	case SNAP_VQ_ADM_MIG_CTRL:
 		switch (hdr.command) {
