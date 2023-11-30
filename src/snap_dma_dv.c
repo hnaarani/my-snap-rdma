@@ -444,7 +444,7 @@ static int dv_dma_q_writev2v(struct snap_dma_q *q,
 		return -EINVAL;
 
 	if (snap_unlikely(!qp_can_tx(q, *n_bb))) {
-		SNAP_LIB_LOG_ERR("%s: qp out of tx_available resource", __func__);
+		SNAP_LIB_LOG_DBG("%s: qp out of tx_available resource", __func__);
 		return -EAGAIN;
 	}
 
