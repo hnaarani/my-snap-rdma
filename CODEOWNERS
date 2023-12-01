@@ -8,7 +8,7 @@
 # modifies specific files, only its specific owner will will be requested
 # for a review.
 
-/.ci/   @andrii-holovchenko @umanskymax
+/.ci/   @andrii-holovchenko @umanskymax @valintinr @isdrk
 
 *net*   @BodongWang
 
