@@ -13,6 +13,8 @@ failFast: false
 kubernetes:
   cloud: swx-k8s-spray
   namespace: snap-ci
+  runAsUser: "6213"
+  runAsGroup: "11429"
 
 volumes:
   - {mountPath: /hpc/local, hostPath: /hpc/local}
@@ -21,12 +23,16 @@ volumes:
   - {mountPath: /auto/sw/work, hostPath: /auto/sw/work}
   - {mountPath: /.autodirect/sw/release/mlnx_ofed, hostPath: /.autodirect/sw/release/mlnx_ofed}
   - {mountPath: /auto/sw/release/sw_acceleration, hostPath: /auto/sw/release/sw_acceleration}
+  - {mountPath: /var/home/swx-jenkins/.ssh, hostPath: /labhome/swx-jenkins/.ssh}
+  - {mountPath: /root/.docker, hostPath: /auto/mtrswgwork/swx-jenkins/.docker}
 
 env:
   MOFED_VER: 23.07-0.5.0.0
+  DOCA_VER: 2.5
   CCACHE_ENABLE: 'true'
   CCACHE_DIR: '/auto/sw/work/swx_devops/ccache/$job'
   CCACHE_TEMPDIR: '/tmp'
+  docker_config: "/auto/mtrswgwork/swx-jenkins/.docker"
 
 runs_on_dockers:
   - {file: '.ci/Dockerfile.centos.stream8', name: 'centos_stream8', arch: 'x86_64', tag: '$MOFED_VER', build_args: '--build-arg MOFED_VER=$MOFED_VER'}
@@ -44,6 +50,7 @@ runs_on_dockers:
   - {file: '.ci/Dockerfile.ubuntu2204', name: 'toolbox', category: 'tool', arch: 'x86_64', tag: '$MOFED_VER', build_args: '--build-arg MOFED_VER=$MOFED_VER'}
   - {file: '.ci/Dockerfile.openeuler.20.03', name: 'openeuler2003', arch: 'aarch64', tag: '$MOFED_VER', build_args: '--build-arg MOFED_VER=$MOFED_VER'}
   - {url: '$registry_host/toolbox/ngci-centos:7.9.2009.2', name: 'blackduck', category: 'tool', arch: 'x86_64'}
+  - {file: '.ci/Dockerfile.doca', name: 'doca_toolbox', category: 'tool', arch: 'x86_64', tag: '$DOCA_VER', build_args: '--build-arg DOCA_VER=$DOCA_VER'}
 
 steps:
 
@@ -100,14 +107,35 @@ steps:
     run: |
       ./autogen.sh
       ./configure
-      make -j 3 all
-      make install
+      make -j 4 all
+      sudo make install
 
-  - name: Coverity scan
+  - name: Coverity mlnx-libsnap
     containerSelector: "{name: 'toolbox'}"
-    archiveArtifacts: 'cov_build/html/**/*'
     run: |
-      .ci/cov.sh
+      .ci/coverity.sh --pre_script './autogen.sh; ./configure' \
+                      --build_script 'make -j 4' \
+                      --ignore_files 'tests' \
+                      --check \
+                      --verbose
+    publishHTML:
+      reportDir: 'cov_build/html'
+      reportFiles: 'index.html'
+      reportName: 'Coverity Report mlnx-libsnap'
+
+  - name: Coverity core
+    containerSelector: "{name: 'doca_toolbox'}"
+    run: |
+      meson subprojects download
+      .ci/coverity.sh --pre_script 'meson setup build_coverity' \
+                      --build_script 'meson compile --jobs 4 -C build_coverity' \
+                      --ignore_files 'subprojects/flexio subprojects/libfiu /tmp' \
+                      --defects-expected 2 \
+                      --verbose
+    publishHTML:
+      reportDir: 'cov_build/html'
+      reportFiles: 'index.html'
+      reportName: 'Coverity Report core'
 
   - name: Blackduck scan source
     enable: false

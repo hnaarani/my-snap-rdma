@@ -207,7 +207,6 @@ if [[ -f /etc/debian_version ]]; then
         upload_deb_urm
     elif [ $1 == "nexus" ]; then
         repo_name="${repo_name}-${codename}-apt"
-        apt update && apt install python3-requests -y
 
         # Create APT repository
         ${bd}/manage_repo.py apt --name ${repo_name} \
@@ -231,7 +230,6 @@ elif [[ -f /etc/redhat-release ]] || \
         REPO_URL="https://urm.nvidia.com/artifactory/sw-nbu-swx-ci-rpm-local"
         upload_rpm_urm
     elif [ $1 == "nexus" ]; then
-        yum install python3-requests -y || yum install python36-requests -y
         repo_name="${repo_name}-yum"
 
         # Create YUM repository

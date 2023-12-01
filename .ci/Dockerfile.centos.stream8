@@ -41,7 +41,7 @@ RUN yum install -y \
     environment-modules \
     libusbx fuse-libs \
     chrpath flex graphviz tcl bison tk swig \
-    python3-pip \
+    python3-pip python3-requests \
     numactl-devel openssl-devel libaio-devel libaio \
     wget \
     ccache
@@ -54,9 +54,6 @@ enabled=1\n\
 gpgcheck=0" > /etc/yum.repos.d/mellanox_mlnx_ofed.repo; \
     yum install -y mlnx-ofed-basic-user-only
 
-RUN pip3 -qq install gitlint
-RUN cd /usr/local/bin/ && wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl && chmod +x checkpatch.pl
-RUN cd /usr/local/bin/ && wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/spelling.txt
 RUN echo "${_LOGIN} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 RUN mkdir -p $_HOME

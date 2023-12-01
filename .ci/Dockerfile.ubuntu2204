@@ -35,14 +35,14 @@ RUN apt-get update && \
         ethtool libnl-route-3-dev python3 libnl-3-dev lsof pciutils kmod pkg-config libmnl0 \
         chrpath flex gfortran graphviz dpatch libgfortran5 tcl bison tk swig \
         ccache \
-        python3-pip \
+        python3-pip python3-requests \
         linux-headers-generic
 
 RUN wget -qO - https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox | \
     sudo apt-key add - && \
-    cd /etc/apt/sources.list.d && \
-    echo "deb [trusted=yes] http://webrepo.mtr.labs.mlnx/mswg/release/MLNX_OFED/MLNX_OFED_LINUX-${MOFED_VER}/MLNX_OFED_LINUX-${MOFED_VER}-ubuntu22.04-$(dpkg-architecture -qDEB_HOST_GNU_CPU)/DEBS/ ./" > /etc/apt/sources.list.d/mellanox_mlnx_ofed.list
-RUN apt update && KVERSION=$(ls /lib/modules) apt install -y mlnx-ofed-basic-user-only
+    echo "deb [trusted=yes] http://webrepo.mtr.labs.mlnx/mswg/release/MLNX_OFED/MLNX_OFED_LINUX-${MOFED_VER}/MLNX_OFED_LINUX-${MOFED_VER}-ubuntu22.04-$(dpkg-architecture -qDEB_HOST_GNU_CPU)/DEBS/ ./" > /etc/apt/sources.list.d/mellanox_mlnx_ofed.list && \
+    apt update && KVERSION=$(ls /lib/modules) apt install -y mlnx-ofed-basic-user-only
+
 RUN pip3 -qq install gitlint codespell
 RUN cd /usr/local/bin/ && wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl && chmod +x checkpatch.pl
 RUN cd /usr/local/bin/ && wget https://raw.githubusercontent.com/torvalds/linux/master/scripts/spelling.txt

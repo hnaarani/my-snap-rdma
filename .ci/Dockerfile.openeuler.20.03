@@ -45,10 +45,13 @@ RUN yum install -y \
     environment-modules \
     libusbx fuse-libs \
     chrpath flex graphviz tcl bison tk swig \
-    python3-pip \
+    python3-pip python3-requests \
     numactl-devel openssl-devel libaio-devel libaio \
     wget \
     bc
+
+# Fix priveleges for non-root user
+RUN chmod +rx /usr/bin/eu-*
 
 RUN set -eux; \
     echo -e "[mlnx_ofed]\n\

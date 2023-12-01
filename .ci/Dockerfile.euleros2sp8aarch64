@@ -36,9 +36,12 @@ RUN yum install -y \
     environment-modules \
     libusbx fuse-libs \
     chrpath flex graphviz tcl bison tk swig \
-    python3-pip \
+    python3-pip python3-requests \
     numactl-devel openssl-devel libaio-devel libaio \
     wget
+
+# Fix priveleges for non-root user
+RUN chmod +rx /usr/bin/eu-*
 
 RUN echo "${_LOGIN} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 RUN mkdir -p $_HOME

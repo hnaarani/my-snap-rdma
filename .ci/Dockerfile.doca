@@ -1,0 +1,31 @@
+ARG DOCA_VER=2.5
+FROM nvcr.io/nvstaging/doca/doca:latest-${DOCA_VER}-devel-ubuntu22.04
+ARG _UID=6213
+ARG _GID=11429
+ARG _LOGIN=swx-jenkins
+ARG _HOME=/var/home/$_LOGIN
+
+### ENVIRONMENT VARIABLES ###
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+ENV GIT_COMMITTER_NAME=swx-storage
+ENV GIT_COMMITTER_EMAIL=swx-storage@nvidia.com
+
+### GENERAL PACKAGES
+RUN apt update && \
+    apt install -y \
+        openssh-client \
+        gcc-9 && \
+    apt clean
+
+### ADD SERVICE USER ###
+RUN echo "${_LOGIN} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    mkdir -p $_HOME && \
+    groupadd -f -g "$_GID" "$_LOGIN" && \
+    useradd -u "$_UID" -g "$_GID" -s /bin/bash -m -d ${_HOME} "$_LOGIN" && \
+    chown $_LOGIN $_HOME
+
+### POST STEPS ###
+USER "${_LOGIN}"
+SHELL [ "/bin/bash", "-c" ]
+ENTRYPOINT [ "/bin/bash", "--login", "--rcfile", "/etc/bashrc", "-c" ]
