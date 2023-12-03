@@ -114,6 +114,32 @@ struct snap_dma_completion {
 	int                count;
 };
 
+enum {
+	SNAP_DMA_Q_ERR_HANDLED = 0,
+	SNAP_DMA_Q_ERR_DEFAULT = 1
+};
+
+/**
+ * typedef snap_dma_dv_err_cb_t - Custom error handler callback
+ * @q:        dma q on which error happened
+ * @err_cqe:  cqe with error
+ *
+ * The callback is called when QP has encountered an error on the send side qp
+ * operation. For example, post send, rdma read or write.
+ *
+ * The purpose of the callback is to allow transparent QP recovery and custom
+ * error handling. The recovery is done by calling @snap_dma_q_migrate() which
+ * will resubmit 'good' operations to the new dma q.
+ *
+ * The callback will not be invoked for 'verbs' dma qps.
+ *
+ * Return:
+ *  - SNAP_DMA_Q_ERR_HANDLED error was handled in the callback. If an operation has
+ *  a completion, the completion callback will not be called.
+ *  - SNAP_DMA_Q_ERR_DEFAULT normal error handling is done.
+ */
+typedef int (*snap_dma_dv_err_cb_t)(struct snap_dma_q *q, struct mlx5_cqe64 *err_cqe);
+
 struct mlx5_dma_opaque;
 
 struct snap_rx_completion {
@@ -349,6 +375,7 @@ struct snap_dma_q {
 	struct snap_dma_fw_qp *fw_qp;
 	int n_crypto_ctx;
 	int crypto_place;
+	snap_dma_dv_err_cb_t dv_err_cb;
 };
 
 enum {
@@ -581,6 +608,23 @@ int snap_dma_q_send(struct snap_dma_q *q, void *in_buf, size_t in_len,
 int snap_dma_q_post_recv(struct snap_dma_q *q);
 
 int snap_dma_q_modify_to_err_state(struct snap_dma_q *q);
+
+enum {
+	SNAP_DMA_Q_MIGR_RKEY_RETRY,   /* resumbit all operations as is */
+	SNAP_DMA_Q_MIGR_RKEY_DISCARD, /* discard all operations with the bad rkey */
+	SNAP_DMA_Q_MIGR_RKEY_FIX      /* replace bad rkey with good rkey */
+};
+
+struct snap_dma_q_migrate_attr {
+	uint16_t start_pi;        /* resubmit operations starting with this produce index */
+	uint16_t rkey_policy;     /* how to adjust rkey in the remote data segment */
+	uint32_t fixed_rkey;      /* replacement rkey */
+};
+
+int snap_dma_q_migrate(struct snap_dma_q *orig_q, struct snap_dma_q *new_q, const struct snap_dma_q_migrate_attr *attr);
+int snap_dma_ep_reconnect(struct snap_dma_q *q1, struct snap_dma_q *q2);
+
+void snap_dma_q_dv_err_cb_set(struct snap_dma_q *q, snap_dma_dv_err_cb_t cb);
 
 struct snap_dma_ep_copy_cmd {
 	struct snap_dpa_cmd base;
