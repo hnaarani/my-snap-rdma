@@ -756,26 +756,38 @@ static inline int dv_dma_q_progress_tx(struct snap_dma_q *q, int max_tx_comp)
 		if (!cqe[n])
 			break;
 
-		if (snap_unlikely(mlx5dv_get_cqe_opcode(cqe[n]) != MLX5_CQE_REQ))
-			snap_dv_cqe_err(cqe[n]);
+		if (snap_unlikely(mlx5dv_get_cqe_opcode(cqe[n]) != MLX5_CQE_REQ)) {
+
+			if (q->dv_err_cb) {
+				int ret = q->dv_err_cb(q, cqe[n]);
+
+				if (ret == SNAP_DMA_Q_ERR_HANDLED) {
+					/* only need to update available, completion
+					 * itself is processed by the error handler
+					 */
+					(void)dv_dma_q_get_comp(q, cqe[n]);
+					continue;
+				} else
+					snap_dv_cqe_err(cqe[n]);
+			} else
+				snap_dv_cqe_err(cqe[n]);
+		}
 
 		comp[n] = dv_dma_q_get_comp(q, cqe[n]);
 		n++;
 	} while (n < max_tx_comp_value);
 
 	for (i = 0; i < n; i++) {
-		opcode = mlx5dv_get_cqe_opcode(cqe[i]);
+		if (comp[i] && --comp[i]->count == 0) {
+			if (snap_unlikely(mlx5dv_get_cqe_opcode(cqe[i]) != MLX5_CQE_REQ)) {
+				struct mlx5_err_cqe *ecqe = (struct mlx5_err_cqe *)cqe[i];
 
-		/*
-		 * opcode is good anyway, no need to check return status,
-		 * but coverity doesn't recognize it
-		 */
-#ifdef __COVERITY__
-		if (opcode != MLX5_CQE_REQ)
-			continue;
-#endif
-		if (comp[i] && --comp[i]->count == 0)
+				opcode = ecqe->syndrome;
+			} else
+				opcode = 0;
+
 			comp[i]->func(comp[i], opcode);
+		}
 	}
 
 out:

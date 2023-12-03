@@ -1879,3 +1879,205 @@ int snap_dma_worker_progress_tx(struct snap_dma_worker *wk)
 {
 	return dv_worker_progress_tx(wk);
 }
+
+void snap_dma_q_dv_err_cb_set(struct snap_dma_q *q, snap_dma_dv_err_cb_t cb)
+{
+	q->dv_err_cb = cb;
+}
+
+/**
+ * snap_dma_q_migrate() - Resubmit WQEs from the old qp to the new one
+ * @orig_q:       original qp
+ * @new_q:        new qp to post WQEs
+ * @attr:         various attributes that control how WQEs are resubmitted
+ *
+ * The purpose of the function is to allow fast error recovery when one of the submitted
+ * WQEs executed with error because of a bad remote memory key. For example QP is used
+ * to multiplex requests to several VMs and one VM is suddenly killed.
+ *
+ * However the function tries to be as generic as possible and can be used for other
+ * purposes. E.x. duplicate WQEs to the backup dma q.
+ *
+ * The function will copy all WQEs starting from the @attr.start_pi index to the @new_q.
+ *
+ * If @attr.rkey_policy is SNAP_DMA_Q_MIGR_RKEY_DISCARD the function will assume
+ * that the first WQE caused remote access error and it will not post WQEs with
+ * the same bad rkey. If WQE with the 'bad rkey' has user completion it will be
+ * invoked with the 'remote access' error.
+ *
+ * If @attr.rkey_policy is SNAP_DMA_Q_MIGR_RKEY_FIX the function will repost
+ * everything. Rkey in the first WQE considered 'bad' and it will be replaced
+ * with the @attr.fixed_rkey.
+ *
+ * If @attr.rkey_policy is SNAP_DMA_Q_MIGR_RKEY_RETRY the function will repost
+ * everything.
+ *
+ * All user completions will be also copied to the @new_qp.
+ *
+ * The function will use doorbell trigger mode of the @new_qp.
+ *
+ * There is a number of limitations:
+ * - VERBs are not supported
+ * - only one sided operations are supported:
+ *   RDMA read, write and write short
+ *   GGA read, write
+ *   UMR operations
+ *   compound operations like v2v, writec and v2vc
+ *
+ * Return:
+ * 0 on success
+ * -1 on error
+ */
+int snap_dma_q_migrate(struct snap_dma_q *orig_q, struct snap_dma_q *new_q, const struct snap_dma_q_migrate_attr *attr)
+{
+	/* TODO: this function can also run on DPA, check */
+	uint32_t bad_rkey = 0xffff;
+	struct snap_dv_qp *dvq_orig = &orig_q->sw_qp.dv_qp;
+	struct snap_dv_qp *dvq_new = &new_q->sw_qp.dv_qp;
+	uint16_t end_pi = dvq_orig->hw_qp.sq.pi;
+	uint16_t pi;
+	bool rkey_found;
+
+	SNAP_LIB_LOG_DBG("QPN:0x%x -> 0x%x copy from pi_idx=%d to pi_idx=%d",
+			dvq_orig->hw_qp.qp_num,
+			dvq_new->hw_qp.qp_num,
+			attr->start_pi & (dvq_orig->hw_qp.sq.wqe_cnt - 1),
+			end_pi & (dvq_orig->hw_qp.sq.wqe_cnt - 1));
+	SNAP_LIB_LOG_DBG("Dest idx=%d", dvq_new->hw_qp.sq.pi & (dvq_new->hw_qp.sq.wqe_cnt - 1));
+
+	for (pi = attr->start_pi; pi != end_pi;) {
+		struct mlx5_wqe_ctrl_seg *ctrl = snap_dv_get_wqe_bb_by_pi(dvq_orig, pi);
+		uint8_t opcode = be32toh(ctrl->opmod_idx_opcode) & 0xff;
+		uint8_t opmod = (be32toh(ctrl->opmod_idx_opcode) >> 24) & 0xff;
+		uint8_t ds = be32toh(ctrl->qpn_ds) & 0xff;
+		int n_bb = round_up(16*ds, MLX5_SEND_WQE_BB);
+		struct mlx5_wqe_raddr_seg *rseg = NULL;
+		uint32_t rkey;
+		int i;
+
+		SNAP_LIB_LOG_DBG("ctrl_seg: opmod_idx_opcode 0x%x qpn_dps 0x%x", be32toh(ctrl->opmod_idx_opcode), be32toh(ctrl->qpn_ds));
+		SNAP_LIB_LOG_DBG("opcode: %d wqe_size: %d n_bb: %d", opcode, 16*ds, n_bb);
+
+		if (!qp_can_tx(new_q, n_bb)) {
+			/* TODO: partial migration */
+			SNAP_LIB_LOG_ERR("dest qp 0x%x is full", dvq_new->hw_qp.qp_num);
+			return -EAGAIN;
+		}
+
+		switch (opcode) {
+		case MLX5_OPCODE_RDMA_WRITE:
+		case MLX5_OPCODE_RDMA_READ:
+			rseg = (struct mlx5_wqe_raddr_seg *)(ctrl + 1);
+			rkey = be32toh(rseg->rkey);
+
+			if (pi == attr->start_pi) {
+				bad_rkey = rkey;
+				SNAP_LIB_LOG_DBG("First rkey is 0x%x", rkey);
+				rkey_found = true;
+			}
+			break;
+		default:
+			SNAP_LIB_LOG_ERR("qp 0x%x cannot migrate opcode %d", dvq_orig->hw_qp.qp_num, opcode);
+			return -ENOTSUP;
+		}
+
+		/* get completion */
+		uint16_t comp_idx = pi & (dvq_orig->hw_qp.sq.wqe_cnt - 1);
+		struct snap_dma_completion *comp = dvq_orig->comps[comp_idx].comp;
+
+		if (attr->rkey_policy == SNAP_DMA_Q_MIGR_RKEY_DISCARD) {
+			if (rkey_found && bad_rkey == rkey) {
+				SNAP_LIB_LOG_DBG("Skipping rkey 0x%x", rkey);
+				pi += n_bb;
+				if (comp && --comp->count == 0)
+					comp->func(comp, MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR);
+				continue;
+			}
+		} else if (attr->rkey_policy == SNAP_DMA_Q_MIGR_RKEY_FIX) {
+			if (rkey_found && bad_rkey == rkey) {
+				SNAP_LIB_LOG_DBG("Fixing 0x%x -> 0x%x", rkey, attr->fixed_rkey);
+				rseg->rkey = htobe32(attr->fixed_rkey);
+			}
+		}
+
+		/* repost to the new qp */
+		for (i = 0; i < n_bb; i++) {
+			void *src, *dst;
+
+			src = snap_dv_get_wqe_bb_by_pi(dvq_orig, pi + i);
+			dst = snap_dv_get_wqe_bb_by_pi(dvq_new, dvq_new->hw_qp.sq.pi + i);
+			memcpy(dst, src, MLX5_SEND_WQE_BB);
+		}
+
+		/* adjust control segment */
+		struct mlx5_wqe_ctrl_seg *dst_ctrl = snap_dv_get_wqe_bb(dvq_new);
+
+		dst_ctrl->opmod_idx_opcode = htobe32(((uint32_t)opmod << 24) |
+				((uint32_t)dvq_new->hw_qp.sq.pi << 8) | opcode);
+		dst_ctrl->qpn_ds = htobe32((dvq_new->hw_qp.qp_num << 8) | ds);
+
+		comp_idx = dvq_new->hw_qp.sq.pi & (dvq_new->hw_qp.sq.wqe_cnt - 1);
+
+		/* submit to the qp */
+		dvq_new->hw_qp.sq.pi += n_bb - 1;
+		snap_dv_wqe_submit(dvq_new, dst_ctrl);
+
+		snap_dv_set_comp(dvq_new, comp_idx, comp, ctrl->fm_ce_se, n_bb);
+		new_q->tx_available -= n_bb;
+		pi += n_bb;
+	}
+	return 0;
+}
+
+/**
+ * snap_dma_ep_reconnect() - Recycle endpoints in the error state
+ * @q1: snap_dma_q endpoint
+ * @q2: snap_dma_q endpoint
+ *
+ * The function will move @q1 and @q2 from the error state back to the
+ * connected (RTS) state. This is going to be faster then creating two
+ * new endpoint and connecting them.
+ *
+ * Return:
+ * 0 on success
+ * -errno on error
+ */
+int snap_dma_ep_reconnect(struct snap_dma_q *q1, struct snap_dma_q *q2)
+{
+	uint8_t in[DEVX_ST_SZ_BYTES(2rst_qp_in)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(2rst_qp_out)] = {0};
+	struct snap_dv_qp *dvq1 = &q1->sw_qp.dv_qp;
+	struct snap_dv_qp *dvq2 = &q2->sw_qp.dv_qp;
+	int ret;
+
+	/* reset qp */
+	if (dvq1->hw_qp.rq.wqe_cnt || dvq2->hw_qp.rq.wqe_cnt) {
+		SNAP_LIB_LOG_ERR("Qps with non zero RQ cannot be reconnected");
+		return -ENOTSUP;
+	}
+
+	dvq1->hw_qp.sq.pi = 0;
+	dvq2->hw_qp.sq.pi = 0;
+	/* TODO: rq ??? */
+	q1->tx_available = snap_dma_q_dv_get_tx_avail_max(q1);
+	q2->tx_available = snap_dma_q_dv_get_tx_avail_max(q2);
+
+	/* It looks like RC qp drops directly into the error state,
+	 * skipping SQERR state. It means we cannot move back to RTS with
+	 * the one syscall
+	 */
+	DEVX_SET(2rst_qp_in, in, opcode, MLX5_CMD_OP_2RST_QP);
+	DEVX_SET(2rst_qp_in, in, qpn, snap_qp_get_qpnum(q1->sw_qp.qp));
+
+	ret = snap_qp_modify(q1->sw_qp.qp, in, sizeof(in), out, sizeof(out));
+	if (ret)
+		SNAP_LIB_LOG_ERR("failed to modify qp 0x%x to RST with errno = %d",  snap_qp_get_qpnum(q1->sw_qp.qp), ret);
+
+	DEVX_SET(2rst_qp_in, in, qpn, snap_qp_get_qpnum(q2->sw_qp.qp));
+	ret = snap_qp_modify(q2->sw_qp.qp, in, sizeof(in), out, sizeof(out));
+	if (ret)
+		SNAP_LIB_LOG_ERR("failed to modify qp 0x%x to rst with errno = %d",  snap_qp_get_qpnum(q2->sw_qp.qp), ret);
+
+	/* can skip port check because we already know that 4k mtu and force loopback are ok */
+	return snap_activate_loop_2_qp(&q1->sw_qp, &q2->sw_qp, IBV_MTU_4096, true);
+}

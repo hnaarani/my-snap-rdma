@@ -97,6 +97,12 @@ static inline void *snap_dv_get_wqe_bb(struct snap_dv_qp *dv_qp)
 	       MLX5_SEND_WQE_BB;
 }
 
+static inline void *snap_dv_get_wqe_bb_by_pi(struct snap_dv_qp *dv_qp, uint16_t pi)
+{
+	return (void *)dv_qp->hw_qp.sq.addr + (pi & (dv_qp->hw_qp.sq.wqe_cnt - 1)) *
+	       MLX5_SEND_WQE_BB;
+}
+
 static inline void
 snap_set_ctrl_seg(struct mlx5_wqe_ctrl_seg *ctrl, uint16_t pi,
 			 uint8_t opcode, uint8_t opmod, uint32_t qp_num,
