@@ -2268,3 +2268,357 @@ INSTANTIATE_TEST_CASE_P(
 		SnapCryptoTest,
 		::testing::Values(0, 1));
 
+class SnapQpRecoveryTest : public SnapDmaTest {
+
+	virtual void SetUp();
+	virtual void TearDown();
+
+	public:
+	const static int N_EPS = 2;
+	struct snap_dma_q *m_dummy_q[N_EPS];
+	struct snap_dma_q *m_dma_q[N_EPS];
+
+	uint32_t get_fixed_rkey() { return m_rmr->lkey; }
+};
+
+void SnapQpRecoveryTest::SetUp() {
+	int ret;
+
+	SnapDmaTest::SetUp();
+
+	for (int i = 0; i < N_EPS; i++) {
+		/* create endpoint */
+		m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
+		m_dma_q_attr.sw_use_devx = true;
+		m_dma_q_attr.tx_qsize = 1024;
+		m_dma_q_attr.tx_elem_size = 64;
+		m_dma_q_attr.rx_qsize = 0;
+
+		m_dma_q[i] = snap_dma_ep_create(m_pd, &m_dma_q_attr);
+		ASSERT_TRUE(m_dma_q[i]);
+
+		/* create dummy qp */
+		m_dma_q_attr.mode = SNAP_DMA_Q_MODE_DV;
+		m_dma_q_attr.sw_use_devx = true;
+		m_dma_q_attr.tx_qsize = 0;
+		m_dma_q_attr.rx_qsize = 0;
+
+		m_dummy_q[i] = snap_dma_ep_create(m_pd, &m_dma_q_attr);
+		ASSERT_TRUE(m_dummy_q[i]);
+
+		ret = snap_dma_ep_connect(m_dma_q[i], m_dummy_q[i]);
+		ASSERT_EQ(0, ret);
+	}
+}
+
+void SnapQpRecoveryTest::TearDown() {
+
+	for (int i = 0; i < N_EPS; i++) {
+		snap_dma_ep_destroy(m_dma_q[i]);
+		snap_dma_ep_destroy(m_dummy_q[i]);
+	}
+	SnapDmaTest::TearDown();
+}
+
+static int g_err_count;
+static int g_err_flush_count;
+int dv_err_cb_normal(struct snap_dma_q *q, struct mlx5_cqe64 *cqe)
+{
+	struct mlx5_err_cqe *ecqe = (struct mlx5_err_cqe *)cqe;
+
+	if (ecqe->syndrome == MLX5_CQE_SYNDROME_WR_FLUSH_ERR)
+		g_err_flush_count++;
+	else {
+		EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, ecqe->syndrome);
+		printf("Error detected!!!\n");
+		g_err_count++;
+	}
+	return SNAP_DMA_Q_ERR_HANDLED;
+}
+
+TEST_F(SnapQpRecoveryTest, err_cb_handled_flush) {
+	/* post bad wqe */
+	int rc;
+	struct snap_dma_completion comp;
+
+	comp.func = dma_completion;
+	comp.count = 1;
+
+	g_err_count = g_err_flush_count = g_comp_count = 0;
+	snap_dma_q_dv_err_cb_set(m_dma_q[0], dv_err_cb_normal);
+
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, 0xdeadbeef /*m_rmr->lkey*/, &comp);
+	ASSERT_EQ(0, rc);
+	/* post good wqe */
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, m_rmr->lkey, NULL);
+	ASSERT_EQ(0, rc);
+
+	snap_dma_q_flush(m_dma_q[0]);
+
+	/* poll, check that we have 1 err + 2 flush */
+	EXPECT_EQ(1, g_err_count);
+	EXPECT_EQ(2, g_err_flush_count);
+	EXPECT_EQ(0, g_comp_count);
+	printf("g_last_comp_status is %d\n", g_last_comp_status);
+}
+
+TEST_F(SnapQpRecoveryTest, err_to_rts) {
+	/* post bad wqe */
+	int rc;
+	struct snap_dma_completion comp;
+
+	comp.func = dma_completion;
+	comp.count = 1;
+
+	printf("qpn1 0x%x, qpn2 0x%x\n",
+			snap_qp_get_qpnum(m_dma_q[0]->sw_qp.qp),
+			snap_qp_get_qpnum(m_dummy_q[1]->sw_qp.qp));
+
+	g_err_count = g_err_flush_count = g_comp_count = 0;
+	snap_dma_q_dv_err_cb_set(m_dma_q[0], dv_err_cb_normal);
+
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, 0xdeadbeef /*m_rmr->lkey*/, &comp);
+	ASSERT_EQ(0, rc);
+	snap_dma_q_flush(m_dma_q[0]);
+	rc = snap_dma_ep_reconnect(m_dma_q[0], m_dummy_q[0]);
+	ASSERT_EQ(0, rc);
+	printf("reconnect done\n");
+	/* post good wqe */
+	comp.count = 1;
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, m_rmr->lkey, &comp);
+	ASSERT_EQ(0, rc);
+	printf("posting read\n");
+	snap_dma_q_flush(m_dma_q[0]);
+	printf("flush done\n");
+
+	/* poll, check that we have 1 err + 1 good completion */
+	EXPECT_EQ(1, g_err_count);
+	EXPECT_EQ(0, g_err_flush_count);
+	EXPECT_EQ(1, g_comp_count);
+	EXPECT_EQ(0, g_last_comp_status);
+}
+
+TEST_F(SnapQpRecoveryTest, reconnect_bench) {
+	/* post bad wqe */
+	const int N = 100;
+	int rc;
+	struct timeval t_s, t_e, t_r;
+	double t;
+
+	gettimeofday(&t_s, 0);
+	for (int i = 0; i < N; i++) {
+		rc = snap_dma_ep_reconnect(m_dma_q[0], m_dummy_q[0]);
+		ASSERT_EQ(0, rc);
+	}
+	gettimeofday(&t_e, 0);
+	timersub(&t_e, &t_s, &t_r);
+	t = t_r.tv_sec + t_r.tv_usec/1000000.0;
+	printf("Reconnect latency %1.9lf seconds, %d iters\n", t/N, N);
+}
+
+TEST_F(SnapQpRecoveryTest, err_cb_handled_comp) {
+	/* post bad wqe */
+	int rc;
+	struct snap_dma_completion comp, comp2;
+
+	comp.func = dma_completion;
+	comp.count = 1;
+	comp2 = comp;
+
+	g_err_count = g_err_flush_count = g_comp_count = 0;
+	snap_dma_q_dv_err_cb_set(m_dma_q[0], dv_err_cb_normal);
+
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, 0xdeadbeef /*m_rmr->lkey*/, &comp);
+	ASSERT_EQ(0, rc);
+	/* post good wqe */
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, m_rmr->lkey, &comp2);
+	ASSERT_EQ(0, rc);
+
+	snap_dma_q_flush(m_dma_q[0]);
+
+	/* poll, check that we have 1 err + 1 flush because after comp2 there will
+	 * be no outstanding - no need to flush */
+	EXPECT_EQ(1, g_err_count);
+	EXPECT_EQ(1, g_err_flush_count);
+	/* comp2 should not be completed */
+	EXPECT_EQ(0, g_comp_count);
+	printf("g_last_comp_status is %d\n", g_last_comp_status);
+}
+
+static int dv_err_cb_migrate(struct snap_dma_q *q, struct mlx5_cqe64 *cqe)
+{
+	struct mlx5_err_cqe *ecqe = (struct mlx5_err_cqe *)cqe;
+
+	if (ecqe->syndrome == MLX5_CQE_SYNDROME_WR_FLUSH_ERR)
+		g_err_flush_count++;
+	else {
+		EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, ecqe->syndrome);
+		printf("Access error detected, migration started\n");
+		g_err_count++;
+		SnapQpRecoveryTest *t = (SnapQpRecoveryTest *)q->uctx;
+		const snap_dma_q_migrate_attr attr = {
+			.start_pi = be16toh(cqe->wqe_counter),
+			.rkey_policy = SNAP_DMA_Q_MIGR_RKEY_DISCARD,
+		};
+		int ret = snap_dma_q_migrate(q, t->m_dma_q[1], &attr);
+		EXPECT_EQ(0, ret);
+	}
+	return SNAP_DMA_Q_ERR_HANDLED;
+}
+
+static void good_dma_completion(struct snap_dma_completion *comp, int status)
+{
+	printf("good DMA completion\n");
+	g_comp_count++;
+	g_last_comp_status = status;
+	EXPECT_EQ(0, status);
+}
+
+static void bad_dma_completion(struct snap_dma_completion *comp, int status)
+{
+	printf("bad DMA (REMOTE_ACCESS_ERR) completion \n");
+	g_comp_count++;
+	g_last_comp_status = status;
+	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, status);
+}
+
+TEST_F(SnapQpRecoveryTest, err_cb_handled_migrate_rdma_read) {
+	/* post bad wqe */
+	int rc;
+	struct snap_dma_completion comp, comp2;
+
+	comp.func = bad_dma_completion;
+	comp.count = 1;
+	comp2.func = good_dma_completion;
+	comp2.count = 1;
+
+	g_err_count = g_err_flush_count = g_comp_count = 0;
+	snap_dma_q_dv_err_cb_set(m_dma_q[0], dv_err_cb_migrate);
+	m_dma_q[0]->uctx = this;
+
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, 0xdeadbeef /*m_rmr->lkey*/, &comp);
+	ASSERT_EQ(0, rc);
+	/* post good wqe */
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, m_rmr->lkey, &comp2);
+	ASSERT_EQ(0, rc);
+
+	snap_dma_q_flush(m_dma_q[0]);
+
+	/* poll, check that we have 1 err + 1 flush because after comp2 there will
+	 * be no outstanding - no need to flush */
+	EXPECT_EQ(1, g_err_count);
+	EXPECT_EQ(1, g_err_flush_count);
+	/* request with the bad rkey should be completed with error */
+	EXPECT_EQ(1, g_comp_count);
+	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, g_last_comp_status);
+	printf("g_last_comp_status is %d\n", g_last_comp_status);
+	snap_dma_q_flush(m_dma_q[1]);
+	/* request with the good rkey is migrated to the new qp and completed normally */
+	EXPECT_EQ(2, g_comp_count);
+	EXPECT_EQ(0, g_last_comp_status);
+}
+
+TEST_F(SnapQpRecoveryTest, err_cb_handled_migrate_write_short) {
+	/* post bad wqe */
+	int rc;
+	struct snap_dma_completion comp;
+
+	comp.func = bad_dma_completion;
+	comp.count = 1;
+
+	g_err_count = g_err_flush_count = g_comp_count = 0;
+	snap_dma_q_dv_err_cb_set(m_dma_q[0], dv_err_cb_migrate);
+	m_dma_q[0]->uctx = this;
+
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, 0xdeadbeef /*m_rmr->lkey*/, &comp);
+	ASSERT_EQ(0, rc);
+	/* post good inline wqe that will spawn 2 wqes */
+	rc = snap_dma_q_write_short(m_dma_q[0], m_lbuf, 64, (uintptr_t)m_rbuf, m_rmr->lkey);
+	ASSERT_EQ(0, rc);
+
+	snap_dma_q_flush(m_dma_q[0]);
+
+	/* poll, check that we have 1 err + 1 flush because after comp2 there will
+	 * be no outstanding - no need to flush */
+	EXPECT_EQ(1, g_err_count);
+	EXPECT_EQ(2, g_err_flush_count);
+	/* request with the bad rkey should be completed with error */
+	EXPECT_EQ(1, g_comp_count);
+	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, g_last_comp_status);
+	printf("g_last_comp_status is %d\n", g_last_comp_status);
+
+	snap_dma_q_flush(m_dma_q[1]);
+	/* request with the good rkey is migrated to the new qp and completed normally */
+	EXPECT_EQ(1, g_comp_count);
+	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, g_last_comp_status);
+}
+
+static int dv_err_cb_migrate_recover(struct snap_dma_q *q, struct mlx5_cqe64 *cqe)
+{
+	struct mlx5_err_cqe *ecqe = (struct mlx5_err_cqe *)cqe;
+
+	if (ecqe->syndrome == MLX5_CQE_SYNDROME_WR_FLUSH_ERR)
+		g_err_flush_count++;
+	else {
+		EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, ecqe->syndrome);
+		printf("Access error detected, migration started, fix rkey\n");
+		g_err_count++;
+		SnapQpRecoveryTest *t = (SnapQpRecoveryTest *)q->uctx;
+		const snap_dma_q_migrate_attr attr = {
+			.start_pi = be16toh(cqe->wqe_counter),
+			.rkey_policy = SNAP_DMA_Q_MIGR_RKEY_FIX,
+			.fixed_rkey =  t->get_fixed_rkey(),
+		};
+		int ret = snap_dma_q_migrate(q, t->m_dma_q[1], &attr);
+		EXPECT_EQ(0, ret);
+	}
+	return SNAP_DMA_Q_ERR_HANDLED;
+}
+
+TEST_F(SnapQpRecoveryTest, err_cb_handled_comp_migrate_fix_rkey) {
+	/* post bad wqe */
+	int rc;
+	struct snap_dma_completion comp, comp2;
+
+	comp.func = good_dma_completion;
+	comp.count = 1;
+	comp2.func = good_dma_completion;
+	comp2.count = 1;
+
+	g_err_count = g_err_flush_count = g_comp_count = 0;
+	snap_dma_q_dv_err_cb_set(m_dma_q[0], dv_err_cb_migrate_recover);
+	m_dma_q[0]->uctx = this;
+
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, 0xdeadbeef /*m_rmr->lkey*/, &comp);
+	ASSERT_EQ(0, rc);
+	/* post good wqe */
+	rc = snap_dma_q_read(m_dma_q[0], m_lbuf, m_bsize, m_lmr->lkey,
+			(uintptr_t)m_rbuf, m_rmr->lkey, &comp2);
+	ASSERT_EQ(0, rc);
+
+	snap_dma_q_flush(m_dma_q[0]);
+
+	/* poll, check that we have 1 err + 1 flush because after comp2 there will
+	 * be no outstanding - no need to flush */
+	EXPECT_EQ(1, g_err_count);
+	EXPECT_EQ(1, g_err_flush_count);
+	/* request with the bad rkey should NOT be completed with error */
+	EXPECT_EQ(0, g_comp_count);
+	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, g_last_comp_status);
+	printf("g_last_comp_status is %d\n", g_last_comp_status);
+	snap_dma_q_flush(m_dma_q[1]);
+	/* request with the good rkey is migrated to the new qp and completed normally */
+	EXPECT_EQ(2, g_comp_count);
+	EXPECT_EQ(0, g_last_comp_status);
+}
+
