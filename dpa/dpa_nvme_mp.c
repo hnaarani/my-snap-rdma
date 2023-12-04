@@ -277,7 +277,7 @@ dpa_nvme_mp_rb_attach(struct snap_dpa_cmd *cmd)
 	ns->active_rb = rb_cmd->qp_id;
 	ns->credits = rb_cmd->weight;
 
-	return 0;
+	return SNAP_DPA_RSP_OK;
 }
 
 static int
@@ -315,7 +315,27 @@ dpa_nvme_mp_rb_detach(struct snap_dpa_cmd *cmd)
 	snap_dpa_p2p_send_msg(&cq->p2p_queues[rb_cmd->qp_id], (struct snap_dpa_p2p_msg *) &msg);
 	cq->p2p_queues[rb_cmd->qp_id].dma_q->ops->progress_tx(cq->p2p_queues[rb_cmd->qp_id].dma_q, -1);
 
-	return 0;
+	return SNAP_DPA_RSP_OK;
+}
+
+static int
+dpa_nvme_mp_rb_modify(struct snap_dpa_cmd *cmd)
+{
+	struct dpa_nvme_mp_cq *cq = get_nvme_cq();
+	struct dpa_nvme_mp_sq *sq = TAILQ_FIRST(&cq->sqs);
+	struct dpa_nvme_mp_cmd *ncmd = (struct dpa_nvme_mp_cmd *)cmd;
+	struct dpa_nvme_mp_cmd_rb_modify *rb_cmd = &ncmd->cmd_rb_modify;
+	struct dpa_nvme_mp_rb *rb = &sq->namespaces[rb_cmd->nsid]->rbs[rb_cmd->qp_id];
+
+	if (!rb) {
+		dpa_error("SQ %u: RB of nsid %u, qp_id %u could not be found\n", sq->sqid, rb_cmd->nsid, rb_cmd->qp_id);
+		return SNAP_DPA_RSP_ERR;
+	}
+
+	if (rb_cmd->mask.weight)
+		rb->weight = rb_cmd->weight;
+
+	return SNAP_DPA_RSP_OK;
 }
 
 static int dpa_nvme_mp_sq_create(struct snap_dpa_cmd *cmd)
@@ -500,6 +520,9 @@ static int do_command(int *done)
 			break;
 		case DPA_NVME_MP_RB_DETACH:
 			rsp_status = dpa_nvme_mp_rb_detach(cmd);
+			break;
+		case DPA_NVME_MP_RB_MODIFY:
+			rsp_status = dpa_nvme_mp_rb_modify(cmd);
 			break;
 		default:
 			dpa_warn("unsupported command %d\n", cmd->cmd);
