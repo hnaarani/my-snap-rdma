@@ -1,6 +1,6 @@
 [wrap-git]
 directory = flexio
-url = http://l-gerrit.mtl.labs.mlnx:8080/flexio-sdk
+url = ssh://git-nbu.nvidia.com:12023/dpa/flexio-sdk
 revision = RC2Ver23.10
 depth = 50
 # patch file is needed to make flexio work with address sanitizer
