@@ -226,6 +226,13 @@ int dpa_virtq_modify(struct snap_dpa_cmd *cmd)
 			if (next_state != DPA_VIRTQ_STATE_SUSPEND)
 				goto done_bad_state;
 
+			if(vcmd->cmd_modify.set_hw_indexes) {
+				dpa_virtq_info(vq, "virtq modify: hw avail idx %d  hw used idx %d \n",
+					vcmd->cmd_modify.hw_available_index,
+					vcmd->cmd_modify.hw_used_index);
+				vq->hw_available_index = vcmd->cmd_modify.hw_available_index;
+				vq->hw_used_index = vcmd->cmd_modify.hw_used_index;
+			}
 			/*
 			 * It is nice to guarantee that after suspend all outstanding
 			 * tx to dpu are completed. But is it needed ?

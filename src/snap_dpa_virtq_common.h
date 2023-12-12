@@ -102,6 +102,9 @@ struct dpa_virtq_cmd_create {
 
 struct dpa_virtq_cmd_modify {
 	enum dpa_virtq_state state;
+	uint16_t hw_used_index;
+	uint16_t hw_available_index;
+	bool set_hw_indexes;
 };
 
 struct dpa_virtq_rsp_query {
