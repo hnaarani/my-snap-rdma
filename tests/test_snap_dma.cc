@@ -2512,10 +2512,9 @@ TEST_F(SnapQpRecoveryTest, err_cb_handled_migrate_rdma_read) {
 
 	snap_dma_q_flush(m_dma_q[0]);
 
-	/* poll, check that we have 1 err + 1 flush because after comp2 there will
-	 * be no outstanding - no need to flush */
+	/* poll, check that we have 1 err + 0 flush, second comp is migrated */
 	EXPECT_EQ(1, g_err_count);
-	EXPECT_EQ(1, g_err_flush_count);
+	EXPECT_EQ(0, g_err_flush_count);
 	/* request with the bad rkey should be completed with error */
 	EXPECT_EQ(1, g_comp_count);
 	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, g_last_comp_status);
@@ -2547,10 +2546,9 @@ TEST_F(SnapQpRecoveryTest, err_cb_handled_migrate_write_short) {
 
 	snap_dma_q_flush(m_dma_q[0]);
 
-	/* poll, check that we have 1 err + 1 flush because after comp2 there will
-	 * be no outstanding - no need to flush */
+	/* poll, check that we have 1 err + 0 flush, second comp is migrated */
 	EXPECT_EQ(1, g_err_count);
-	EXPECT_EQ(2, g_err_flush_count);
+	EXPECT_EQ(0, g_err_flush_count);
 	/* request with the bad rkey should be completed with error */
 	EXPECT_EQ(1, g_comp_count);
 	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, g_last_comp_status);
@@ -2611,7 +2609,7 @@ TEST_F(SnapQpRecoveryTest, err_cb_handled_comp_migrate_fix_rkey) {
 	/* poll, check that we have 1 err + 1 flush because after comp2 there will
 	 * be no outstanding - no need to flush */
 	EXPECT_EQ(1, g_err_count);
-	EXPECT_EQ(1, g_err_flush_count);
+	EXPECT_EQ(0, g_err_flush_count);
 	/* request with the bad rkey should NOT be completed with error */
 	EXPECT_EQ(0, g_comp_count);
 	EXPECT_EQ(MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR, g_last_comp_status);

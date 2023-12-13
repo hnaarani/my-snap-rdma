@@ -1983,12 +1983,21 @@ int snap_dma_q_migrate(struct snap_dma_q *orig_q, struct snap_dma_q *new_q, cons
 		uint16_t comp_idx = pi & (dvq_orig->hw_qp.sq.wqe_cnt - 1);
 		struct snap_dma_completion *comp = dvq_orig->comps[comp_idx].comp;
 
+		orig_q->tx_available += n_bb;
+
 		if (attr->rkey_policy == SNAP_DMA_Q_MIGR_RKEY_DISCARD) {
 			if (rkey_found && bad_rkey == rkey) {
 				SNAP_LIB_LOG_DBG("Skipping rkey 0x%x", rkey);
 				pi += n_bb;
-				if (comp && --comp->count == 0)
+				if (comp && --comp->count == 0) {
 					comp->func(comp, MLX5_CQE_SYNDROME_REMOTE_ACCESS_ERR);
+					/* completion callback may post more to this qp, and it will use
+					 * same 'bad_rkey'
+					 */
+					end_pi = dvq_orig->hw_qp.sq.pi;
+					SNAP_LIB_LOG_DBG("CB called, new end_pi is %d", end_pi & (dvq_orig->hw_qp.sq.wqe_cnt - 1));
+					dvq_orig->tx_need_ring_db = false;
+				}
 				continue;
 			}
 		} else if (attr->rkey_policy == SNAP_DMA_Q_MIGR_RKEY_FIX) {
@@ -2024,6 +2033,8 @@ int snap_dma_q_migrate(struct snap_dma_q *orig_q, struct snap_dma_q *new_q, cons
 		new_q->tx_available -= n_bb;
 		pi += n_bb;
 	}
+
+	dvq_orig->tx_need_ring_db = false;
 	return 0;
 }
 
@@ -2059,6 +2070,7 @@ int snap_dma_ep_reconnect(struct snap_dma_q *q1, struct snap_dma_q *q2)
 	/* TODO: rq ??? */
 	q1->tx_available = snap_dma_q_dv_get_tx_avail_max(q1);
 	q2->tx_available = snap_dma_q_dv_get_tx_avail_max(q2);
+	dvq1->tx_need_ring_db = dvq2->tx_need_ring_db = false;
 
 	/* It looks like RC qp drops directly into the error state,
 	 * skipping SQERR state. It means we cannot move back to RTS with
