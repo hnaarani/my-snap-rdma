@@ -131,6 +131,17 @@ void dpa_thread_free(void *addr);
 
 struct snap_dma_q *dpa_dma_ep_cmd_copy(struct snap_dpa_cmd *cmd, bool dummy_rq);
 
+static inline int dpa_config_uar_extension( uint32_t device_id){
+
+	uintptr_t ret;
+	struct flexio_os_thread_ctx *ctx;
+	ctx = dpa_get_thread_ctx();
+
+	ret = flexio_os_outbox_set_gvmi(device_id, ctx->outbox_base);
+
+	return ret ? 0 : -1;
+}
+
 static inline void dpa_dma_q_ring_tx_db(uint32_t qpnum, uint16_t pi)
 {
 	struct flexio_os_thread_ctx *ctx;

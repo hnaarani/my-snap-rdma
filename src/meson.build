@@ -19,6 +19,7 @@ libsnap_core_sources = [
 	'snap_dma_dv.c',
 	'snap_dma_verbs.c',
 	'snap_dpa.c',
+	'snap_cross_gvmi.c',
 	'snap_env.c',
 	'snap_mr.c',
 	'snap_qp.c',
@@ -44,13 +45,25 @@ install_headers('snap_dma.h',
 	'snap_dpa_common.h',
 	'snap_dpa_virtq_common.h')
 
-libsnap_core = static_library('snap_core',
-			libsnap_core_sources,
-			c_args : common_cflags,
-			dependencies : libsnap_core_depends,
-			include_directories : libsnap_core_include,
-			install: false,
-			native: true)
+# install fails in cross build
+if not meson.is_cross_build()
+	libsnap_core = shared_library('snap_core',
+				libsnap_core_sources,
+				c_args : common_cflags,
+				dependencies : libsnap_core_depends,
+				include_directories : libsnap_core_include,
+				install: true,
+				install_dir : '/usr/local/snap_core',
+				native: true)
+else 
+	libsnap_core = shared_library('snap_core',
+				libsnap_core_sources,
+				c_args : common_cflags,
+				dependencies : libsnap_core_depends,
+				include_directories : libsnap_core_include,
+				install: false,
+				native: true)
+endif 
 
 libsnap_core_dep = declare_dependency(
 			compile_args : common_cflags,
@@ -67,13 +80,24 @@ libdpa_core_sources = [
 	'snap_dpa_p2p.c'
 ]
 
-libdpa_core = static_library('dpa_core',
-			libdpa_core_sources,
-			c_args : common_cflags,
-			dependencies : libsnap_core_dep,
-			include_directories : libdpa_core_include,
-			install: false,
-			native: true)
+if not meson.is_cross_build()
+	libdpa_core = shared_library('dpa_core',
+				libdpa_core_sources,
+				c_args : common_cflags,
+				dependencies : libsnap_core_dep,
+				include_directories : libdpa_core_include,
+				install: true,
+				install_dir : '/usr/local/snap_core',
+				native: true)
+else 
+	libdpa_core = shared_library('dpa_core',
+				libdpa_core_sources,
+				c_args : common_cflags,
+				dependencies : libsnap_core_dep,
+				include_directories : libdpa_core_include,
+				install: false,
+				native: true)
+endif
 
 libdpa_core_dep = declare_dependency(
 			compile_args : common_cflags,

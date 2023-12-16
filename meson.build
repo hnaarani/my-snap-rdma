@@ -61,6 +61,7 @@ if (flexio_pfx == 'subproject')
 	flexio = flexio_proj.get_variable('flexiosdk_libflexio_dep')
 	flexio_pfx = 'subprojects/flexio'
 	libflexio_os_dep = flexio_proj.get_variable('flexiosdk_libflexio_os_dep')
+	libflexio_dev_dep = flexio_proj.get_variable('flexiosdk_libflexio_dev_dep')
 	flexio_include = []
 	libsnap_core_depends += flexio
 	conf_data.set10('HAVE_FLEXIO', 1, description : 'Enable DPA host side support')

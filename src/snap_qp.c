@@ -25,6 +25,8 @@
 #include "mlx5_ifc.h"
 #include "snap_lib_log.h"
 
+#include "snap_cross_gvmi.h"
+
 SNAP_LIB_LOG_REGISTER(QP)
 
 #ifndef SNAP_QP_ISOLATE_VL_TC_ENABLE_DEFAULT
@@ -116,7 +118,13 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 			}
 			devx_cq->eqn_or_dpa_element = snap_dpa_thread_id(attr->dpa_thread);
 			dpa_proc = attr->dpa_thread->dctx;
-
+			
+			/*if alias is needed, the function sets the eqn_or_dpa_element */
+			ret = snap_check_create_alias_thread(dpa_proc, ctx, attr->dpa_thread, &devx_cq->eqn_or_dpa_element); 
+			if (ret) {
+				ret = -EINVAL;
+				goto deref_uar;
+			}
 			DEVX_SET(cqc, cqctx, always_armed_cq, 1);
 		} else if (attr->dpa_element_type == MLX5_APU_ELEMENT_TYPE_EQ ||
 			   attr->dpa_element_type == MLX5_APU_ELEMENT_TYPE_EMULATED_DEV_EQ) {
@@ -150,6 +158,13 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 		DEVX_SET(cqc, cqctx, ext_element_type, attr->dpa_element_type);
 
 		umem_id = snap_dpa_process_umem_id(dpa_proc);
+		
+		/*if alias is needed, the function sets umem_id */
+		ret = snap_check_create_alias_dumem(dpa_proc, ctx, &umem_id); 
+		if (ret) {
+			ret = -EINVAL;
+			goto deref_uar;
+		}		
 		umem_offset = snap_dpa_process_umem_offset(dpa_proc, snap_dpa_mem_addr(devx_cq->devx.dpa_mem));
 		/*
 		 * TODO: switch back to the host uar, our cqs on dpa should be either
@@ -158,6 +173,12 @@ static int devx_cq_init(struct snap_cq *cq, struct ibv_context *ctx, const struc
 		 */
 		page_id = snap_dpa_process_uar_id(dpa_proc);
 
+		/*if alias is needed, the function sets page_id */
+		ret = snap_check_create_alias_uar(dpa_proc, ctx, &page_id); 
+		if (ret) {
+			ret = -EINVAL;
+			goto deref_uar;
+		}
 		/* always put dbr record on dpu side. This way cq can be armed
 		 * both from dpu and dpa. Consider adding a special option for
 		 * this
@@ -549,8 +570,22 @@ static int devx_qp_init(struct snap_qp *qp, struct ibv_pd *pd, const struct snap
 		}
 
 		umem_id = snap_dpa_process_umem_id(attr->dpa_proc);
+		
+		/*if alias is needed, the function sets umem_id */
+		ret = snap_check_create_alias_dumem(attr->dpa_proc, ctx, &umem_id); 
+		if (ret) {
+			ret = -EINVAL;
+			goto reset_qp_umem;
+		}
 		umem_offset = snap_dpa_process_umem_offset(attr->dpa_proc, snap_dpa_mem_addr(devx_qp->devx.dpa_mem));
 		page_id = snap_dpa_process_uar_id(attr->dpa_proc);
+
+		/*if alias is needed, the function sets page_id */
+		ret = snap_check_create_alias_uar(attr->dpa_proc, ctx, &page_id); 
+		if (ret) {
+			ret = -EINVAL;
+			goto reset_qp_umem;
+		}
 	}
 
 	devx_qp->dbr_offset = qp_buf_len;

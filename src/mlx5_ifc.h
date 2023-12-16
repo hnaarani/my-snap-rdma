@@ -1356,6 +1356,14 @@ enum cross_vhca_object_support_bit {
 	CROSS_VHCA_OBJ_SUPPORT_LQP_TO_RUMEM = 1 << 3,
 	CROSS_VHCA_OBJ_SUPPORT_LCQ_TO_RAPU = 1 << 4,
 	CROSS_VHCA_OBJ_SUPPORT_LNVME_SQ_BE_TO_RNVME_SQ = 1 << 5,
+
+	CROSS_VHCA_OBJ_SUPPORT_PD = 0x1ul,
+	CROSS_VHCA_OBJ_SUPPORT_UAR = 0x2ul,
+	CROSS_VHCA_OBJ_SUPPORT_MKEY = 0x4ul,
+	CROSS_VHCA_OBJ_SUPPORT_UMEM = 0x8ul,
+	CROSS_VHCA_OBJ_SUPPORT_EQ = 0x10ul,
+	CROSS_VHCA_OBJ_SUPPORT_DPA_THREAD =  0x80000000000ul,
+	CROSS_VHCA_OBJ_SUPPORT_DPA_UAR = 0x100000000000ul
 };
 
 struct mlx5_ifc_header_modify_cap_properties_bits {
@@ -2665,6 +2673,17 @@ struct mlx5_ifc_alloc_flow_counter_out_bits {
 	u8	reserved_at_60[0x20];
 };
 
+enum mlx5_obj_allowed_support {
+	MLX5_HCA_CAPS_2_ALLOWED_OBJ_FOR_OTHER_VHCA_ACCESS_PD = 0x1ul,
+	MLX5_HCA_CAPS_2_ALLOWED_OBJ_FOR_OTHER_VHCA_ACCESS_UAR = 0x2ul,
+	MLX5_HCA_CAPS_2_ALLOWED_OBJ_FOR_OTHER_VHCA_ACCESS_MKEY = 0x4ul,
+	MLX5_HCA_CAPS_2_ALLOWED_OBJ_FOR_OTHER_VHCA_ACCESS_UMEM = 0x8ul,
+	MLX5_HCA_CAPS_2_ALLOWED_OBJ_FOR_OTHER_VHCA_ACCESS_EQ = 0x10ul,
+	MLX5_HCA_CAPS_2_ALLOWED_OBJ_FOR_OTHER_VHCA_ACCESS_DPA_THREAD =  0x80000000000ul,
+	MLX5_HCA_CAPS_2_ALLOWED_OBJ_FOR_OTHER_VHCA_ACCESS_DPA_UAR = 0x100000000000ul
+};
+
+
 // PRM - HCA Capabilities Field Descriptions
 enum mlx5_obj_type {
 	MLX5_OBJ_TYPE_NVME_DEVICE_EMULATION = 0x0006,
@@ -2687,6 +2706,10 @@ enum mlx5_obj_type {
 	MLX5_OBJ_TYPE_NVME_SQ_BE = 0x0038,
 	MLX5_OBJ_TYPE_VIRTIO_FS_DEVICE_EMULATION = 0x003d,
 	MLX5_OBJ_TYPE_VIRTIO_FS_Q = 0x003e,
+
+	MLX5_OBJ_TYPE_DPA_DUMEM = 0xff13,
+	MLX5_OBJ_TYPE_DPA_THREAD = 0x2b,
+	MLX5_OBJ_TYPE_DPA_UAR = 0x4a,
 
 	MLX5_OBJ_TYPE_APU_MEM = 0x10000000000,
 	MLX5_OBJ_TYPE_APU_PROCESS = 0x40000000000,
@@ -2767,6 +2790,11 @@ struct mlx5_ifc_alias_context_bits {
 	u8	 access_key[0x100];
 
 	u8	 reserved_at_180[0x80];
+};
+
+struct mlx5_ifc_create_alias_in_bits {
+	struct mlx5_ifc_general_obj_in_cmd_hdr_bits hdr;
+	struct mlx5_ifc_alias_context_bits alias_ctx;
 };
 
 struct mlx5_ifc_flow_meter_parameters_bits {

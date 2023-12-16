@@ -621,7 +621,7 @@ static int snap_qp_attr_helper(struct snap_dma_q *q, struct ibv_pd *pd,
 
 	SNAP_LIB_LOG_DBG("Opening dma_q of type %d dpa_mode %d", attr->mode, attr->dpa_mode);
 	if (attr->dpa_mode != SNAP_DMA_Q_DPA_MODE_NONE) {
-		if (snap_dpa_enabled(pd->context)) {
+		if (attr->use_aliases || snap_dpa_enabled(pd->context)) {
 			if (q->ops->mode != SNAP_DMA_Q_MODE_DV)
 				return -EINVAL;
 			q->no_events = true;

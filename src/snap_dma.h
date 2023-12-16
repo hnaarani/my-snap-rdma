@@ -504,6 +504,8 @@ struct snap_dma_q_create_attr {
 	uint32_t emu_dev_eqn;
 
 	struct snap_dma_q_crypto_attr crypto_attr;
+
+	bool 		use_aliases;
 };
 
 /* TODO add support for worker mode single and SRQ*/
