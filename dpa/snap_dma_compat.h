@@ -35,6 +35,7 @@ struct iovec {
 /* from infiniband/verbs.h */
 struct ibv_context;
 struct ibv_device;
+struct ibv_qp_attr;
 
 struct ibv_sge {
 	uint64_t		addr;

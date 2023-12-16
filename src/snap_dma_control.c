@@ -856,13 +856,10 @@ static int snap_modify_lb_qp_rst2init(struct snap_qp *qp,
 	return ret;
 }
 
-static int snap_modify_lb_qp_init2rtr(struct snap_qp *qp,
-				    struct ibv_qp_attr *qp_attr, int attr_mask)
+void snap_modify_qp_init2rtr_com(struct snap_qp *qp,
+				    struct ibv_qp_attr *qp_attr, int attr_mask, 
+					uint8_t* in, uint8_t* out, void *qpc)
 {
-	uint8_t in[DEVX_ST_SZ_BYTES(init2rtr_qp_in)] = {0};
-	uint8_t out[DEVX_ST_SZ_BYTES(init2rtr_qp_out)] = {0};
-	void *qpc = DEVX_ADDR_OF(init2rtr_qp_in, in, qpc);
-	int ret;
 
 	DEVX_SET(init2rtr_qp_in, in, opcode, MLX5_CMD_OP_INIT2RTR_QP);
 	DEVX_SET(init2rtr_qp_in, in, qpn, snap_qp_get_qpnum(qp));
@@ -891,6 +888,18 @@ static int snap_modify_lb_qp_init2rtr(struct snap_qp *qp,
 			 snap_u32log2(qp_attr->max_dest_rd_atomic));
 	if (attr_mask & IBV_QP_MIN_RNR_TIMER)
 		DEVX_SET(qpc, qpc, min_rnr_nak, qp_attr->min_rnr_timer);
+}
+
+static int snap_modify_lb_qp_init2rtr(struct snap_qp *qp,
+				    struct ibv_qp_attr *qp_attr, int attr_mask)
+{
+	uint8_t in[DEVX_ST_SZ_BYTES(init2rtr_qp_in)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(init2rtr_qp_out)] = {0};
+	void *qpc = DEVX_ADDR_OF(init2rtr_qp_in, in, qpc);
+
+	int ret;
+
+	snap_modify_qp_init2rtr_com(qp, qp_attr, attr_mask, in, out, qpc);
 	if (attr_mask & IBV_QP_AV)
 		DEVX_SET(qpc, qpc, primary_address_path.fl, 1);
 
@@ -928,6 +937,73 @@ static int snap_modify_lb_qp_rtr2rts(struct snap_qp *qp,
 	if (ret)
 		SNAP_LIB_LOG_ERR("failed to modify qp to rts with errno = %d", ret);
 	return ret;
+}
+
+
+int snap_modify_qp_rst2init(struct snap_qp *qp,
+				     struct ibv_qp_attr *qp_attr, int attr_mask) {
+	return snap_modify_lb_qp_rst2init(qp, qp_attr, attr_mask); /* lb doesn't matter for rst2init*/					
+}
+
+int snap_modify_qp_init2rtr(struct snap_qp *qp, struct ibv_pd *pd,
+				     struct ibv_qp_attr *qp_attr, int attr_mask) {
+
+	uint8_t in[DEVX_ST_SZ_BYTES(init2rtr_qp_in)] = {0};
+	uint8_t out[DEVX_ST_SZ_BYTES(init2rtr_qp_out)] = {0};
+	void *qpc = DEVX_ADDR_OF(init2rtr_qp_in, in, qpc);
+
+	int ret;
+
+	snap_modify_qp_init2rtr_com(qp, qp_attr, attr_mask, in, out, qpc);
+	if (attr_mask & IBV_QP_AV) {
+		/* rmac is not a part of av_attr, in order to get it
+		* we have to create ah and convert it to the dv ah
+		* which has rmac
+		*/
+		
+		struct mlx5dv_obj  av_obj;
+		struct mlx5dv_ah   dv_ah;
+
+		struct ibv_ah *ah = ibv_create_ah(pd, &qp_attr->ah_attr);
+		if (!ah) {
+			SNAP_LIB_LOG_ERR("ibv_create_ah() return failed with errno:%d", errno);
+			return -1;
+		}
+
+		av_obj.ah.in = ah;
+		av_obj.ah.out = &dv_ah;
+		mlx5dv_init_obj(&av_obj, MLX5DV_OBJ_AH);
+		ibv_destroy_ah(ah);
+
+		DEVX_SET(qpc, qpc, primary_address_path.fl, 0);
+		DEVX_SET(qpc, qpc, primary_address_path.tclass,
+			 qp_attr->ah_attr.grh.traffic_class);
+		/* set destination gid, mac and udp port */
+		memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rgid_rip),
+		       qp_attr->ah_attr.grh.dgid.raw,
+		       DEVX_FLD_SZ_BYTES(qpc, primary_address_path.rgid_rip));
+		memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rmac_47_32),
+		       dv_ah.av->rmac, 6);
+		/* av uses rlid to return udp source port */
+		DEVX_SET(qpc, qpc, primary_address_path.udp_sport,
+			 htobe16(dv_ah.av->rlid));
+
+		printf("udp sport = %x \n ", htobe16(dv_ah.av->rlid));
+		// DEVX_SET(qpc, qpc, primary_address_path.udp_sport, 0xc000);
+		DEVX_SET(qpc, qpc, primary_address_path.hop_limit, 255); /* High value so it won't limit */
+		DEVX_SET(qpc, qpc, primary_address_path.src_addr_index, qp_attr->ah_attr.grh.sgid_index);
+		
+	}
+
+	ret = snap_qp_modify(qp, in, sizeof(in), out, sizeof(out));
+	if (ret)
+		SNAP_LIB_LOG_ERR("failed to modify qp to rtr with errno = %d", ret);
+	return ret;
+
+}
+int snap_modify_qp_rtr2rts(struct snap_qp *qp,
+				     struct ibv_qp_attr *qp_attr, int attr_mask) {
+	return snap_modify_lb_qp_rtr2rts(qp, qp_attr, attr_mask); /* lb doesn't matter for rtr2rts*/
 }
 
 #if !HAVE_DECL_IBV_QUERY_GID_EX

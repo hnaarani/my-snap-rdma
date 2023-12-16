@@ -102,7 +102,9 @@ dpa_tests = [
 	'dpa_rt_test_polling',
 	'dpa_rt_test_event',
 	'dpa_cmd_lat_bench',
-	'dpa_dma_test'
+	'dpa_dma_test',
+	
+	'nl_test_dpa',
 ]
 
 foreach t : dpa_tests
